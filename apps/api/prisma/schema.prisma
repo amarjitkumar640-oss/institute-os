@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StaffRole {
+  admin
+  teacher
+  frontdesk
+}
+
+enum ExamCategory {
+  ssc
+  banking
+  railway
+}
+
+enum BatchStatus {
+  upcoming
+  running
+  completed
+}
+
+enum EnrollmentStatus {
+  active
+  paused
+  completed
+  dropped
+}
+
+enum LeadStatus {
+  new
+  contacted
+  visited
+  converted
+  lost
+}
+
+enum FeePlanType {
+  full
+  installment
+}
+
+enum FeePaymentStatus {
+  pending
+  paid
+  overdue
+}
+
+model Staff {
+  id           String    @id @default(uuid())
+  fullName     String
+  phone        String
+  email        String    @unique
+  role         StaffRole
+  passwordHash String
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignedLeads Lead[] @relation("LeadAssignedTo")
+
+  @@map("staff")
+}
+
+model Subject {
+  id           String        @id @default(uuid())
+  name         String
+  examCategory ExamCategory?
+
+  @@map("subjects")
+}
+
+model Course {
+  id              String       @id @default(uuid())
+  name            String
+  examCategory    ExamCategory
+  durationMonths  Int
+  defaultFee      Decimal      @db.Decimal(10, 2)
+
+  batches Batch[]
+
+  @@map("courses")
+}
+
+model Batch {
+  id        String      @id @default(uuid())
+  courseId  String
+  course    Course      @relation(fields: [courseId], references: [id])
+  name      String
+  capacity  Int
+  startDate DateTime
+  endDate   DateTime
+  status    BatchStatus @default(upcoming)
+
+  enrollments Enrollment[]
+
+  @@map("batches")
+}
+
+model Student {
+  id            String    @id @default(uuid())
+  studentCode   String    @unique
+  fullName      String
+  phone         String
+  email         String?
+  photoUrl      String?
+  dob           DateTime?
+  address       String?
+  guardianPhone String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  enrollments    Enrollment[]
+  leadsConverted Lead[]       @relation("LeadConvertedStudent")
+
+  @@map("students")
+}
+
+model Enrollment {
+  id         String           @id @default(uuid())
+  studentId  String
+  student    Student          @relation(fields: [studentId], references: [id])
+  batchId    String
+  batch      Batch            @relation(fields: [batchId], references: [id])
+  enrolledOn DateTime         @default(now())
+  status     EnrollmentStatus @default(active)
+
+  feePlans FeePlan[]
+
+  @@unique([studentId, batchId])
+  @@map("enrollments")
+}
+
+model Lead {
+  id                  String     @id @default(uuid())
+  name                String
+  phone               String
+  targetExam          ExamCategory
+  source              String
+  status              LeadStatus @default(new)
+  assignedToId        String?
+  assignedTo          Staff?     @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+  convertedStudentId  String?
+  convertedStudent    Student?   @relation("LeadConvertedStudent", fields: [convertedStudentId], references: [id])
+  notes               String?
+  createdAt           DateTime   @default(now())
+
+  @@map("leads")
+}
+
+model FeePlan {
+  id            String      @id @default(uuid())
+  enrollmentId  String
+  enrollment    Enrollment  @relation(fields: [enrollmentId], references: [id])
+  totalAmount   Decimal     @db.Decimal(10, 2)
+  planType      FeePlanType
+
+  payments FeePayment[]
+
+  @@map("fee_plans")
+}
+
+model FeePayment {
+  id          String           @id @default(uuid())
+  feePlanId   String
+  feePlan     FeePlan          @relation(fields: [feePlanId], references: [id])
+  dueDate     DateTime
+  amountDue   Decimal          @db.Decimal(10, 2)
+  amountPaid  Decimal          @default(0) @db.Decimal(10, 2)
+  paidOn      DateTime?
+  status      FeePaymentStatus @default(pending)
+  receiptNo   String?
+
+  @@map("fee_payments")
+}

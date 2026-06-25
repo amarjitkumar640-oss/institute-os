@@ -1,0 +1,28 @@
+import "express-async-errors";
+import cors from "cors";
+import express from "express";
+import { authRouter } from "./modules/auth/auth.routes";
+import { subjectsRouter } from "./modules/subjects/subjects.routes";
+import { coursesRouter } from "./modules/courses/courses.routes";
+import { batchesRouter } from "./modules/batches/batches.routes";
+import { studentsRouter } from "./modules/students/students.routes";
+import { enrollmentsRouter } from "./modules/enrollments/enrollments.routes";
+import { leadsRouter } from "./modules/leads/leads.routes";
+import { errorHandler } from "./middleware/errorHandler";
+
+export const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+app.use("/api/auth", authRouter);
+app.use("/api/subjects", subjectsRouter);
+app.use("/api/courses", coursesRouter);
+app.use("/api/batches", batchesRouter);
+app.use("/api/students", studentsRouter);
+app.use("/api/enrollments", enrollmentsRouter);
+app.use("/api/leads", leadsRouter);
+
+app.use(errorHandler);

@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Expo
+apps/mobile/.expo/
+apps/mobile/.expo-shared/
+apps/mobile/web-build/
+apps/mobile/*.jks
+apps/mobile/*.p8
+apps/mobile/*.p12
+apps/mobile/*.key
+apps/mobile/*.mobileprovision
+
+# Docker volumes
+infra/minio-data/
+infra/postgres-data/
