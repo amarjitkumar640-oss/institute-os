@@ -1,0 +1,172 @@
+{
+  "info": {
+    "name": "Institute OS API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000/api" },
+    { "key": "accessToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@institute-os.local\",\n  \"password\": \"admin123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subjects",
+      "item": [
+        { "name": "List Subjects", "request": { "method": "GET", "url": "{{baseUrl}}/subjects" } },
+        {
+          "name": "Create Subject",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/subjects",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Quantitative Aptitude\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Courses",
+      "item": [
+        { "name": "List Courses", "request": { "method": "GET", "url": "{{baseUrl}}/courses" } },
+        {
+          "name": "Create Course",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/courses",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"SSC CGL Foundation\",\n  \"examCategory\": \"ssc\",\n  \"durationMonths\": 6,\n  \"defaultFee\": 15000\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Batches",
+      "item": [
+        { "name": "List Batches", "request": { "method": "GET", "url": "{{baseUrl}}/batches" } },
+        {
+          "name": "Create Batch",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/batches",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": \"<course-id>\",\n  \"name\": \"Morning Batch A\",\n  \"capacity\": 30,\n  \"startDate\": \"2026-07-01\",\n  \"endDate\": \"2026-12-31\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Students",
+      "item": [
+        { "name": "List Students", "request": { "method": "GET", "url": "{{baseUrl}}/students" } },
+        { "name": "Get Student", "request": { "method": "GET", "url": "{{baseUrl}}/students/:id" } },
+        {
+          "name": "Create Student",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/students",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Rahul Sharma\",\n  \"phone\": \"9999999999\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Upload Student Photo",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/students/:id/photo",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "photo", "type": "file", "src": "" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Enrollments",
+      "item": [
+        {
+          "name": "Create Enrollment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/enrollments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"<student-id>\",\n  \"batchId\": \"<batch-id>\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leads",
+      "item": [
+        { "name": "List Leads", "request": { "method": "GET", "url": "{{baseUrl}}/leads" } },
+        {
+          "name": "Create Lead",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/leads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Priya Singh\",\n  \"phone\": \"8888888888\",\n  \"targetExam\": \"ssc\",\n  \"source\": \"walk-in\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Convert Lead",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/leads/:id/convert",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchId\": \"<batch-id>\",\n  \"feePlan\": {\n    \"totalAmount\": 15000,\n    \"planType\": \"full\"\n  }\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

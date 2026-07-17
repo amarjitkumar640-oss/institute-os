@@ -9,6 +9,42 @@ import { BatchFullError, createEnrollment } from "./enrollments.service";
 
 export const enrollmentsRouter = Router();
 
+// GET /enrollments?studentId=xxx  — list a student's active enrollments with batch info
+enrollmentsRouter.get(
+  "/",
+  requireAuth,
+  async (req, res) => {
+    const { studentId } = req.query as { studentId?: string };
+    if (!studentId) return res.status(400).json({ error: "studentId query param required" });
+
+    const enrollments = await prisma.enrollment.findMany({
+      where: { studentId, status: "active" },
+      include: {
+        batch: {
+          include: {
+            course: true,
+            _count: { select: { enrollments: true } },
+          },
+        },
+      },
+      orderBy: { enrolledOn: "desc" },
+    });
+
+    return res.json(
+      enrollments.map((e) => ({
+        id: e.id,
+        enrolledOn: e.enrolledOn,
+        status: e.status,
+        batch: {
+          ...e.batch,
+          enrolledCount: e.batch._count.enrollments,
+          _count: undefined,
+        },
+      }))
+    );
+  }
+);
+
 enrollmentsRouter.post(
   "/",
   requireAuth,

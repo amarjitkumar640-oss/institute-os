@@ -7,11 +7,15 @@ import { requireRole } from "../../middleware/role";
 import { validateBody } from "../../middleware/validate";
 import { BatchFullError } from "../enrollments/enrollments.service";
 import { convertLead } from "./leads.service";
+import { centerFilter, centerIdForCreate } from "../../lib/centerFilter";
 
 export const leadsRouter = Router();
 
-leadsRouter.get("/", requireAuth, requireRole("admin", "frontdesk"), async (_req, res) => {
-  const leads = await prisma.lead.findMany({ orderBy: { createdAt: "desc" } });
+leadsRouter.get("/", requireAuth, requireRole("admin", "frontdesk"), async (req, res) => {
+  const leads = await prisma.lead.findMany({
+    where:   centerFilter(req),
+    orderBy: { createdAt: "desc" },
+  });
   res.json(leads);
 });
 
@@ -21,7 +25,9 @@ leadsRouter.post(
   requireRole("admin", "frontdesk"),
   validateBody(createLeadSchema),
   async (req, res) => {
-    const lead = await prisma.lead.create({ data: req.body });
+    const centerId = centerIdForCreate(req, req.body.centerId);
+    if (!centerId) return res.status(400).json({ error: "centerId required when using all-centers mode" });
+    const lead = await prisma.lead.create({ data: { ...req.body, centerId } });
     res.status(201).json(lead);
   }
 );

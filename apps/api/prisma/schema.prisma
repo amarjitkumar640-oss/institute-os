@@ -51,6 +51,36 @@ enum FeePaymentStatus {
   overdue
 }
 
+model Center {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  staff    CenterStaff[]
+  students Student[]
+  batches  Batch[]
+  faculty  Faculty[]
+  leads    Lead[]
+
+  @@map("centers")
+}
+
+model CenterStaff {
+  id       String    @id @default(uuid())
+  centerId String
+  staffId  String
+  role     StaffRole
+
+  center Center @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([centerId, staffId])
+  @@map("center_staff")
+}
+
 model Staff {
   id           String    @id @default(uuid())
   fullName     String
@@ -62,17 +92,50 @@ model Staff {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  assignedLeads Lead[] @relation("LeadAssignedTo")
+  assignedLeads     Lead[]        @relation("LeadAssignedTo")
+  centerAssignments CenterStaff[]
 
   @@map("staff")
 }
 
 model Subject {
   id           String        @id @default(uuid())
-  name         String
+  name         String        @unique
   examCategory ExamCategory?
 
+  facultySubjects FacultySubject[]
+
   @@map("subjects")
+}
+
+model Faculty {
+  id              String    @id @default(uuid())
+  employeeCode    String    @unique
+  fullName        String
+  phone           String    @unique
+  email           String    @unique
+  qualification   String
+  experienceYears Int       @default(0)
+  isActive        Boolean   @default(true)
+  joiningDate     DateTime  @db.Date
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  centerId        String?
+  center          Center?   @relation(fields: [centerId], references: [id])
+
+  teachingSubjects FacultySubject[]
+
+  @@map("faculty")
+}
+
+model FacultySubject {
+  facultyId String
+  subjectId String
+  faculty   Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([facultyId, subjectId])
+  @@map("faculty_subjects")
 }
 
 model Course {
@@ -96,6 +159,8 @@ model Batch {
   startDate DateTime
   endDate   DateTime
   status    BatchStatus @default(upcoming)
+  centerId  String?
+  center    Center?     @relation(fields: [centerId], references: [id])
 
   enrollments Enrollment[]
 
@@ -103,17 +168,35 @@ model Batch {
 }
 
 model Student {
-  id            String    @id @default(uuid())
-  studentCode   String    @unique
-  fullName      String
-  phone         String
-  email         String?
-  photoUrl      String?
-  dob           DateTime?
-  address       String?
-  guardianPhone String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String    @id @default(uuid())
+  studentCode        String    @unique
+  centerId           String?
+  center             Center?   @relation(fields: [centerId], references: [id])
+  fullName           String
+  phone              String
+  email              String?
+  photoUrl           String?
+  dob                DateTime?
+  address            String?
+  guardianPhone      String?
+  // Extended admission fields
+  aadhaar            String?
+  gender             String?
+  fatherName         String?
+  motherName         String?
+  guardianOccupation String?
+  guardianEmail      String?
+  qualification      String?
+  passYear           String?
+  board              String?
+  whatsapp           String?
+  coursePreference   String?
+  durationPreference String?
+  preferredTiming    String?
+  paymentMode        String?
+  amountPaid         Decimal?  @db.Decimal(10, 2)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   enrollments    Enrollment[]
   leadsConverted Lead[]       @relation("LeadConvertedStudent")
@@ -148,6 +231,8 @@ model Lead {
   convertedStudentId  String?
   convertedStudent    Student?   @relation("LeadConvertedStudent", fields: [convertedStudentId], references: [id])
   notes               String?
+  centerId            String?
+  center              Center?    @relation(fields: [centerId], references: [id])
   createdAt           DateTime   @default(now())
 
   @@map("leads")

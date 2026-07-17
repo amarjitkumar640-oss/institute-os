@@ -6,6 +6,7 @@ import { StaffRole } from "@prisma/client";
 export interface AuthPayload {
   staffId: string;
   role: StaffRole;
+  centerId?: string | null;
 }
 
 declare global {

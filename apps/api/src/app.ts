@@ -8,6 +8,10 @@ import { batchesRouter } from "./modules/batches/batches.routes";
 import { studentsRouter } from "./modules/students/students.routes";
 import { enrollmentsRouter } from "./modules/enrollments/enrollments.routes";
 import { leadsRouter } from "./modules/leads/leads.routes";
+import { facultyRouter } from "./modules/faculty/faculty.routes";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
+import { centersRouter } from "./modules/centers/centers.routes";
+import { staffRouter }   from "./modules/staff/staff.routes";
 import { errorHandler } from "./middleware/errorHandler";
 
 export const app = express();
@@ -24,5 +28,9 @@ app.use("/api/batches", batchesRouter);
 app.use("/api/students", studentsRouter);
 app.use("/api/enrollments", enrollmentsRouter);
 app.use("/api/leads", leadsRouter);
+app.use("/api/faculty", facultyRouter);
+app.use("/api/dashboard", dashboardRouter);
+app.use("/api/centers", centersRouter);
+app.use("/api/staff",   staffRouter);
 
 app.use(errorHandler);

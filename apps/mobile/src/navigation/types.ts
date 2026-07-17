@@ -1,0 +1,30 @@
+import type { CourseItem } from "../api/courses";
+import type { FacultyItem } from "../api/faculty";
+import type { SubjectItem } from "../api/subjects";
+import type { StudentItem } from "../api/students";
+import type { BatchItem } from "../api/batches";
+
+export type RootStackParamList = {
+  Dashboard: undefined;
+  Profile:   undefined;
+  BatchList: { initialFilter?: "all" | "active" };
+  BatchDetail: { batch: BatchItem };
+  CreateBatch: undefined;
+  EditBatch: { batch: BatchItem };
+  CourseList: undefined;
+  CreateCourse: undefined;
+  EditCourse: { course: CourseItem };
+  FacultyList: undefined;
+  CreateFaculty: undefined;
+  EditFaculty: { faculty: FacultyItem };
+  SubjectList: undefined;
+  CreateSubject: undefined;
+  EditSubject: { subject: SubjectItem };
+  StudentList: { batchId?: string; batchName?: string } | undefined;
+  NewAdmission: undefined;
+  EditStudent: { student: StudentItem };
+  CenterManagement: undefined;
+  StaffManagement:  undefined;
+  Leads: undefined;
+  Students: undefined;
+};
