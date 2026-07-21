@@ -243,6 +243,7 @@ async function main() {
   console.log(`Seeded ${subjects.length} subjects`);
 
   const adminEmail = "admin@institute-os.local";
+  const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "admin123";
   const existingAdmin = await prisma.staff.findUnique({ where: { email: adminEmail } });
   if (!existingAdmin) {
     await prisma.staff.create({
@@ -251,10 +252,10 @@ async function main() {
         phone:        "9999999999",
         email:        adminEmail,
         role:         "admin",
-        passwordHash: await bcrypt.hash("admin123", 10),
+        passwordHash: await bcrypt.hash(adminPassword, 10),
       },
     });
-    console.log(`Seeded admin: ${adminEmail} / admin123`);
+    console.log(`Seeded admin: ${adminEmail} / ${adminPassword}`);
   }
 
   const center = await seedMainCenter();

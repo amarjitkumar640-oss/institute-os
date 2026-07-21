@@ -1,0 +1,8 @@
+# No domain yet — served over plain HTTP on the bare IP.
+# Once you buy a domain and point it here, replace ":80" below with
+# your domain (e.g. "api.yourdomain.com") and Caddy will automatically
+# switch to HTTPS with a free auto-renewing certificate — no other change needed.
+
+:80 {
+	reverse_proxy api:4000
+}

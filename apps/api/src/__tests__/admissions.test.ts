@@ -64,7 +64,6 @@ describe("lead conversion", () => {
 
     const result = await convertLead(prisma, lead.id, {
       batchId: batch.id,
-      feePlan: { totalAmount: 10000, planType: "full" },
     });
 
     expect(result.student.fullName).toBe("Lead Name");

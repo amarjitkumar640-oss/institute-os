@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { ms, fs } from "../../utils/responsive";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { EmptyState } from "../../components/ui/EmptyState";
 import {
   fetchAllCenters, createCenter, updateCenter,
   fetchCenterStaff, assignStaffToCenter, removeStaffFromCenter,
@@ -557,14 +558,13 @@ export function CenterManagementScreen() {
           }
         >
           {centers.length === 0 ? (
-            <View style={s.empty}>
-              <Ionicons name="business-outline" size={ms(48)} color="#D5CCC8" />
-              <Text style={s.emptyT}>No centers yet</Text>
-              <Text style={s.emptySub}>Tap the + button to create your first center.</Text>
-              <TouchableOpacity style={s.emptyBtn} onPress={openCreate}>
-                <Text style={s.emptyBtnT}>Create Center</Text>
-              </TouchableOpacity>
-            </View>
+            <EmptyState
+              scene="centers"
+              color="#1B9C63"
+              title="No centers yet"
+              subtitle="Create your first branch or teaching center to get started"
+              action={{ label: "Create Center", onPress: openCreate }}
+            />
           ) : (
             centers.map((center) => {
               const isOpen = expanded === center.id;

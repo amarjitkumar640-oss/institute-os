@@ -9,6 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import type { RootStackParamList } from "../../navigation/types";
 import { listStudents, type StudentItem, type CoursePreference } from "../../api/students";
@@ -332,15 +333,16 @@ function Banner({ students }: { students: StudentItem[] }) {
   );
 }
 
-// ── Empty / Error states ──────────────────────────────────────────────────────
+// ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyState({ search }: { search: string }) {
+function StudentEmpty({ search }: { search: string }) {
   return (
-    <View style={cs.empty}>
-      <Ionicons name="school-outline" size={ms(48)} color="#D5CCC8" />
-      <Text style={cs.emptyTitle}>{search ? "No students match your search" : "No students yet"}</Text>
-      <Text style={cs.emptySubT}>{search ? "Try a different name or roll number" : "Add the first student via the + button"}</Text>
-    </View>
+    <EmptyState
+      scene="students"
+      color="#2563A8"
+      title={search ? "No students match your search" : "No students yet"}
+      subtitle={search ? "Try a different name or roll number" : "Add the first student via the + button"}
+    />
   );
 }
 
@@ -457,7 +459,7 @@ export function StudentListScreen({ navigation, route }: Props) {
               )}
               contentContainerStyle={cs.listContent}
               showsVerticalScrollIndicator={false}
-              ListEmptyComponent={<EmptyState search={search} />}
+              ListEmptyComponent={<StudentEmpty search={search} />}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={["#8B1E3F"]} tintColor="#8B1E3F" />
               }

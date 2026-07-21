@@ -50,13 +50,14 @@ interface CreatedCourse {
 }
 
 const EXAM_OPTIONS = [
-  { label: "SSC",     value: "ssc",     color: "#8B1E3F" },
-  { label: "Banking", value: "banking", color: "#2563A8" },
-  { label: "Railway", value: "railway", color: "#1B9C63" },
+  { label: "SSC",        value: "ssc",        color: "#8B1E3F" },
+  { label: "Banking",    value: "banking",     color: "#2563A8" },
+  { label: "Railway",    value: "railway",     color: "#1B9C63" },
+  { label: "Foundation", value: "foundation",  color: "#7B3FA0" },
 ];
 
 const CATEGORY_LABEL: Record<string, string> = {
-  ssc: "SSC", banking: "Banking", railway: "Railway",
+  ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation",
 };
 
 const INITIAL_FORM: FormState = {
@@ -268,28 +269,6 @@ export function CreateCourseScreen({ navigation }: Props) {
             </View>
           )}
 
-          {isDirty && (
-            <View style={s.preview}>
-              <Text style={s.previewTitle}>Preview</Text>
-              <View style={s.previewRow}>
-                <Text style={s.previewKey}>Name</Text>
-                <Text style={s.previewVal} numberOfLines={1}>{form.name.trim() || "—"}</Text>
-              </View>
-              <View style={s.previewRow}>
-                <Text style={s.previewKey}>Category</Text>
-                <Text style={s.previewVal}>{EXAM_OPTIONS.find((o) => o.value === form.examCategory)?.label || "—"}</Text>
-              </View>
-              <View style={s.previewRow}>
-                <Text style={s.previewKey}>Duration</Text>
-                <Text style={s.previewVal}>{form.durationMonths ? `${form.durationMonths} months` : "—"}</Text>
-              </View>
-              <View style={[s.previewRow, { borderBottomWidth: 0 }]}>
-                <Text style={s.previewKey}>Default Fee</Text>
-                <Text style={s.previewVal}>{form.defaultFee ? `₹${Number(form.defaultFee).toLocaleString("en-IN")}` : "—"}</Text>
-              </View>
-            </View>
-          )}
-
           <View style={s.buttonGroup}>
             <PrimaryButton
               label="Create Course"
@@ -407,12 +386,6 @@ const s = StyleSheet.create({
 
   submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },
   submitErrorT:  { fontSize: fs(13), color: "#C0392B", lineHeight: fs(18) },
-
-  preview:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(18), marginBottom: ms(20), borderWidth: 1.5, borderColor: "#EDE8E3" },
-  previewTitle:  { fontSize: fs(11), fontWeight: "800", color: "#8B1E3F", letterSpacing: 1, textTransform: "uppercase", marginBottom: ms(12) },
-  previewRow:    { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: ms(8), borderBottomWidth: 1, borderBottomColor: "#F5F0EA" },
-  previewKey:    { fontSize: fs(12), color: "#8A7F82", fontWeight: "600" },
-  previewVal:    { fontSize: fs(13), color: "#2B1B1F", fontWeight: "700", flex: 1, textAlign: "right", marginLeft: ms(12) },
 
   buttonGroup:   { gap: ms(12) },
 

@@ -1,11 +1,14 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ── Enums ─────────────────────────────────────────────────────────────────────
 
 enum StaffRole {
   admin
@@ -17,6 +20,7 @@ enum ExamCategory {
   ssc
   banking
   railway
+  foundation
 }
 
 enum BatchStatus {
@@ -40,16 +44,77 @@ enum LeadStatus {
   lost
 }
 
-enum FeePlanType {
-  full
-  installment
+// ── Fee system enums ──────────────────────────────────────────────────────────
+
+enum TemplateLineType {
+  fixed          // Fixed rupee amount
+  percentage     // Percentage of effective fee
+  equal_split    // Split remaining equally across N installments
+  remaining      // Whatever is left unpaid
 }
 
-enum FeePaymentStatus {
+enum TemplateTrigger {
+  on_admission          // Due immediately on enrollment
+  days_after_admission  // Due X days after enrollment date
+  days_after_previous   // Due X days after previous installment due date
+  monthly_recurring     // Recurring on dayOfMonth each month
+}
+
+enum FeeScheduleStatus {
+  active
+  completed
+  cancelled
+}
+
+enum InstallmentStatus {
   pending
+  partial
   paid
   overdue
+  waived
+  deferred
 }
+
+enum TxnMode {
+  cash
+  upi
+  card
+  bank_transfer
+  cheque
+}
+
+enum TxnType {
+  payment
+  refund
+  adjustment
+  credit_applied
+}
+
+// ── Class schedule enums ──────────────────────────────────────────────────────
+
+enum DayOfWeek {
+  monday
+  tuesday
+  wednesday
+  thursday
+  friday
+  saturday
+  sunday
+}
+
+enum SessionStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum SessionType {
+  regular
+  extra
+  makeup
+}
+
+// ── Core models ───────────────────────────────────────────────────────────────
 
 model Center {
   id        String   @id @default(uuid())
@@ -92,8 +157,9 @@ model Staff {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  assignedLeads     Lead[]        @relation("LeadAssignedTo")
-  centerAssignments CenterStaff[]
+  assignedLeads        Lead[]               @relation("LeadAssignedTo")
+  centerAssignments    CenterStaff[]
+  collectedPayments    PaymentTransaction[]
 
   @@map("staff")
 }
@@ -104,6 +170,8 @@ model Subject {
   examCategory ExamCategory?
 
   facultySubjects FacultySubject[]
+  classSlots      ClassSlot[]
+  classSessions   ClassSession[]
 
   @@map("subjects")
 }
@@ -124,6 +192,8 @@ model Faculty {
   center          Center?   @relation(fields: [centerId], references: [id])
 
   teachingSubjects FacultySubject[]
+  classSlots       ClassSlot[]
+  classSessions    ClassSession[]
 
   @@map("faculty")
 }
@@ -139,13 +209,14 @@ model FacultySubject {
 }
 
 model Course {
-  id              String       @id @default(uuid())
-  name            String
-  examCategory    ExamCategory
-  durationMonths  Int
-  defaultFee      Decimal      @db.Decimal(10, 2)
+  id             String       @id @default(uuid())
+  name           String
+  examCategory   ExamCategory
+  durationMonths Int
+  defaultFee     Decimal      @db.Decimal(10, 2)
 
-  batches Batch[]
+  batches     Batch[]
+  feeTemplate CourseFeeTemplate?
 
   @@map("courses")
 }
@@ -162,7 +233,9 @@ model Batch {
   centerId  String?
   center    Center?     @relation(fields: [centerId], references: [id])
 
-  enrollments Enrollment[]
+  enrollments   Enrollment[]
+  classSlots    ClassSlot[]
+  classSessions ClassSession[]
 
   @@map("batches")
 }
@@ -179,7 +252,6 @@ model Student {
   dob                DateTime?
   address            String?
   guardianPhone      String?
-  // Extended admission fields
   aadhaar            String?
   gender             String?
   fatherName         String?
@@ -195,6 +267,7 @@ model Student {
   preferredTiming    String?
   paymentMode        String?
   amountPaid         Decimal?  @db.Decimal(10, 2)
+  tcAcknowledgedAt   DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -213,53 +286,178 @@ model Enrollment {
   enrolledOn DateTime         @default(now())
   status     EnrollmentStatus @default(active)
 
-  feePlans FeePlan[]
+  feeSchedule StudentFeeSchedule?
 
   @@unique([studentId, batchId])
   @@map("enrollments")
 }
 
 model Lead {
-  id                  String     @id @default(uuid())
-  name                String
-  phone               String
-  targetExam          ExamCategory
-  source              String
-  status              LeadStatus @default(new)
-  assignedToId        String?
-  assignedTo          Staff?     @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
-  convertedStudentId  String?
-  convertedStudent    Student?   @relation("LeadConvertedStudent", fields: [convertedStudentId], references: [id])
-  notes               String?
-  centerId            String?
-  center              Center?    @relation(fields: [centerId], references: [id])
-  createdAt           DateTime   @default(now())
+  id                 String       @id @default(uuid())
+  name               String
+  phone              String
+  targetExam         ExamCategory
+  source             String
+  status             LeadStatus   @default(new)
+  assignedToId       String?
+  assignedTo         Staff?       @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+  convertedStudentId String?
+  convertedStudent   Student?     @relation("LeadConvertedStudent", fields: [convertedStudentId], references: [id])
+  notes              String?
+  centerId           String?
+  center             Center?      @relation(fields: [centerId], references: [id])
+  createdAt          DateTime     @default(now())
 
   @@map("leads")
 }
 
-model FeePlan {
-  id            String      @id @default(uuid())
-  enrollmentId  String
-  enrollment    Enrollment  @relation(fields: [enrollmentId], references: [id])
-  totalAmount   Decimal     @db.Decimal(10, 2)
-  planType      FeePlanType
+// ── Fee Template (course-level default plan) ──────────────────────────────────
 
-  payments FeePayment[]
+model CourseFeeTemplate {
+  id        String   @id @default(uuid())
+  courseId  String   @unique
+  course    Course   @relation(fields: [courseId], references: [id])
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("fee_plans")
+  lines TemplateLine[]
+
+  @@map("course_fee_templates")
 }
 
-model FeePayment {
-  id          String           @id @default(uuid())
-  feePlanId   String
-  feePlan     FeePlan          @relation(fields: [feePlanId], references: [id])
-  dueDate     DateTime
-  amountDue   Decimal          @db.Decimal(10, 2)
-  amountPaid  Decimal          @default(0) @db.Decimal(10, 2)
-  paidOn      DateTime?
-  status      FeePaymentStatus @default(pending)
-  receiptNo   String?
+model TemplateLine {
+  id         String            @id @default(uuid())
+  templateId String
+  template   CourseFeeTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sortOrder  Int
+  label      String
+  lineType   TemplateLineType  @default(fixed)
+  amount     Decimal?          @db.Decimal(10, 2)
+  percentage Decimal?          @db.Decimal(5, 2)
+  splitCount Int?
+  trigger    TemplateTrigger   @default(on_admission)
+  offsetDays Int?
+  dayOfMonth Int?
 
-  @@map("fee_payments")
+  @@map("template_lines")
+}
+
+// ── Student Fee Schedule (per-enrollment copy of template) ────────────────────
+
+model StudentFeeSchedule {
+  id             String            @id @default(uuid())
+  enrollmentId   String            @unique
+  enrollment     Enrollment        @relation(fields: [enrollmentId], references: [id])
+  totalFee       Decimal           @db.Decimal(10, 2)
+  discountAmount Decimal           @default(0) @db.Decimal(10, 2)
+  discountReason String?
+  effectiveFee   Decimal           @db.Decimal(10, 2)
+  creditBalance  Decimal           @default(0) @db.Decimal(10, 2)
+  status         FeeScheduleStatus @default(active)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  installments ScheduleInstallment[]
+  transactions PaymentTransaction[]
+
+  @@map("student_fee_schedules")
+}
+
+model ScheduleInstallment {
+  id            String             @id @default(uuid())
+  scheduleId    String
+  schedule      StudentFeeSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  sortOrder     Int
+  label         String
+  plannedAmount Decimal            @db.Decimal(10, 2)
+  paidAmount    Decimal            @default(0) @db.Decimal(10, 2)
+  waivedAmount  Decimal            @default(0) @db.Decimal(10, 2)
+  lateFee       Decimal            @default(0) @db.Decimal(10, 2)
+  dueDate       DateTime           @db.Date
+  status        InstallmentStatus  @default(pending)
+  waivedReason  String?
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  transactions PaymentTransaction[]
+
+  @@map("schedule_installments")
+}
+
+// ── Payment Ledger (source of truth for every rupee) ─────────────────────────
+
+model PaymentTransaction {
+  id            String               @id @default(uuid())
+  scheduleId    String
+  schedule      StudentFeeSchedule   @relation(fields: [scheduleId], references: [id])
+  installmentId String?
+  installment   ScheduleInstallment? @relation(fields: [installmentId], references: [id])
+  amount        Decimal              @db.Decimal(10, 2)
+  mode          TxnMode
+  type          TxnType              @default(payment)
+  receiptNo     String?              @unique
+  paidAt        DateTime
+  collectedById String?
+  collectedBy   Staff?               @relation(fields: [collectedById], references: [id])
+  chequeNo      String?
+  bankName      String?
+  upiRef        String?
+  notes         String?
+  createdAt     DateTime             @default(now())
+
+  @@map("payment_transactions")
+}
+
+// ── Class Schedule ────────────────────────────────────────────────────────────
+
+model ClassSlot {
+  id        String    @id @default(uuid())
+  batchId   String
+  batch     Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  dayOfWeek DayOfWeek
+  startTime String    // "09:00" — 24-hour HH:MM
+  endTime   String    // "10:30"
+  subjectId String?
+  subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  facultyId String?
+  faculty   Faculty?  @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  room      String?
+  validFrom DateTime  @db.Date
+  validTo   DateTime? @db.Date
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  sessions ClassSession[]
+
+  @@map("class_slots")
+}
+
+model ClassSession {
+  id            String        @id @default(uuid())
+  batchId       String
+  batch         Batch         @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  slotId        String?
+  slot          ClassSlot?    @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  scheduledDate DateTime      @db.Date
+  startTime     String
+  endTime       String
+  subjectId     String?
+  subject       Subject?      @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  facultyId     String?
+  faculty       Faculty?      @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  room          String?
+  status        SessionStatus @default(scheduled)
+  type          SessionType   @default(regular)
+  cancelReason  String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Prevents generating the same slot twice on the same date.
+  // NULL slotId (ad-hoc) is exempt: PostgreSQL treats NULLs as distinct in unique indexes.
+  @@unique([slotId, scheduledDate])
+  @@map("class_sessions")
 }

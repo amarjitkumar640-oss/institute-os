@@ -5,7 +5,13 @@ export function validateBody(schema: ZodSchema) {
   return (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.flatten() });
+      const flat = result.error.flatten();
+      const fieldErrors = Object.entries(flat.fieldErrors)
+        .map(([field, msgs]) => `${field}: ${(msgs as string[]).join(", ")}`)
+        .join("; ");
+      const summary = fieldErrors || flat.formErrors.join("; ") || "Validation failed";
+      console.error("[validateBody]", summary, JSON.stringify(flat));
+      return res.status(400).json({ error: summary });
     }
     req.body = result.data;
     next();

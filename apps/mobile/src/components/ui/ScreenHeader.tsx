@@ -49,15 +49,16 @@ function Wave() {
 }
 
 interface Props {
-  title:       string;
-  count?:      number;
-  countLabel?: string;
-  onBack:      () => void;
-  rightIcon?:  string;
-  onRight?:    () => void;
+  title:              string;
+  count?:             number;
+  countLabel?:        string;
+  onBack:             () => void;
+  rightIcon?:         string;
+  onRight?:           () => void;
+  heroIllustration?:  React.ReactNode;
 }
 
-export function ScreenHeader({ title, count, countLabel = "total", onBack, rightIcon, onRight }: Props) {
+export function ScreenHeader({ title, count, countLabel = "total", onBack, rightIcon, onRight, heroIllustration }: Props) {
   const insets = useSafeAreaInsets();
   const dotAreaH = Math.round(ms(110));
 
@@ -69,6 +70,14 @@ export function ScreenHeader({ title, count, countLabel = "total", onBack, right
       style={s.header}
     >
       <PolkaDots height={dotAreaH} />
+
+      {/* Hero illustration — right-side watermark */}
+      {heroIllustration && (
+        <View style={s.heroWrap} pointerEvents="none">
+          {heroIllustration}
+        </View>
+      )}
+
       <View style={[s.content, { paddingTop: insets.top + ms(10) }]}>
         <TouchableOpacity
           style={s.back}
@@ -99,7 +108,13 @@ export function ScreenHeader({ title, count, countLabel = "total", onBack, right
 }
 
 const s = StyleSheet.create({
-  header:  { overflow: "hidden" },
+  header:   { overflow: "hidden" },
+  heroWrap: {
+    position:  "absolute",
+    right:     ms(-12),
+    bottom:    WAVE_H + ms(4),
+    opacity:   0.18,
+  },
   content: {
     flexDirection: "row",
     alignItems: "center",

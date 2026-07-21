@@ -134,6 +134,7 @@ export async function deleteCourse(id: string): Promise<DeleteResult> {
     return { ok: false, hasData: true, batchCount: course._count.batches };
   }
 
+  await prisma.courseFeeTemplate.deleteMany({ where: { courseId: id } });
   await prisma.course.delete({ where: { id } });
   return { ok: true };
 }

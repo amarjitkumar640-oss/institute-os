@@ -1,9 +1,9 @@
 import React, { useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
-  StatusBar, TouchableOpacity, Animated, ActivityIndicator, Modal,
+  StatusBar, TouchableOpacity, Animated, ActivityIndicator,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { BottomSheet } from "../../components/ui/BottomSheet";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -12,16 +12,23 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { updateBatch, type BatchItem, type BatchStatus } from "../../api/batches";
 import { ms, fs } from "../../utils/responsive";
+import { C } from "../../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditBatch">;
 
-const EXAM_COLOR: Record<string, string> = { ssc: "#2563A8", banking: "#1B9C63", railway: "#E8752C" };
-const EXAM_LABEL: Record<string, string> = { ssc: "SSC", banking: "Banking", railway: "Railway" };
+// ── Maps ──────────────────────────────────────────────────────────────────────
+
+const EXAM_COLOR: Record<string, string> = {
+  ssc: C.blue, banking: C.green, railway: C.orange, foundation: C.purple,
+};
+const EXAM_LABEL: Record<string, string> = {
+  ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation",
+};
 
 const STATUS_OPTIONS: { key: BatchStatus; label: string; color: string; icon: string }[] = [
-  { key: "upcoming",  label: "Upcoming",  color: "#2563A8", icon: "time-outline"           },
-  { key: "running",   label: "Running",   color: "#1B9C63", icon: "play-circle-outline"    },
-  { key: "completed", label: "Completed", color: "#8A7F82", icon: "checkmark-done-outline" },
+  { key: "upcoming",  label: "Upcoming",  color: C.blue,    icon: "time-outline"           },
+  { key: "running",   label: "Running",   color: C.green,   icon: "play-circle-outline"    },
+  { key: "completed", label: "Completed", color: C.muted,   icon: "checkmark-done-outline" },
 ];
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -35,7 +42,7 @@ function isoToDate(iso: string): Date | null {
 
 function fmtDisplay(d: Date | null): string {
   if (!d) return "";
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function toISO(d: Date): string {
@@ -77,7 +84,12 @@ function DatePickerModal({ visible, value, minYear = 2020, maxYear = 2035, onCon
           {items.map((item) => {
             const active = item === selected;
             return (
-              <TouchableOpacity key={String(item)} style={[dp.item, active && dp.itemActive]} onPress={() => onSelect(item)} activeOpacity={0.7}>
+              <TouchableOpacity
+                key={String(item)}
+                style={[dp.item, active && dp.itemActive]}
+                onPress={() => onSelect(item)}
+                activeOpacity={0.7}
+              >
                 <Text style={[dp.itemT, active && dp.itemActiveT]}>{fmt(item)}</Text>
               </TouchableOpacity>
             );
@@ -88,64 +100,62 @@ function DatePickerModal({ visible, value, minYear = 2020, maxYear = 2035, onCon
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={dp.overlay}>
-        <View style={dp.sheet}>
-          <View style={dp.handle} />
-          <Text style={dp.title}>Select Date</Text>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View style={dp.sheetPad}>
+        <View style={dp.handle} />
+        <Text style={dp.title}>Select Date</Text>
 
-          <View style={dp.selectors}>
-            <View style={dp.selector}>
-              <Text style={dp.colLabel}>DAY</Text>
-              <Col items={days} selected={safeDay} onSelect={setDay} fmt={(v) => String(v)} />
-            </View>
-            <View style={[dp.selector, { flex: 1.4 }]}>
-              <Text style={dp.colLabel}>MONTH</Text>
-              <Col items={MONTHS} selected={MONTHS[month]} onSelect={(v) => setMonth(MONTHS.indexOf(v))} fmt={(v) => v} />
-            </View>
-            <View style={dp.selector}>
-              <Text style={dp.colLabel}>YEAR</Text>
-              <Col items={years} selected={year} onSelect={setYear} fmt={(v) => String(v)} />
-            </View>
+        <View style={dp.selectors}>
+          <View style={dp.selector}>
+            <Text style={dp.colLabel}>DAY</Text>
+            <Col items={days} selected={safeDay} onSelect={setDay} fmt={(v) => String(v)} />
           </View>
-
-          <View pointerEvents="none" style={dp.highlight} />
-
-          <View style={dp.btnRow}>
-            <TouchableOpacity style={dp.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-              <Text style={dp.cancelT}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={dp.confirmBtn} onPress={() => onConfirm(new Date(year, month, safeDay))} activeOpacity={0.85}>
-              <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
-                <Text style={dp.confirmT}>Done</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+          <View style={[dp.selector, { flex: 1.4 }]}>
+            <Text style={dp.colLabel}>MONTH</Text>
+            <Col items={MONTHS} selected={MONTHS[month]} onSelect={(v) => setMonth(MONTHS.indexOf(v))} fmt={(v) => v} />
+          </View>
+          <View style={dp.selector}>
+            <Text style={dp.colLabel}>YEAR</Text>
+            <Col items={years} selected={year} onSelect={setYear} fmt={(v) => String(v)} />
           </View>
         </View>
+
+        <View pointerEvents="none" style={dp.highlight} />
+
+        <View style={dp.btnRow}>
+          <TouchableOpacity style={dp.cancelBtn} onPress={onClose} activeOpacity={0.8}>
+            <Text style={dp.cancelT}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={dp.confirmBtn}
+            onPress={() => onConfirm(new Date(year, month, safeDay))}
+            activeOpacity={0.85}
+          >
+            <Text style={dp.confirmT}>Done</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const dp = StyleSheet.create({
-  overlay:     { flex: 1, backgroundColor: "rgba(16,4,8,0.5)", justifyContent: "flex-end" },
-  sheet:       { backgroundColor: "#FFFFFF", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
-  handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
-  title:       { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(16), textAlign: "center" },
+  sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
+  handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
+  title:       { fontSize: fs(16), fontWeight: "800", color: C.text, marginBottom: ms(16), textAlign: "center" },
   selectors:   { flexDirection: "row", height: ms(180), gap: ms(4) },
   selector:    { flex: 1 },
-  colLabel:    { fontSize: fs(10), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
+  colLabel:    { fontSize: fs(10), fontWeight: "800", color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
   col:         { flex: 1 },
   item:        { alignItems: "center", paddingVertical: ms(10) },
-  itemActive:  { backgroundColor: "#FEF4F4", borderRadius: ms(8) },
-  itemT:       { fontSize: fs(15), color: "#8A7F82", fontWeight: "600" },
-  itemActiveT: { color: "#8B1E3F", fontWeight: "800" },
-  highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 2, borderColor: "#8B1E3F20", backgroundColor: "#FEF4F430" },
+  itemActive:  { backgroundColor: C.primary + "12", borderRadius: ms(8) },
+  itemT:       { fontSize: fs(15), color: C.muted, fontWeight: "600" },
+  itemActiveT: { color: C.primary, fontWeight: "800" },
+  highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 1.5, borderColor: C.primary + "30", backgroundColor: C.primary + "06" },
   btnRow:      { flexDirection: "row", gap: ms(10), marginTop: ms(20) },
-  cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1.5, borderColor: "#E0D8D4" },
-  cancelT:     { fontSize: fs(14), fontWeight: "700", color: "#8A7F82" },
-  confirmBtn:  { flex: 1, borderRadius: ms(14), overflow: "hidden" },
-  confirmGrad: { alignItems: "center", paddingVertical: ms(14) },
+  cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg },
+  cancelT:     { fontSize: fs(14), fontWeight: "700", color: C.muted },
+  confirmBtn:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: C.primary },
   confirmT:    { fontSize: fs(14), fontWeight: "800", color: "#fff" },
 });
 
@@ -156,10 +166,10 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
   onPress?: () => void; readOnly?: boolean; error?: string;
 }) {
   return (
-    <View style={s.dateFieldWrap}>
-      <Text style={s.fieldLabel}>{label}</Text>
+    <View style={{ marginBottom: ms(14) }}>
+      <Text style={f.label}>{label}</Text>
       <TouchableOpacity
-        style={[s.dateField, readOnly && s.dateFieldReadOnly, !!error && s.dateFieldError]}
+        style={[f.field, readOnly && f.fieldReadOnly, !!error && f.fieldError]}
         onPress={onPress}
         activeOpacity={readOnly ? 1 : 0.8}
         disabled={readOnly}
@@ -167,22 +177,41 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
         <Ionicons
           name={readOnly ? "lock-closed-outline" : "calendar-outline"}
           size={ms(16)}
-          color={readOnly ? "#B0A9AC" : value ? "#8B1E3F" : "#C7BAB4"}
+          color={readOnly ? C.placeholder : value ? C.primary : C.placeholder}
         />
-        <Text style={[s.dateFieldT, !value && s.dateFieldPlaceholder, readOnly && { color: "#8A7F82" }]}>
+        <Text style={[f.fieldT, !value && f.placeholder, readOnly && { color: C.muted }]} numberOfLines={1}>
           {value || placeholder}
         </Text>
-        {!readOnly && <Ionicons name="chevron-down" size={ms(14)} color="#B0A9AC" />}
-        {readOnly && (
-          <View style={s.autoCalcBadge}>
-            <Text style={s.autoCalcT}>Auto</Text>
+        {!readOnly ? (
+          <Ionicons name="chevron-down" size={ms(14)} color={C.placeholder} />
+        ) : (
+          <View style={f.autoBadge}>
+            <Text style={f.autoT}>Auto</Text>
           </View>
         )}
       </TouchableOpacity>
-      {error ? <Text style={s.errT}>{error}</Text> : null}
+      {error ? (
+        <View style={f.errRow}>
+          <Ionicons name="alert-circle-outline" size={ms(13)} color={C.red} />
+          <Text style={f.errT}>{error}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
+
+const f = StyleSheet.create({
+  label:       { fontSize: fs(12.5), fontWeight: "700", color: C.text, marginBottom: ms(7), letterSpacing: 0.3 },
+  field:       { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: 1, borderColor: C.border, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: C.inputBg },
+  fieldReadOnly:{ backgroundColor: C.bg, borderColor: C.border },
+  fieldError:  { borderColor: C.red, backgroundColor: C.red + "06" },
+  fieldT:      { flex: 1, fontSize: fs(14), color: C.text, fontWeight: "600" },
+  placeholder: { color: C.placeholder, fontWeight: "400" },
+  autoBadge:   { backgroundColor: C.green + "18", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  autoT:       { fontSize: fs(10), fontWeight: "800", color: C.green },
+  errRow:      { flexDirection: "row", alignItems: "center", marginTop: ms(5), gap: ms(4) },
+  errT:        { fontSize: fs(11.5), color: C.red, flex: 1 },
+});
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -195,7 +224,6 @@ export function EditBatchScreen({ navigation, route }: Props) {
   const [startDate, setStartDate] = useState<Date | null>(isoToDate(batch.startDate));
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-  // end date always auto-calculated from startDate + course duration
   const endDate: Date | null = startDate
     ? addMonths(startDate, batch.course.durationMonths)
     : null;
@@ -208,15 +236,14 @@ export function EditBatchScreen({ navigation, route }: Props) {
   const cardSlide   = useRef(new Animated.Value(ms(40))).current;
   const checkScale  = useRef(new Animated.Value(0)).current;
 
-  const examColor = EXAM_COLOR[batch.course.examCategory] ?? "#8A7F82";
+  const examColor = EXAM_COLOR[batch.course.examCategory] ?? C.muted;
   const examLabel = EXAM_LABEL[batch.course.examCategory] ?? batch.course.examCategory.toUpperCase();
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
-    if (!name.trim())                         errs.name     = "Batch name is required.";
-    if (!capacity.trim() || isNaN(Number(capacity)) || Number(capacity) < 1)
-                                              errs.capacity = "Enter a valid capacity (min 1).";
-    if (!startDate)                           errs.startDate = "Please select a start date.";
+    if (!name.trim())                                                    errs.name     = "Batch name is required.";
+    if (!capacity.trim() || isNaN(Number(capacity)) || Number(capacity) < 1) errs.capacity = "Enter a valid capacity (min 1).";
+    if (!startDate)                                                       errs.startDate = "Please select a start date.";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -250,125 +277,163 @@ export function EditBatchScreen({ navigation, route }: Props) {
       <ScreenHeader title="Edit Batch" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-
-          {/* Course info (read-only) */}
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={s.body}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ── Course (read-only) ── */}
           <View style={s.card}>
-            <View style={s.sectionHead}>
-              <View style={[s.sectionIcon, { backgroundColor: examColor + "18" }]}>
-                <Ionicons name="book-outline" size={ms(16)} color={examColor} />
+            <View style={s.cardHead}>
+              <View style={[s.cardHeadIcon, { backgroundColor: examColor + "18" }]}>
+                <Ionicons name="book-outline" size={ms(15)} color={examColor} />
               </View>
-              <Text style={[s.sectionLabel, { color: examColor }]}>COURSE</Text>
+              <Text style={s.cardHeadT}>Course</Text>
+              <View style={s.lockChip}>
+                <Ionicons name="lock-closed-outline" size={ms(11)} color={C.muted} />
+                <Text style={s.lockChipT}>Fixed</Text>
+              </View>
             </View>
-            <View style={[s.courseReadOnly, { borderColor: examColor + "40" }]}>
-              <View style={[s.courseTag, { backgroundColor: examColor + "20" }]}>
-                <Text style={[s.courseTagT, { color: examColor }]}>{examLabel}</Text>
+            <View style={s.divider} />
+            <View style={s.courseRow}>
+              <View style={[s.examBadge, { backgroundColor: examColor + "18" }]}>
+                <Text style={[s.examBadgeT, { color: examColor }]}>{examLabel}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.courseName}>{batch.course.name}</Text>
-                <Text style={s.courseSub}>{batch.course.durationMonths} months · ₹{Number(batch.course.defaultFee).toLocaleString("en-IN")}</Text>
-              </View>
-              <View style={s.lockBadge}>
-                <Ionicons name="lock-closed-outline" size={ms(12)} color="#8A7F82" />
-                <Text style={s.lockT}>Fixed</Text>
+                <Text style={s.courseName} numberOfLines={2}>{batch.course.name}</Text>
+                <Text style={s.courseSub}>
+                  {batch.course.durationMonths} months · ₹{Number(batch.course.defaultFee).toLocaleString("en-IN")}
+                </Text>
               </View>
             </View>
           </View>
 
-          {/* Batch details */}
+          {/* ── Batch details ── */}
           <View style={s.card}>
-            <View style={s.sectionHead}>
-              <View style={[s.sectionIcon, { backgroundColor: "#2563A818" }]}>
-                <Ionicons name="layers-outline" size={ms(16)} color="#2563A8" />
+            <View style={s.cardHead}>
+              <View style={[s.cardHeadIcon, { backgroundColor: C.blue + "18" }]}>
+                <Ionicons name="layers-outline" size={ms(15)} color={C.blue} />
               </View>
-              <Text style={[s.sectionLabel, { color: "#2563A8" }]}>BATCH DETAILS</Text>
+              <Text style={s.cardHeadT}>Batch Details</Text>
             </View>
-            <FormField label="BATCH NAME" value={name} onChangeText={(v) => { setName(v); setErrors((p) => ({ ...p, name: "" })); }}
-              placeholder="e.g. SSC Morning Batch A" error={errors.name} icon="layers-outline" maxLength={120} clearable />
-            <FormField label="CAPACITY (SEATS)" value={capacity} onChangeText={(v) => { setCapacity(v.replace(/\D/g, "")); setErrors((p) => ({ ...p, capacity: "" })); }}
-              placeholder="e.g. 40" keyboardType="number-pad" error={errors.capacity} icon="people-outline" />
+            <View style={[s.divider, { marginBottom: ms(14) }]} />
+            <View style={s.fieldsPad}>
+              <FormField
+                label="Batch Name"
+                value={name}
+                onChangeText={(v) => { setName(v); setErrors((p) => ({ ...p, name: "" })); }}
+                placeholder="e.g. SSC Morning Batch A"
+                error={errors.name}
+                icon="layers-outline"
+                maxLength={120}
+                clearable
+                required
+              />
+              <FormField
+                label="Capacity (seats)"
+                value={capacity}
+                onChangeText={(v) => { setCapacity(v.replace(/\D/g, "")); setErrors((p) => ({ ...p, capacity: "" })); }}
+                placeholder="e.g. 40"
+                keyboardType="number-pad"
+                error={errors.capacity}
+                icon="people-outline"
+                required
+              />
+            </View>
           </View>
 
-          {/* Status */}
+          {/* ── Status ── */}
           <View style={s.card}>
-            <View style={s.sectionHead}>
-              <View style={[s.sectionIcon, { backgroundColor: "#E8752C18" }]}>
-                <Ionicons name="pulse-outline" size={ms(16)} color="#E8752C" />
+            <View style={s.cardHead}>
+              <View style={[s.cardHeadIcon, { backgroundColor: C.orange + "18" }]}>
+                <Ionicons name="pulse-outline" size={ms(15)} color={C.orange} />
               </View>
-              <Text style={[s.sectionLabel, { color: "#E8752C" }]}>STATUS</Text>
+              <Text style={s.cardHeadT}>Status</Text>
             </View>
-            <View style={s.statusRow}>
+            <View style={s.divider} />
+            <View style={s.statusGrid}>
               {STATUS_OPTIONS.map((opt) => {
                 const active = status === opt.key;
                 return (
                   <TouchableOpacity
                     key={opt.key}
-                    style={[s.statusOpt, active && { backgroundColor: opt.color, borderColor: opt.color }]}
+                    style={[s.statusChip, active && { backgroundColor: opt.color, borderColor: opt.color }]}
                     onPress={() => setStatus(opt.key)}
                     activeOpacity={0.75}
                   >
-                    <Ionicons name={opt.icon as any} size={ms(16)} color={active ? "#fff" : "#8A7F82"} />
-                    <Text style={[s.statusOptT, active && { color: "#fff" }]}>{opt.label}</Text>
+                    <Ionicons name={opt.icon as any} size={ms(15)} color={active ? "#fff" : C.muted} />
+                    <Text style={[s.statusChipT, active && { color: "#fff" }]}>{opt.label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
             {batch.enrolledCount > 0 && (
-              <View style={s.enrolledHint}>
-                <Ionicons name="people-outline" size={ms(13)} color="#2563A8" />
-                <Text style={s.enrolledHintT}>{batch.enrolledCount} student{batch.enrolledCount !== 1 ? "s" : ""} currently enrolled</Text>
+              <View style={s.enrolledNote}>
+                <Ionicons name="people-outline" size={ms(13)} color={C.blue} />
+                <Text style={s.enrolledNoteT}>
+                  {batch.enrolledCount} student{batch.enrolledCount !== 1 ? "s" : ""} currently enrolled
+                </Text>
               </View>
             )}
           </View>
 
-          {/* Schedule */}
+          {/* ── Schedule ── */}
           <View style={s.card}>
-            <View style={s.sectionHead}>
-              <View style={[s.sectionIcon, { backgroundColor: "#1B9C6318" }]}>
-                <Ionicons name="calendar-outline" size={ms(16)} color="#1B9C63" />
+            <View style={s.cardHead}>
+              <View style={[s.cardHeadIcon, { backgroundColor: C.green + "18" }]}>
+                <Ionicons name="calendar-outline" size={ms(15)} color={C.green} />
               </View>
-              <Text style={[s.sectionLabel, { color: "#1B9C63" }]}>SCHEDULE</Text>
+              <Text style={s.cardHeadT}>Schedule</Text>
             </View>
-
-            <DateField
-              label="START DATE"
-              value={fmtDisplay(startDate)}
-              placeholder="Tap to select start date"
-              onPress={() => setDatePickerOpen(true)}
-              error={errors.startDate}
-            />
-
-            <DateField
-              label={`END DATE (${batch.course.durationMonths} months from start)`}
-              value={fmtDisplay(endDate)}
-              placeholder="Auto-calculated from start date"
-              readOnly
-            />
+            <View style={[s.divider, { marginBottom: ms(14) }]} />
+            <View style={s.fieldsPad}>
+              <DateField
+                label="Start Date"
+                value={fmtDisplay(startDate)}
+                placeholder="Tap to pick start date"
+                onPress={() => setDatePickerOpen(true)}
+                error={errors.startDate}
+              />
+              <DateField
+                label={`End Date  ·  auto-calculated (${batch.course.durationMonths} months)`}
+                value={fmtDisplay(endDate)}
+                placeholder="Auto-calculated"
+                readOnly
+              />
+            </View>
           </View>
 
+          {/* ── Submit error ── */}
           {errors.submit ? (
             <View style={s.submitErr}>
-              <Ionicons name="alert-circle-outline" size={ms(16)} color="#DC2626" />
+              <Ionicons name="alert-circle-outline" size={ms(15)} color={C.red} />
               <Text style={s.submitErrT}>{errors.submit}</Text>
             </View>
           ) : null}
 
-          <TouchableOpacity style={s.saveWrap} onPress={handleSave} disabled={loading} activeOpacity={0.85}>
-            <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.saveBtn}>
-              {loading
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <>
-                    <Ionicons name="checkmark-circle-outline" size={ms(20)} color="#fff" />
-                    <Text style={s.saveT}>Save Changes</Text>
-                  </>}
-            </LinearGradient>
+          {/* ── Save button ── */}
+          <TouchableOpacity
+            style={[s.saveBtn, loading && { opacity: 0.7 }]}
+            onPress={handleSave}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={ms(20)} color="#fff" />
+                <Text style={s.saveBtnT}>Save Changes</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <View style={{ height: ms(32) }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Date picker */}
+      {/* ── Date picker ── */}
       <DatePickerModal
         visible={datePickerOpen}
         value={startDate}
@@ -376,48 +441,50 @@ export function EditBatchScreen({ navigation, route }: Props) {
         onClose={() => setDatePickerOpen(false)}
       />
 
-      {/* Success card */}
+      {/* ── Success overlay ── */}
       {updated && (
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
           <ScrollView contentContainerStyle={s.successScroll} showsVerticalScrollIndicator={false}>
             <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
-              <Animated.View style={{ transform: [{ scale: checkScale }], marginBottom: ms(20) }}>
-                <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
-                  <Ionicons name="pencil" size={ms(44)} color="#fff" />
-                </LinearGradient>
-              </Animated.View>
-              <Text style={s.successTitle}>Batch Updated!</Text>
-              <View style={s.regCodeRow}>
-                <Ionicons name="layers-outline" size={ms(14)} color="#8B1E3F" />
-                <Text style={s.regCode}>{updated.name}</Text>
-              </View>
-              <Text style={s.successSub}>Changes saved successfully</Text>
 
-              <View style={s.detailBox}>
+              {/* Check circle */}
+              <Animated.View style={[s.checkWrap, { transform: [{ scale: checkScale }] }]}>
+                <View style={s.checkCircle}>
+                  <Ionicons name="checkmark" size={ms(40)} color="#fff" />
+                </View>
+              </Animated.View>
+
+              <Text style={s.successTitle}>Batch Updated!</Text>
+              <View style={s.successNameRow}>
+                <Ionicons name="layers-outline" size={ms(13)} color={C.primary} />
+                <Text style={s.successName} numberOfLines={1}>{updated.name}</Text>
+              </View>
+              <Text style={s.successSub}>All changes saved successfully</Text>
+
+              {/* Summary tiles */}
+              <View style={s.summaryGrid}>
                 {[
-                  { icon: "book-outline",       label: "Course",   value: updated.course.name,                                        color: "#2563A8" },
-                  { icon: "people-outline",      label: "Capacity", value: `${updated.capacity} seats`,                                color: "#1B9C63" },
-                  { icon: "pulse-outline",       label: "Status",   value: STATUS_OPTIONS.find((o) => o.key === updated.status)?.label ?? updated.status, color: "#E8752C" },
-                  { icon: "play-circle-outline", label: "Starts",   value: new Date(updated.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), color: "#8B1E3F" },
-                  { icon: "stop-circle-outline", label: "Ends",     value: new Date(updated.endDate).toLocaleDateString("en-IN",   { day: "2-digit", month: "short", year: "numeric" }), color: "#8B1E3F" },
+                  { icon: "book-outline",        label: "Course",   value: updated.course.name, color: C.blue   },
+                  { icon: "people-outline",       label: "Capacity", value: `${updated.capacity} seats`, color: C.green  },
+                  { icon: "pulse-outline",        label: "Status",   value: STATUS_OPTIONS.find((o) => o.key === updated.status)?.label ?? updated.status, color: C.orange },
+                  { icon: "calendar-outline",     label: "Starts",   value: new Date(updated.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), color: C.primary },
+                  { icon: "flag-outline",         label: "Ends",     value: new Date(updated.endDate).toLocaleDateString("en-IN",   { day: "2-digit", month: "short", year: "numeric" }), color: C.primary },
                 ].map((row, i, arr) => (
-                  <View key={row.label} style={[s.detailRow, i < arr.length - 1 && s.detailRowBorder]}>
-                    <View style={[s.detailIcon, { backgroundColor: row.color + "18" }]}>
+                  <View key={row.label} style={[s.summaryRow, i < arr.length - 1 && s.summaryRowBorder]}>
+                    <View style={[s.summaryIcon, { backgroundColor: row.color + "18" }]}>
                       <Ionicons name={row.icon as any} size={ms(14)} color={row.color} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.detailLabel}>{row.label}</Text>
-                      <Text style={s.detailValue}>{row.value}</Text>
+                      <Text style={s.summaryLabel}>{row.label}</Text>
+                      <Text style={s.summaryValue} numberOfLines={1}>{row.value}</Text>
                     </View>
                   </View>
                 ))}
               </View>
 
-              <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.viewAllWrap}>
-                <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.viewAllBtn}>
-                  <Ionicons name="layers-outline" size={ms(18)} color="#fff" />
-                  <Text style={s.viewAllT}>View All Batches</Text>
-                </LinearGradient>
+              <TouchableOpacity style={s.goBackBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+                <Ionicons name="arrow-back" size={ms(18)} color="#fff" />
+                <Text style={s.goBackT}>Back to Batch</Text>
               </TouchableOpacity>
             </Animated.View>
           </ScrollView>
@@ -427,63 +494,100 @@ export function EditBatchScreen({ navigation, route }: Props) {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: "#8B1E3F" },
-  scroll: { flex: 1, backgroundColor: "#FFFBF0" },
-  body:   { paddingHorizontal: ms(16), paddingTop: ms(16), paddingBottom: ms(16) },
+  safe:   { flex: 1, backgroundColor: C.primary },
+  scroll: { flex: 1, backgroundColor: C.bg },
+  body:   { paddingHorizontal: ms(16), paddingTop: ms(16), gap: ms(14) },
 
-  card:        { backgroundColor: "#FFFFFF", borderRadius: ms(20), padding: ms(18), marginBottom: ms(14), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
-  sectionHead: { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(16) },
-  sectionIcon: { width: ms(36), height: ms(36), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
-  sectionLabel:{ fontSize: fs(12), fontWeight: "800", letterSpacing: 0.8 },
+  // Card
+  card: {
+    backgroundColor: C.card,
+    borderRadius:    ms(18),
+    overflow:        "hidden",
+    shadowColor:     C.text,
+    shadowOffset:    { width: 0, height: ms(2) },
+    shadowOpacity:   0.07,
+    shadowRadius:    ms(8),
+    elevation:       3,
+  },
+  cardHead:     { flexDirection: "row", alignItems: "center", gap: ms(10), padding: ms(14) },
+  cardHeadIcon: { width: ms(32), height: ms(32), borderRadius: ms(9), alignItems: "center", justifyContent: "center" },
+  cardHeadT:    { flex: 1, fontSize: fs(14), fontWeight: "800", color: C.text },
+  divider:      { height: 1, backgroundColor: C.border },
 
-  courseReadOnly: { flexDirection: "row", alignItems: "center", gap: ms(12), borderWidth: 1.5, borderRadius: ms(14), padding: ms(14), backgroundColor: "#FAFAFA" },
-  courseTag:      { borderRadius: ms(8), paddingHorizontal: ms(9), paddingVertical: ms(5) },
-  courseTagT:     { fontSize: fs(11), fontWeight: "800" },
-  courseName:     { fontSize: fs(13.5), fontWeight: "700", color: "#2B1B1F" },
-  courseSub:      { fontSize: fs(11), color: "#8A7F82", marginTop: ms(2) },
-  lockBadge:      { flexDirection: "row", alignItems: "center", gap: ms(3), backgroundColor: "#F4F4F4", borderRadius: ms(8), paddingHorizontal: ms(7), paddingVertical: ms(4) },
-  lockT:          { fontSize: fs(10), fontWeight: "700", color: "#8A7F82" },
+  // Lock chip
+  lockChip:  { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.inputBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(4) },
+  lockChipT: { fontSize: fs(10), fontWeight: "700", color: C.muted },
 
-  statusRow:     { flexDirection: "row", gap: ms(8) },
-  statusOpt:     { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6), paddingVertical: ms(10), borderRadius: ms(12), backgroundColor: "#FAFAFA", borderWidth: 1.5, borderColor: "#E0D8D4" },
-  statusOptT:    { fontSize: fs(12), fontWeight: "700", color: "#8A7F82" },
-  enrolledHint:  { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#EFF6FF", borderRadius: ms(10), padding: ms(10), marginTop: ms(12) },
-  enrolledHintT: { fontSize: fs(12), color: "#2563A8", fontWeight: "600" },
+  // Course row
+  courseRow:   { flexDirection: "row", alignItems: "center", gap: ms(12), padding: ms(14) },
+  examBadge:   { borderRadius: ms(8), paddingHorizontal: ms(10), paddingVertical: ms(5) },
+  examBadgeT:  { fontSize: fs(11), fontWeight: "800" },
+  courseName:  { fontSize: fs(13), fontWeight: "700", color: C.text },
+  courseSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
 
-  dateFieldWrap:      { marginBottom: ms(16) },
-  fieldLabel:         { fontSize: fs(11), fontWeight: "800", color: "#8A7F82", letterSpacing: 0.8, marginBottom: ms(8) },
-  dateField:          { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: 1.5, borderColor: "#E0D8D4", borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: "#FAFAFA" },
-  dateFieldReadOnly:  { backgroundColor: "#F7F4F2", borderColor: "#EDE8E3" },
-  dateFieldError:     { borderColor: "#DC2626" },
-  dateFieldT:         { flex: 1, fontSize: fs(13.5), color: "#2B1B1F", fontWeight: "600" },
-  dateFieldPlaceholder: { color: "#C7BAB4", fontWeight: "400" },
-  autoCalcBadge:      { backgroundColor: "#E7F7EF", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  autoCalcT:          { fontSize: fs(10), fontWeight: "800", color: "#1B9C63" },
+  // Fields padding wrapper
+  fieldsPad: { paddingHorizontal: ms(14) },
 
-  errT:        { fontSize: fs(11.5), color: "#DC2626", marginTop: ms(4) },
-  submitErr:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: "#FEE2E2", borderRadius: ms(10), padding: ms(12), marginBottom: ms(12) },
-  submitErrT:  { fontSize: fs(13), color: "#DC2626", flex: 1 },
+  // Status
+  statusGrid:   { flexDirection: "row", gap: ms(8), padding: ms(14) },
+  statusChip:   { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6), paddingVertical: ms(10), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border },
+  statusChipT:  { fontSize: fs(12), fontWeight: "700", color: C.muted },
+  enrolledNote: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.blue + "12", borderRadius: ms(10), padding: ms(10), margin: ms(14), marginTop: 0 },
+  enrolledNoteT:{ fontSize: fs(12), color: C.blue, fontWeight: "600" },
 
-  saveWrap: { marginTop: ms(4) },
-  saveBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  saveT:    { fontSize: fs(15), fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+  // Submit error
+  submitErr:  { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.red + "12", borderRadius: ms(12), padding: ms(12) },
+  submitErrT: { fontSize: fs(13), color: C.red, flex: 1 },
 
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0" },
+  // Save button
+  saveBtn: {
+    flexDirection:   "row",
+    alignItems:      "center",
+    justifyContent:  "center",
+    gap:             ms(8),
+    backgroundColor: C.primary,
+    borderRadius:    ms(16),
+    paddingVertical: ms(16),
+    shadowColor:     C.primary,
+    shadowOffset:    { width: 0, height: ms(4) },
+    shadowOpacity:   0.35,
+    shadowRadius:    ms(10),
+    elevation:       6,
+  },
+  saveBtnT: { fontSize: fs(15), fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+
+  // Success overlay
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg },
   successScroll:  { flexGrow: 1, justifyContent: "center", paddingHorizontal: ms(20), paddingVertical: ms(32) },
-  successCard:    { backgroundColor: "#FFFFFF", borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
-  checkCircle:    { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
-  successTitle:   { fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(8) },
-  regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF4F4", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(6), marginBottom: ms(8) },
-  regCode:        { fontSize: fs(13), fontWeight: "800", color: "#8B1E3F", letterSpacing: 0.5 },
-  successSub:     { fontSize: fs(13), color: "#8A7F82", marginBottom: ms(20), textAlign: "center" },
-  detailBox:      { width: "100%", backgroundColor: "#FAFAFA", borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(20), borderWidth: 1, borderColor: "#F0EDE8" },
-  detailRow:      { flexDirection: "row", alignItems: "center", paddingVertical: ms(12), gap: ms(12) },
-  detailRowBorder:{ borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
-  detailIcon:     { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
-  detailLabel:    { fontSize: fs(10.5), color: "#8A7F82", fontWeight: "600" },
-  detailValue:    { fontSize: fs(13.5), fontWeight: "700", color: "#1A1214" },
-  viewAllWrap:    { width: "100%", borderRadius: ms(16), overflow: "hidden" },
-  viewAllBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), paddingVertical: ms(16) },
-  viewAllT:       { fontSize: fs(15), fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+  successCard: {
+    backgroundColor: C.card,
+    borderRadius:    ms(24),
+    padding:         ms(24),
+    alignItems:      "center",
+    shadowColor:     C.text,
+    shadowOffset:    { width: 0, height: ms(6) },
+    shadowOpacity:   0.10,
+    shadowRadius:    ms(20),
+    elevation:       10,
+  },
+  checkWrap:   { marginBottom: ms(20) },
+  checkCircle: { width: ms(80), height: ms(80), borderRadius: ms(40), backgroundColor: C.primary, justifyContent: "center", alignItems: "center" },
+
+  successTitle:   { fontSize: fs(22), fontWeight: "800", color: C.text, marginBottom: ms(8) },
+  successNameRow: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.primary + "10", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(6), marginBottom: ms(6) },
+  successName:    { fontSize: fs(13), fontWeight: "800", color: C.primary, flex: 1 },
+  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(20) },
+
+  summaryGrid:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(14), marginBottom: ms(20), borderWidth: 1, borderColor: C.border, overflow: "hidden" },
+  summaryRow:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(11), paddingHorizontal: ms(14), gap: ms(12) },
+  summaryRowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
+  summaryIcon:      { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
+  summaryLabel:     { fontSize: fs(10), color: C.muted, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
+  summaryValue:     { fontSize: fs(13), fontWeight: "700", color: C.text },
+
+  goBackBtn: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: C.primary, borderRadius: ms(14), paddingVertical: ms(14) },
+  goBackT:   { fontSize: fs(14), fontWeight: "800", color: "#fff" },
 });

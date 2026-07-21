@@ -10,6 +10,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { EmptyState as UIEmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import type { RootStackParamList } from "../../navigation/types";
 import { ms, fs } from "../../utils/responsive";
@@ -39,14 +40,15 @@ function catLabel(c: ExamCategory | null): string {
 
 // ── Filter chips ──────────────────────────────────────────────────────────────
 
-type Filter = "all" | "shared" | "ssc" | "banking" | "railway";
+type Filter = "all" | "shared" | "ssc" | "banking" | "railway" | "foundation";
 
 const FILTERS: { key: Filter; label: string; color: string }[] = [
-  { key: "all",     label: "All",     color: C.primary  },
-  { key: "shared",  label: "Shared",  color: "#E8752C"  },
-  { key: "ssc",     label: "SSC",     color: "#8B1E3F"  },
-  { key: "banking", label: "Banking", color: "#2563A8"  },
-  { key: "railway", label: "Railway", color: "#2CA6A4"  },
+  { key: "all",        label: "All",        color: C.primary  },
+  { key: "shared",     label: "Shared",     color: "#E8752C"  },
+  { key: "ssc",        label: "SSC",        color: "#8B1E3F"  },
+  { key: "banking",    label: "Banking",    color: "#2563A8"  },
+  { key: "railway",    label: "Railway",    color: "#2CA6A4"  },
+  { key: "foundation", label: "Foundation", color: "#7B3FA0"  },
 ];
 
 // ── Subject card ──────────────────────────────────────────────────────────────
@@ -150,23 +152,21 @@ const sc = StyleSheet.create({
 
 // ── Empty state ────────────────────────────────────────────────────────────────
 
-function EmptyState({ search, filter }: { search: string; filter: Filter }) {
-  const msg = search
+function SubjectEmpty({ search, filter }: { search: string; filter: Filter }) {
+  const title = search
     ? `No subjects match "${search}"`
     : filter !== "all"
       ? `No ${CAT_LABEL[filter] ?? filter} subjects yet`
       : "No subjects yet";
   return (
-    <View style={es.wrap}>
-      <Ionicons name="book-outline" size={ms(48)} color="#D5CCC8" />
-      <Text style={es.t}>{msg}</Text>
-    </View>
+    <UIEmptyState
+      scene="subjects"
+      color="#5B2D8E"
+      title={title}
+      subtitle={search ? "Try a different keyword or category" : "Add subjects to your curriculum"}
+    />
   );
 }
-const es = StyleSheet.create({
-  wrap: { alignItems: "center", paddingVertical: ms(48), gap: ms(10) },
-  t:    { fontSize: fs(14), color: "#B0A9AC", textAlign: "center" },
-});
 
 // ── Banner stats ───────────────────────────────────────────────────────────────
 
@@ -358,7 +358,7 @@ export function SubjectListScreen(_: Props) {
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={
             !loading && !error ? (
-              <EmptyState search={search} filter={filter} />
+              <SubjectEmpty search={search} filter={filter} />
             ) : null
           }
           refreshing={refreshing}

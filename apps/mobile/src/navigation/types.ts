@@ -25,6 +25,11 @@ export type RootStackParamList = {
   EditStudent: { student: StudentItem };
   CenterManagement: undefined;
   StaffManagement:  undefined;
+  FeesList:           undefined;
+  FeeScheduleDetail:  { enrollmentId: string; studentName: string };
+  FeeStructure:       { courseId: string; courseName: string; defaultFee: number };
   Leads: undefined;
   Students: undefined;
+  BatchSchedule: { batchId: string; batchName: string };
+  SessionDetail: { sessionId: string; batchId: string; batchName: string };
 };

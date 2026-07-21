@@ -33,8 +33,13 @@ import { EditSubjectScreen }   from "../screens/subjects/EditSubjectScreen";
 import { StudentListScreen }      from "../screens/students/StudentListScreen";
 import { StudentAdmissionScreen } from "../screens/students/StudentAdmissionScreen";
 import { EditStudentScreen }      from "../screens/students/EditStudentScreen";
+import { FeesScreen }             from "../screens/fees/FeesScreen";
+import { FeeScheduleDetailScreen } from "../screens/fees/FeeScheduleDetailScreen";
+import { FeeStructureScreen }      from "../screens/fees/FeeStructureScreen";
 import { LeadsScreen }       from "../screens/leads/LeadsScreen";
 import { StudentsScreen }    from "../screens/students/StudentsScreen";
+import { BatchScheduleScreen } from "../screens/schedule/BatchScheduleScreen";
+import { SessionDetailScreen } from "../screens/schedule/SessionDetailScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -61,7 +66,7 @@ function RootNavigatorInner() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
         {/* Dashboard — home after login */}
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
         <Stack.Screen name="Profile"   component={ProfileScreen}   />
@@ -69,20 +74,29 @@ function RootNavigatorInner() {
         {/* Feature list screens */}
         <Stack.Screen name="BatchList"    component={BatchListScreen} />
         <Stack.Screen name="BatchDetail"  component={BatchDetailScreen} />
-        <Stack.Screen name="CreateBatch"  component={CreateBatchScreen} />
-        <Stack.Screen name="EditBatch"    component={EditBatchScreen} />
+        <Stack.Screen name="CreateBatch"  component={CreateBatchScreen}  options={{ animation: "slide_from_bottom" }} />
+        <Stack.Screen name="EditBatch"    component={EditBatchScreen}    options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="CourseList"    component={CourseListScreen} />
-        <Stack.Screen name="CreateCourse"  component={CreateCourseScreen} />
-        <Stack.Screen name="EditCourse"    component={EditCourseScreen} />
+        <Stack.Screen name="CreateCourse"  component={CreateCourseScreen} options={{ animation: "slide_from_bottom" }} />
+        <Stack.Screen name="EditCourse"    component={EditCourseScreen}   options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="FacultyList"    component={FacultyListScreen} />
-        <Stack.Screen name="CreateFaculty"  component={CreateFacultyScreen} />
-        <Stack.Screen name="EditFaculty"    component={EditFacultyScreen} />
+        <Stack.Screen name="CreateFaculty"  component={CreateFacultyScreen} options={{ animation: "slide_from_bottom" }} />
+        <Stack.Screen name="EditFaculty"    component={EditFacultyScreen}   options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="SubjectList"    component={SubjectListScreen} />
-        <Stack.Screen name="CreateSubject"  component={CreateSubjectScreen} />
-        <Stack.Screen name="EditSubject"    component={EditSubjectScreen} />
+        <Stack.Screen name="CreateSubject"  component={CreateSubjectScreen} options={{ animation: "slide_from_bottom" }} />
+        <Stack.Screen name="EditSubject"    component={EditSubjectScreen}   options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="StudentList"   component={StudentListScreen} />
-        <Stack.Screen name="NewAdmission" component={StudentAdmissionScreen} />
-        <Stack.Screen name="EditStudent"  component={EditStudentScreen} />
+        <Stack.Screen name="NewAdmission" component={StudentAdmissionScreen} options={{ animation: "slide_from_bottom" }} />
+        <Stack.Screen name="EditStudent"  component={EditStudentScreen}     options={{ animation: "slide_from_bottom" }} />
+
+        {/* Fees */}
+        <Stack.Screen name="FeesList"          component={FeesScreen}             />
+        <Stack.Screen name="FeeScheduleDetail" component={FeeScheduleDetailScreen} />
+        <Stack.Screen name="FeeStructure"      component={FeeStructureScreen}     options={{ animation: "slide_from_bottom" }} />
+
+        {/* Class Schedule */}
+        <Stack.Screen name="BatchSchedule" component={BatchScheduleScreen} />
+        <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
 
         {/* Admin-only management screens */}
         <Stack.Screen name="CenterManagement" component={CenterManagementScreen} />

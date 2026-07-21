@@ -9,6 +9,7 @@ import { uploadPhoto } from "../../lib/s3";
 import { generateStudentCode } from "./students.service";
 import { centerFilter, centerIdForCreate } from "../../lib/centerFilter";
 import { BatchFullError, createEnrollment } from "../enrollments/enrollments.service";
+import { generateReceiptNo, generateSchedule } from "../fees/fees.service";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -64,7 +65,7 @@ studentsRouter.post(
   requireRole("admin", "frontdesk"),
   validateBody(admitStudentSchema),
   async (req, res) => {
-    const { batchId, amountPaid, ...studentData } = req.body;
+    const { batchId, amountPaid, tcAcknowledged: _tc, ...studentData } = req.body;
 
     try {
       const centerId = centerIdForCreate(req, req.body.centerId);
@@ -97,12 +98,98 @@ studentsRouter.post(
             preferredTiming:    studentData.preferredTiming ?? null,
             paymentMode:        studentData.paymentMode ?? null,
             amountPaid:         amountPaid ?? null,
+            tcAcknowledgedAt:   req.body.tcAcknowledged ? new Date() : null,
           },
         });
 
         let enrollment = null;
         if (batchId) {
+          // Fetch batch → course → fee template before creating enrollment
+          const batch = await (tx as any).batch.findUnique({
+            where:   { id: batchId },
+            include: { course: { include: { feeTemplate: { include: { lines: { orderBy: { sortOrder: "asc" } } } } } } },
+          });
+
           enrollment = await createEnrollment(tx as any, student.id, batchId);
+
+          const paid       = amountPaid ? Number(amountPaid) : 0;
+          const today      = new Date();
+          today.setHours(0, 0, 0, 0);
+          const txnMode    = studentData.paymentMode === "cash" ? "cash" : "upi";
+          const feeTemplate = batch?.course?.feeTemplate;
+          const totalFee    = Number(batch?.course?.defaultFee ?? 0);
+
+          if (feeTemplate && feeTemplate.lines.length > 0) {
+            // Generate full installment schedule from course fee template
+            const schedule = await generateSchedule(tx as any, enrollment.id, { totalFee, discountAmount: 0 });
+
+            if (paid > 0) {
+              // Apply admission payment to first installment
+              const firstInst = schedule.installments[0];
+              const applying  = Math.min(paid, Number(firstInst.plannedAmount));
+              const newStatus = applying >= Number(firstInst.plannedAmount) ? "paid" : "partial";
+
+              await (tx as any).scheduleInstallment.update({
+                where: { id: firstInst.id },
+                data:  { paidAmount: applying, status: newStatus },
+              });
+
+              await (tx as any).paymentTransaction.create({
+                data: {
+                  scheduleId:    schedule.id,
+                  installmentId: firstInst.id,
+                  amount:        paid,
+                  mode:          txnMode,
+                  type:          "payment",
+                  receiptNo:     generateReceiptNo(),
+                  paidAt:        today,
+                  collectedById: req.auth?.staffId ?? null,
+                },
+              });
+
+              // Mark schedule active/completed based on total paid
+              await (tx as any).studentFeeSchedule.update({
+                where: { id: schedule.id },
+                data:  { status: paid >= totalFee ? "completed" : "active" },
+              });
+            }
+          } else if (paid > 0) {
+            // No fee template — create a simple admission payment record
+            const schedule = await (tx as any).studentFeeSchedule.create({
+              data: {
+                enrollmentId:   enrollment.id,
+                totalFee:       paid,
+                discountAmount: 0,
+                effectiveFee:   paid,
+                creditBalance:  0,
+                status:         "completed",
+                installments: {
+                  create: [{
+                    sortOrder:     0,
+                    label:         "Admission Payment",
+                    plannedAmount: paid,
+                    paidAmount:    paid,
+                    dueDate:       today,
+                    status:        "paid",
+                  }],
+                },
+              },
+              include: { installments: true },
+            });
+
+            await (tx as any).paymentTransaction.create({
+              data: {
+                scheduleId:    schedule.id,
+                installmentId: schedule.installments[0].id,
+                amount:        paid,
+                mode:          txnMode,
+                type:          "payment",
+                receiptNo:     generateReceiptNo(),
+                paidAt:        today,
+                collectedById: req.auth?.staffId ?? null,
+              },
+            });
+          }
         }
 
         return { student, enrollment };

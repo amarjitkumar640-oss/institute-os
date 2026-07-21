@@ -9,6 +9,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import type { RootStackParamList } from "../../navigation/types";
 import { listBatches, deleteBatch, type BatchItem, type BatchStatus, type ExamCategory } from "../../api/batches";
@@ -23,9 +24,10 @@ type Props = NativeStackScreenProps<RootStackParamList, "BatchList">;
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
 const EXAM_META: Record<ExamCategory, { label: string; color: string; bg: string }> = {
-  ssc:     { label: "SSC",     color: "#2563A8", bg: "#EFF6FF" },
-  banking: { label: "Banking", color: "#1B9C63", bg: "#F0FDF8" },
-  railway: { label: "Railway", color: "#E8752C", bg: "#FFF7ED" },
+  ssc:        { label: "SSC",        color: "#2563A8", bg: "#EFF6FF" },
+  banking:    { label: "Banking",    color: "#1B9C63", bg: "#F0FDF8" },
+  railway:    { label: "Railway",    color: "#E8752C", bg: "#FFF7ED" },
+  foundation: { label: "Foundation", color: "#7B3FA0", bg: "#F5F0FF" },
 };
 
 const STATUS_META: Record<BatchStatus, { label: string; color: string; bg: string; dot: string }> = {
@@ -316,9 +318,6 @@ function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStud
     <TouchableOpacity style={cs.card} onPress={onPress} activeOpacity={0.92}>
       {/* Top row */}
       <View style={cs.cardTop}>
-        <View style={[cs.examTag, { backgroundColor: exam.bg }]}>
-          <Text style={[cs.examTagT, { color: exam.color }]}>{exam.label}</Text>
-        </View>
         <View style={cs.cardMid}>
           <Text style={cs.batchName} numberOfLines={1}>{batch.name}</Text>
           <Text style={cs.courseName} numberOfLines={1}>{batch.course.name}</Text>
@@ -422,15 +421,16 @@ function Banner({ batches }: { batches: BatchItem[] }) {
   );
 }
 
-// ── Empty / Error ─────────────────────────────────────────────────────────────
+// ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyState({ search }: { search: string }) {
+function BatchEmpty({ search }: { search: string }) {
   return (
-    <View style={cs.empty}>
-      <Ionicons name="layers-outline" size={ms(48)} color="#D5CCC8" />
-      <Text style={cs.emptyTitle}>{search ? "No batches match your search" : "No batches yet"}</Text>
-      <Text style={cs.emptySub}>{search ? "Try a different keyword" : "Batches will appear here once created"}</Text>
-    </View>
+    <EmptyState
+      scene="batches"
+      color="#8B1E3F"
+      title={search ? "No batches match your search" : "No batches yet"}
+      subtitle={search ? "Try a different keyword" : "Create your first batch to get started"}
+    />
   );
 }
 
@@ -511,7 +511,12 @@ export function BatchListScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={cs.safe} edges={["bottom"]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <ScreenHeader title="Batches" count={batches.length} countLabel="total" onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title="Batches"
+        count={batches.length}
+        countLabel="total"
+        onBack={() => navigation.goBack()}
+      />
 
       <View style={cs.content}>
         {loading ? (
@@ -577,7 +582,7 @@ export function BatchListScreen({ route, navigation }: Props) {
               )}
               contentContainerStyle={cs.listContent}
               showsVerticalScrollIndicator={false}
-              ListEmptyComponent={<EmptyState search={search} />}
+              ListEmptyComponent={<BatchEmpty search={search} />}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={["#8B1E3F"]} tintColor="#8B1E3F" />
               }
@@ -666,11 +671,12 @@ const cs = StyleSheet.create({
   // Card
   card:        { backgroundColor: "#FFFFFF", borderRadius: ms(16), padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
   cardTop:     { flexDirection: "row", alignItems: "flex-start", gap: ms(10), marginBottom: ms(10) },
-  examTag:     { borderRadius: ms(10), paddingHorizontal: ms(9), paddingVertical: ms(6), flexShrink: 0, alignItems: "center", justifyContent: "center", minWidth: ms(52) },
-  examTagT:    { fontSize: fs(10.5), fontWeight: "800", letterSpacing: 0.5 },
+  examTag:     { borderRadius: ms(6), paddingHorizontal: ms(7), paddingVertical: ms(3), flexShrink: 0 },
+  examTagT:    { fontSize: fs(10), fontWeight: "800", letterSpacing: 0.4 },
   cardMid:     { flex: 1, minWidth: 0 },
-  batchName:   { fontSize: fs(13.5), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(2) },
-  courseName:  { fontSize: fs(11.5), color: "#8A7F82" },
+  batchName:   { fontSize: fs(13.5), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(5) },
+  batchSubRow: { flexDirection: "row", alignItems: "center", gap: ms(6), flexWrap: "wrap" },
+  courseName:  { fontSize: fs(11.5), color: "#8A7F82", flex: 1 },
   statusBadge: { flexDirection: "row", alignItems: "center", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(4), gap: ms(4), flexShrink: 0 },
   statusDot:   { width: ms(6), height: ms(6), borderRadius: ms(3) },
   statusT:     { fontSize: fs(10.5), fontWeight: "700" },

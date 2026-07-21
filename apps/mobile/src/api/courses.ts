@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 import { AxiosError } from "axios";
 
-export type ExamCategory = "ssc" | "banking" | "railway";
+export type ExamCategory = "ssc" | "banking" | "railway" | "foundation";
 
 export interface CreateCoursePayload {
   name: string;

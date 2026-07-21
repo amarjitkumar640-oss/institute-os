@@ -185,6 +185,7 @@ export function DashboardScreen() {
     | { screen: "FacultyList"; params?: undefined }
     | { screen: "SubjectList"; params?: undefined }
     | { screen: "StudentList"; params?: undefined }
+    | { screen: "FeesList";    params?: undefined }
     | null;
 
   const STATS: {
@@ -243,7 +244,7 @@ export function DashboardScreen() {
       color: "#B3273F",
       delta: "All time total",
       up:    stats.feesCollected > 0,
-      nav:   null,
+      nav:   { screen: "FeesList" },
     },
   ] : [];
 
@@ -255,6 +256,8 @@ export function DashboardScreen() {
     if (!nav) return;
     if (nav.screen === "BatchList") {
       navigation.navigate("BatchList", nav.params ?? { initialFilter: "all" });
+    } else if (nav.screen === "FeesList") {
+      navigation.navigate("FeesList");
     } else if (nav.screen === "SubjectList") {
       navigation.navigate("SubjectList");
     } else {

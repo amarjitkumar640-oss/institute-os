@@ -9,6 +9,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import type { RootStackParamList } from "../../navigation/types";
 import { ms, fs } from "../../utils/responsive";
@@ -21,19 +22,21 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Props = NativeStackScreenProps<RootStackParamList, "CourseList">;
 
 const CATEGORY_META: Record<ExamCategory, { label: string; code: string; color: string }> = {
-  ssc:     { label: "SSC",     code: "SSC",  color: C.primary },
-  banking: { label: "Banking", code: "BANK", color: C.blue },
-  railway: { label: "Railway", code: "RAIL", color: C.accent },
+  ssc:        { label: "SSC",        code: "SSC",  color: C.primary },
+  banking:    { label: "Banking",    code: "BANK", color: C.blue },
+  railway:    { label: "Railway",    code: "RAIL", color: C.accent },
+  foundation: { label: "Foundation", code: "FOUND", color: "#7B3FA0" },
 };
 
-type Filter = "All" | "SSC" | "Banking" | "Railway";
-const FILTERS: Filter[] = ["All", "SSC", "Banking", "Railway"];
+type Filter = "All" | "SSC" | "Banking" | "Railway" | "Foundation";
+const FILTERS: Filter[] = ["All", "SSC", "Banking", "Railway", "Foundation"];
 
 const FILTER_TO_CATEGORY: Record<Filter, ExamCategory | undefined> = {
-  All: undefined,
-  SSC: "ssc",
-  Banking: "banking",
-  Railway: "railway",
+  All:        undefined,
+  SSC:        "ssc",
+  Banking:    "banking",
+  Railway:    "railway",
+  Foundation: "foundation",
 };
 
 // ─── Course Card ─────────────────────────────────────────────────────────────
@@ -43,11 +46,13 @@ function CourseCard({
   deleting,
   onEdit,
   onDelete,
+  onFeeStructure,
 }: {
   course: CourseItem;
   deleting: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onFeeStructure: () => void;
 }) {
   const { showAlert } = useAlert();
   const meta = CATEGORY_META[course.examCategory];
@@ -110,16 +115,26 @@ function CourseCard({
 
       {/* Action row */}
       <View style={cs.divider} />
+      {locked && (
+        <View style={cs.lockHint}>
+          <Ionicons name="lock-closed-outline" size={ms(11)} color="#B0A9AC" />
+          <Text style={cs.lockHintT}>{course.batchCount} batch{course.batchCount > 1 ? "es" : ""} linked — edit/delete disabled</Text>
+        </View>
+      )}
       <View style={cs.actionRow}>
-        {/* Batch guard hint */}
-        {locked && (
-          <View style={cs.lockHint}>
-            <Ionicons name="lock-closed-outline" size={ms(11)} color="#B0A9AC" />
-            <Text style={cs.lockHintT}>{course.batchCount} batch{course.batchCount > 1 ? "es" : ""} linked</Text>
-          </View>
-        )}
-
         <View style={cs.actionBtns}>
+          {/* Fee Structure button */}
+          <TouchableOpacity
+            style={[cs.actionBtn, cs.feeBtn]}
+            onPress={onFeeStructure}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="cash-outline" size={ms(13)} color="#1B9C63" />
+            <Text style={[cs.actionBtnT, { color: "#1B9C63" }]}>Fee Structure</Text>
+          </TouchableOpacity>
+
+          <View style={cs.actionDivider} />
+
           {/* Edit button */}
           <TouchableOpacity
             style={[cs.actionBtn, cs.editBtn, locked && cs.actionBtnLocked]}
@@ -164,12 +179,14 @@ function CourseCard({
 
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
-function EmptyState({ search }: { search: string }) {
+function CourseEmpty({ search }: { search: string }) {
   return (
-    <View style={cs.empty}>
-      <Ionicons name="book-outline" size={ms(48)} color="#D5CCC8" />
-      <Text style={cs.emptyT}>{search ? "No courses match your search" : "No courses found"}</Text>
-    </View>
+    <EmptyState
+      scene="courses"
+      color="#2CA6A4"
+      title={search ? "No courses match your search" : "No courses yet"}
+      subtitle={search ? "Try a different keyword" : "Create your first course to get started"}
+    />
   );
 }
 
@@ -333,6 +350,11 @@ export function CourseListScreen({ navigation }: Props) {
               deleting={deletingId === item.id}
               onEdit={() => nav.navigate("EditCourse", { course: item })}
               onDelete={() => confirmDelete(item)}
+              onFeeStructure={() => nav.navigate("FeeStructure", {
+                courseId:   item.id,
+                courseName: item.name,
+                defaultFee: item.defaultFee,
+              })}
             />
           )}
           ListHeaderComponent={ListHeader}
@@ -340,7 +362,7 @@ export function CourseListScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           onRefresh={handleRefresh}
           refreshing={refreshing}
-          ListEmptyComponent={!loading && !error ? <EmptyState search={search} /> : null}
+          ListEmptyComponent={!loading && !error ? <CourseEmpty search={search} /> : null}
         />
 
         {/* Centered loader overlay */}
@@ -418,13 +440,14 @@ const cs = StyleSheet.create({
   statDivider: { width: 1, height: ms(16), backgroundColor: "#F0EDE8" },
 
   // Action row
-  actionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  lockHint: { flexDirection: "row", alignItems: "center", gap: ms(4), flex: 1 },
-  lockHintT: { fontSize: fs(10.5), color: "#B0A9AC", fontWeight: "600" },
-  actionBtns: { flexDirection: "row", alignItems: "center", gap: ms(0) },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(12), paddingVertical: ms(6), borderRadius: ms(8) },
-  editBtn: { backgroundColor: "#EEF3FB" },
-  deleteBtn: { backgroundColor: "#FEF0EE" },
+  lockHint:   { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(2), paddingBottom: ms(8) },
+  lockHintT:  { fontSize: fs(10.5), color: "#B0A9AC", fontWeight: "600" },
+  actionRow:  { flexDirection: "row", alignItems: "center" },
+  actionBtns: { flexDirection: "row", alignItems: "center", flex: 1 },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(7), borderRadius: ms(8) },
+  feeBtn:   { backgroundColor: "#E7F7EF" },
+  editBtn:  { backgroundColor: "#EEF3FB" },
+  deleteBtn:{ backgroundColor: "#FEF0EE" },
   actionBtnLocked: { backgroundColor: "#F5F5F5", opacity: 0.7 },
   actionBtnT: { fontSize: fs(12), fontWeight: "700" },
   actionDivider: { width: ms(8) },

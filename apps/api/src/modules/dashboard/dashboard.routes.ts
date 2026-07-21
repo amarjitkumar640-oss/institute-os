@@ -35,7 +35,13 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
         ...(cFilter.centerId ? { batch: { centerId: cFilter.centerId } } : {}),
       },
     }),
-    prisma.student.aggregate({ where: cFilter, _sum: { amountPaid: true } }),
+    prisma.paymentTransaction.aggregate({
+      where: {
+        type: "payment",
+        ...(cFilter.centerId ? { schedule: { enrollment: { batch: { centerId: cFilter.centerId } } } } : {}),
+      },
+      _sum: { amount: true },
+    }),
 
     prisma.enrollment.findMany({
       where: {
@@ -131,7 +137,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
     totalFaculty,
     totalSubjects,
     totalEnrollments,
-    feesCollected: Number(feesAgg._sum.amountPaid ?? 0),
+    feesCollected: Number(feesAgg._sum.amount ?? 0),
     monthlyEnrollments,
     recentActivity: activityItems,
     ...(perCenter !== undefined ? { perCenter } : {}),

@@ -10,6 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { ms, fs } from "../../utils/responsive";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { useAuth } from "../../context/AuthContext";
 import {
   fetchAllStaffDetailed, createStaffMember, updateStaffMember, resetStaffPassword,
@@ -948,31 +949,29 @@ export function StaffManagementScreen() {
           }
         >
           {filtered.length === 0 ? (
-            <View style={s.empty}>
-              <View style={s.emptyIconWrap}>
-                <Ionicons name="people-outline" size={ms(36)} color={C.primary} />
-              </View>
-              <Text style={s.emptyTitle}>
-                {search
+            <EmptyState
+              scene="staff"
+              color={C.primary}
+              title={
+                search
                   ? "No results found"
                   : filter === "inactive"
                     ? "No inactive staff"
-                    : `No ${filter === "all" ? "staff" : ROLE_META[filter as Role]?.label} yet`}
-              </Text>
-              <Text style={s.emptySub}>
-                {search
+                    : `No ${filter === "all" ? "staff" : ROLE_META[filter as Role]?.label} yet`
+              }
+              subtitle={
+                search
                   ? `No staff match "${search}"`
                   : filter === "all"
-                    ? "Add your first staff member to get started."
-                    : "Try a different filter or add a new member."}
-              </Text>
-              {!search && filter === "all" && (
-                <TouchableOpacity style={s.emptyBtn} onPress={() => setShowCreate(true)}>
-                  <Ionicons name="person-add-outline" size={ms(15)} color="#fff" />
-                  <Text style={s.emptyBtnT}>Add Staff Member</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+                    ? "Add your first staff member to get started"
+                    : "Try a different filter or add a new member"
+              }
+              action={
+                !search && filter === "all"
+                  ? { label: "Add Staff Member", onPress: () => setShowCreate(true) }
+                  : undefined
+              }
+            />
           ) : (
             filtered.map((m) => (
               <StaffCard

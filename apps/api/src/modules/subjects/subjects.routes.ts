@@ -3,6 +3,8 @@ import {
   createSubjectSchema,
   updateSubjectSchema,
   subjectQuerySchema,
+  type CreateSubjectInput,
+  type UpdateSubjectInput,
 } from "@institute-os/shared";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
@@ -69,7 +71,7 @@ subjectsRouter.post(
   requireRole("admin"),
   validateBody(createSubjectSchema),
   async (req, res) => {
-    const { name, examCategory } = req.body as { name: string; examCategory?: string | null };
+    const { name, examCategory } = req.body as CreateSubjectInput;
 
     const existing = await prisma.subject.findUnique({ where: { name } });
     if (existing) {
@@ -98,7 +100,7 @@ subjectsRouter.patch(
     const subject = await prisma.subject.findUnique({ where: { id: req.params.id } });
     if (!subject) return res.status(404).json({ notFound: true });
 
-    const { name, examCategory } = req.body as { name?: string; examCategory?: string | null };
+    const { name, examCategory } = req.body as UpdateSubjectInput;
 
     if (name && name !== subject.name) {
       const conflict = await prisma.subject.findUnique({ where: { name } });

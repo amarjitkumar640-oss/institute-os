@@ -25,6 +25,8 @@ interface Props extends Pick<TextInputProps, "returnKeyType" | "onSubmitEditing"
   icon?: keyof typeof Ionicons.glyphMap;
   /** Show clear button when field has a value */
   clearable?: boolean;
+  /** Show a red asterisk to mark this field as mandatory */
+  required?: boolean;
 }
 
 export function FormField({
@@ -39,6 +41,7 @@ export function FormField({
   hint,
   icon,
   clearable = false,
+  required = false,
   returnKeyType,
   onSubmitEditing,
   blurOnSubmit,
@@ -48,7 +51,10 @@ export function FormField({
 
   return (
     <View style={s.wrap}>
-      <Text style={s.label}>{label}</Text>
+      <Text style={s.label}>
+        {label}
+        {required ? <Text style={s.asterisk}> *</Text> : null}
+      </Text>
 
       <TouchableOpacity
         activeOpacity={1}
@@ -105,6 +111,7 @@ export function FormField({
 const s = StyleSheet.create({
   wrap:             { marginBottom: ms(20) },
   label:            { fontSize: fs(12.5), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(7), letterSpacing: 0.3 },
+  asterisk:         { color: "#C0392B", fontWeight: "800" },
   inputRow:         {
     flexDirection: "row",
     alignItems: "center",

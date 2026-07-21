@@ -3,14 +3,12 @@ import { z } from "zod";
 export const staffRoleSchema = z.enum(["admin", "teacher", "frontdesk"]);
 export type StaffRole = z.infer<typeof staffRoleSchema>;
 
-export const examCategorySchema = z.enum(["ssc", "banking", "railway"]);
+export const examCategorySchema = z.enum(["ssc", "banking", "railway", "foundation"]);
 export type ExamCategory = z.infer<typeof examCategorySchema>;
 
 export const batchStatusSchema = z.enum(["upcoming", "running", "completed"]);
 export const enrollmentStatusSchema = z.enum(["active", "paused", "completed", "dropped"]);
 export const leadStatusSchema = z.enum(["new", "contacted", "visited", "converted", "lost"]);
-export const feePlanTypeSchema = z.enum(["full", "installment"]);
-export const feePaymentStatusSchema = z.enum(["pending", "paid", "overdue"]);
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -79,12 +77,8 @@ export const createLeadSchema = z.object({
 });
 
 export const convertLeadSchema = z.object({
-  batchId: z.string().uuid(),
-  feePlan: z.object({
-    totalAmount: z.number().nonnegative(),
-    planType: feePlanTypeSchema,
-  }),
-  studentDob: z.coerce.date().optional(),
+  batchId:       z.string().uuid(),
+  studentDob:    z.coerce.date().optional(),
   guardianPhone: z.string().optional(),
 });
 
@@ -157,6 +151,8 @@ export const admitStudentSchema = z.object({
   preferredTiming:    z.enum(["morning", "midday", "evening"]).nullable().optional(),
   paymentMode:        z.enum(["cash", "online"]).nullable().optional(),
   amountPaid:         z.number().nonnegative().nullable().optional(),
+  // T&C acknowledgment — front desk confirms student was informed
+  tcAcknowledged:     z.boolean().optional(),
 });
 export type AdmitStudentInput = z.infer<typeof admitStudentSchema>;
 
@@ -170,3 +166,143 @@ export const createEnrollmentSchema = z.object({
   studentId: z.string().uuid(),
   batchId: z.string().uuid(),
 });
+
+// ─── Fee Templates ────────────────────────────────────────────────────────────
+
+export const templateLineTypeSchema  = z.enum(["fixed", "percentage", "equal_split", "remaining"]);
+export const templateTriggerSchema   = z.enum(["on_admission", "days_after_admission", "days_after_previous", "monthly_recurring"]);
+
+export const createTemplateLineSchema = z.object({
+  sortOrder:  z.number().int().min(0),
+  label:      z.string().min(1).max(100),
+  lineType:   templateLineTypeSchema,
+  amount:     z.number().nonnegative().optional(),
+  percentage: z.number().min(0).max(100).optional(),
+  splitCount: z.number().int().positive().optional(),
+  trigger:    templateTriggerSchema,
+  offsetDays: z.number().int().min(0).optional(),
+  dayOfMonth: z.number().int().min(1).max(31).optional(),
+});
+export type CreateTemplateLineInput = z.infer<typeof createTemplateLineSchema>;
+
+export const upsertFeeTemplateSchema = z.object({
+  notes: z.string().max(500).optional(),
+  lines: z.array(createTemplateLineSchema).min(1),
+});
+export type UpsertFeeTemplateInput = z.infer<typeof upsertFeeTemplateSchema>;
+
+// ─── Student Fee Schedule ─────────────────────────────────────────────────────
+
+export const generateScheduleSchema = z.object({
+  totalFee:       z.number().positive(),
+  discountAmount: z.number().nonnegative().default(0),
+  discountReason: z.string().max(300).optional(),
+  enrollmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // override; defaults to today
+});
+export type GenerateScheduleInput = z.infer<typeof generateScheduleSchema>;
+
+export const applyDiscountSchema = z.object({
+  discountAmount: z.number().nonnegative(),
+  discountReason: z.string().max(300).optional(),
+});
+
+export const editInstallmentSchema = z.object({
+  label:         z.string().min(1).max(100).optional(),
+  plannedAmount: z.number().positive().optional(),
+  dueDate:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  waivedAmount:  z.number().nonnegative().optional(),
+  waivedReason:  z.string().max(300).optional(),
+  lateFee:       z.number().nonnegative().optional(),
+  notes:         z.string().max(500).optional(),
+  status:        z.enum(["pending", "partial", "paid", "overdue", "waived", "deferred"]).optional(),
+});
+export type EditInstallmentInput = z.infer<typeof editInstallmentSchema>;
+
+// ─── Payments ─────────────────────────────────────────────────────────────────
+
+export const txnModeSchema = z.enum(["cash", "upi", "card", "bank_transfer", "cheque"]);
+
+export const recordPaymentSchema = z.object({
+  scheduleId:    z.string().uuid(),
+  installmentId: z.string().uuid().optional(),   // null = advance / credit
+  amount:        z.number().positive(),
+  mode:          txnModeSchema,
+  paidAt:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  chequeNo:      z.string().max(50).optional(),
+  bankName:      z.string().max(100).optional(),
+  upiRef:        z.string().max(100).optional(),
+  notes:         z.string().max(500).optional(),
+});
+export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
+
+// ── Class Schedule ─────────────────────────────────────────────────────────────
+
+const timeStr = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24-hour)");
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD");
+
+export const dayOfWeekSchema = z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]);
+export type DayOfWeek = z.infer<typeof dayOfWeekSchema>;
+
+export const sessionStatusSchema = z.enum(["scheduled", "completed", "cancelled"]);
+export const sessionTypeSchema   = z.enum(["regular", "extra", "makeup"]);
+
+export const createSlotSchema = z.object({
+  dayOfWeek: dayOfWeekSchema,
+  startTime: timeStr,
+  endTime:   timeStr,
+  subjectId: z.string().uuid().optional(),
+  facultyId: z.string().uuid().optional(),
+  room:      z.string().max(100).optional(),
+  validFrom: dateStr,
+  validTo:   dateStr.optional(),
+});
+export type CreateSlotInput = z.infer<typeof createSlotSchema>;
+
+export const updateSlotSchema = z.object({
+  startTime: timeStr.optional(),
+  endTime:   timeStr.optional(),
+  subjectId: z.string().uuid().nullable().optional(),
+  facultyId: z.string().uuid().nullable().optional(),
+  room:      z.string().max(100).nullable().optional(),
+  validTo:   dateStr.nullable().optional(),
+  isActive:  z.boolean().optional(),
+});
+export type UpdateSlotInput = z.infer<typeof updateSlotSchema>;
+
+export const generateSessionsSchema = z.object({
+  from: dateStr,
+  to:   dateStr,
+});
+export type GenerateSessionsInput = z.infer<typeof generateSessionsSchema>;
+
+export const createAdHocSessionSchema = z.object({
+  scheduledDate: dateStr,
+  startTime:     timeStr,
+  endTime:       timeStr,
+  type:          sessionTypeSchema.default("extra"),
+  subjectId:     z.string().uuid().optional(),
+  facultyId:     z.string().uuid().optional(),
+  room:          z.string().max(100).optional(),
+  notes:         z.string().max(500).optional(),
+});
+export type CreateAdHocSessionInput = z.infer<typeof createAdHocSessionSchema>;
+
+export const patchSessionSchema = z.object({
+  status:        sessionStatusSchema.optional(),
+  scheduledDate: dateStr.optional(),
+  startTime:     timeStr.optional(),
+  endTime:       timeStr.optional(),
+  facultyId:     z.string().uuid().nullable().optional(),
+  subjectId:     z.string().uuid().nullable().optional(),
+  room:          z.string().max(100).nullable().optional(),
+  cancelReason:  z.string().max(500).optional(),
+  notes:         z.string().max(500).optional(),
+});
+export type PatchSessionInput = z.infer<typeof patchSessionSchema>;
+
+export const sessionQuerySchema = z.object({
+  from:   dateStr,
+  to:     dateStr,
+  status: sessionStatusSchema.optional(),
+});
+export type SessionQueryInput = z.infer<typeof sessionQuerySchema>;

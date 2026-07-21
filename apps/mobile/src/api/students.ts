@@ -59,6 +59,7 @@ export interface AdmitStudentPayload {
   preferredTiming?:   BatchTiming | null;
   paymentMode?:       PaymentMode | null;
   amountPaid?:        number | null;
+  tcAcknowledged?:    boolean;
 }
 
 export interface AdmitStudentResult {

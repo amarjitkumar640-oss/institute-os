@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 
 export type BatchStatus  = "upcoming" | "running" | "completed";
-export type ExamCategory = "ssc" | "banking" | "railway";
+export type ExamCategory = "ssc" | "banking" | "railway" | "foundation";
 
 export interface BatchItem {
   id:            string;

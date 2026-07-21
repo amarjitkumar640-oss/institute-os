@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
-  StatusBar, TouchableOpacity, Animated, ActivityIndicator, Modal, FlatList,
+  StatusBar, TouchableOpacity, Animated, ActivityIndicator, FlatList,
 } from "react-native";
+import { BottomSheet } from "../../components/ui/BottomSheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -84,49 +85,46 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={dp.overlay}>
-        <View style={dp.sheet}>
-          <View style={dp.handle} />
-          <Text style={dp.title}>Select Date</Text>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View style={dp.sheetPad}>
+        <View style={dp.handle} />
+        <Text style={dp.title}>Select Date</Text>
 
-          <View style={dp.selectors}>
-            <View style={dp.selector}>
-              <Text style={dp.colLabel}>DAY</Text>
-              <Col items={days} selected={safeDay} onSelect={setDay} fmt={(v) => String(v)} />
-            </View>
-            <View style={[dp.selector, { flex: 1.4 }]}>
-              <Text style={dp.colLabel}>MONTH</Text>
-              <Col items={MONTHS} selected={MONTHS[month]} onSelect={(v) => setMonth(MONTHS.indexOf(v))} fmt={(v) => v} />
-            </View>
-            <View style={dp.selector}>
-              <Text style={dp.colLabel}>YEAR</Text>
-              <Col items={years} selected={year} onSelect={setYear} fmt={(v) => String(v)} />
-            </View>
+        <View style={dp.selectors}>
+          <View style={dp.selector}>
+            <Text style={dp.colLabel}>DAY</Text>
+            <Col items={days} selected={safeDay} onSelect={setDay} fmt={(v) => String(v)} />
           </View>
-
-          {/* highlight bar */}
-          <View pointerEvents="none" style={dp.highlight} />
-
-          <View style={dp.btnRow}>
-            <TouchableOpacity style={dp.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-              <Text style={dp.cancelT}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={dp.confirmBtn} onPress={confirm} activeOpacity={0.85}>
-              <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
-                <Text style={dp.confirmT}>Done</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+          <View style={[dp.selector, { flex: 1.4 }]}>
+            <Text style={dp.colLabel}>MONTH</Text>
+            <Col items={MONTHS} selected={MONTHS[month]} onSelect={(v) => setMonth(MONTHS.indexOf(v))} fmt={(v) => v} />
+          </View>
+          <View style={dp.selector}>
+            <Text style={dp.colLabel}>YEAR</Text>
+            <Col items={years} selected={year} onSelect={setYear} fmt={(v) => String(v)} />
           </View>
         </View>
+
+        {/* highlight bar */}
+        <View pointerEvents="none" style={dp.highlight} />
+
+        <View style={dp.btnRow}>
+          <TouchableOpacity style={dp.cancelBtn} onPress={onClose} activeOpacity={0.8}>
+            <Text style={dp.cancelT}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={dp.confirmBtn} onPress={confirm} activeOpacity={0.85}>
+            <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
+              <Text style={dp.confirmT}>Done</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const dp = StyleSheet.create({
-  overlay:     { flex: 1, backgroundColor: "rgba(16,4,8,0.5)", justifyContent: "flex-end" },
-  sheet:       { backgroundColor: "#FFFFFF", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
+  sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
   title:       { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(16), textAlign: "center" },
   selectors:   { flexDirection: "row", height: ms(180), gap: ms(4) },
@@ -156,12 +154,11 @@ function CoursePickerModal({ visible, courses, loading, onSelect, onClose }: {
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={pm.overlay}>
-        <View style={pm.sheet}>
-          <View style={pm.handle} />
-          <Text style={pm.title}>Select Course</Text>
-          {loading ? (
+    <BottomSheet visible={visible} onClose={onClose} maxHeight="75%">
+      <View style={pm.sheetPad}>
+        <View style={pm.handle} />
+        <Text style={pm.title}>Select Course</Text>
+        {loading ? (
             <View style={{ alignItems: "center", paddingVertical: ms(40) }}>
               <ActivityIndicator size="large" color="#8B1E3F" />
               <Text style={{ color: "#8A7F82", marginTop: ms(12), fontSize: fs(13) }}>Loading courses…</Text>
@@ -200,14 +197,12 @@ function CoursePickerModal({ visible, courses, loading, onSelect, onClose }: {
             <Text style={pm.cancelT}>Cancel</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const pm = StyleSheet.create({
-  overlay:   { flex: 1, backgroundColor: "rgba(16,4,8,0.5)", justifyContent: "flex-end" },
-  sheet:     { backgroundColor: "#FFFFFF", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(16), maxHeight: "75%" },
+  sheetPad:  { paddingTop: ms(12), paddingHorizontal: ms(16) },
   handle:    { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
   title:     { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(16) },
   row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: "#F0EDE8", gap: ms(12) },
