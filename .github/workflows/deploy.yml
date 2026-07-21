@@ -13,6 +13,7 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      - run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - run: npm run build -w packages/shared
       - run: npm run build -w apps/api
       - run: npm test -w apps/api
