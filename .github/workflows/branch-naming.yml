@@ -4,8 +4,7 @@ on:
   push:
     branches-ignore:
       - main
-      - develop
-      - staging
+      - quality
 
 jobs:
   check-branch-name:
