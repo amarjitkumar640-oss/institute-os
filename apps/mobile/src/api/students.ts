@@ -31,6 +31,7 @@ export interface StudentItem {
   preferredTiming:    BatchTiming | null;
   paymentMode:        PaymentMode | null;
   amountPaid:         string | null;
+  photoUrl?:          string | null;
   createdAt:          string;
   centerId?:          string | null;
   center?:            { id: string; name: string } | null;
@@ -85,6 +86,24 @@ export async function updateStudent(id: string, payload: UpdateStudentPayload): 
     return { ok: true, student: data };
   } catch (err: any) {
     return { ok: false, error: err?.response?.data?.error ?? "Update failed" };
+  }
+}
+
+export async function uploadStudentPhoto(
+  id: string,
+  uri: string,
+  mimeType: string = "image/jpeg",
+): Promise<{ ok: true; student: StudentItem } | { ok: false; error: string }> {
+  try {
+    const formData = new FormData();
+    const filename = uri.split("/").pop() ?? "photo.jpg";
+    (formData as any).append("photo", { uri, name: filename, type: mimeType } as any);
+    const { data } = await apiClient.post<StudentItem>(`/students/${id}/photo`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return { ok: true, student: data };
+  } catch (err: any) {
+    return { ok: false, error: err?.response?.data?.error ?? "Upload failed" };
   }
 }
 

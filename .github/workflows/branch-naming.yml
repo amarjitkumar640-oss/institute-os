@@ -1,0 +1,40 @@
+name: Branch Naming Convention
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - develop
+      - staging
+
+jobs:
+  check-branch-name:
+    name: Validate branch name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "Branch: $BRANCH"
+
+          PATTERN="^(feature|fix|hotfix|release|chore)\/[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+
+          if [[ "$BRANCH" =~ $PATTERN ]]; then
+            echo "✅ Branch name '$BRANCH' follows the naming convention."
+          else
+            echo ""
+            echo "❌ Branch name '$BRANCH' does NOT follow the naming convention."
+            echo ""
+            echo "Allowed formats:"
+            echo "  feature/<description>   → feature/student-photo-upload"
+            echo "  fix/<description>       → fix/login-crash"
+            echo "  hotfix/<description>    → hotfix/payment-null-pointer"
+            echo "  release/<version>       → release/1.2.0"
+            echo "  chore/<description>     → chore/update-dependencies"
+            echo ""
+            echo "Rules:"
+            echo "  - Use only lowercase letters, numbers, and hyphens"
+            echo "  - No spaces, underscores, or uppercase letters"
+            echo "  - Must start with an allowed prefix followed by /"
+            exit 1
+          fi

@@ -1,15 +1,17 @@
 import React, { useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, StatusBar, Animated, TouchableOpacity, ActivityIndicator,
+  Platform, StatusBar, Animated, TouchableOpacity, ActivityIndicator, Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
-import { updateStudent } from "../../api/students";
+import { BottomSheet } from "../../components/ui/BottomSheet";
+import { updateStudent, uploadStudentPhoto } from "../../api/students";
 import type {
   Gender, Qualification, CoursePreference, DurationPref, BatchTiming, PaymentMode, StudentItem,
 } from "../../api/students";
@@ -189,6 +191,37 @@ export function EditStudentScreen({ navigation, route }: Props) {
   const cardSlide         = useRef(new Animated.Value(ms(40))).current;
   const checkScale        = useRef(new Animated.Value(0)).current;
 
+  // ── Photo ──
+  const [photoUri, setPhotoUri]           = useState<string | null>(student.photoUrl ?? null);
+  const [photoLoading, setPhotoLoading]   = useState(false);
+  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [photoError, setPhotoError]       = useState<string | null>(null);
+
+  async function handlePickPhoto(fromCamera: boolean) {
+    setShowPhotoPicker(false);
+    setPhotoError(null);
+    if (fromCamera) {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") { setPhotoError("Camera permission is required."); return; }
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") { setPhotoError("Gallery permission is required."); return; }
+    }
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    setPhotoLoading(true);
+    const res = await uploadStudentPhoto(student.id, asset.uri, asset.mimeType ?? "image/jpeg");
+    setPhotoLoading(false);
+    if (res.ok) {
+      setPhotoUri(res.student.photoUrl ?? asset.uri);
+    } else {
+      setPhotoError(res.error);
+    }
+  }
+
   // ── Step 0: Personal ──
   const [fullName, setFullName] = useState(student.fullName);
   const [dob, setDob]           = useState(isoToDisplay(student.dob));
@@ -301,9 +334,29 @@ export function EditStudentScreen({ navigation, route }: Props) {
 
   function renderStep() {
     switch (step) {
-      case 0:
+      case 0: {
+        const initials = fullName.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "S";
         return (
           <View style={s.stepContent}>
+            {/* Photo avatar */}
+            <View style={s.avatarWrap}>
+              <TouchableOpacity onPress={() => setShowPhotoPicker(true)} activeOpacity={0.85} disabled={photoLoading}>
+                <View style={s.avatarCircle}>
+                  {photoUri
+                    ? <Image source={{ uri: photoUri }} style={s.avatarImg} />
+                    : <Text style={s.avatarInitials}>{initials}</Text>
+                  }
+                </View>
+                <View style={s.avatarBadge}>
+                  {photoLoading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Ionicons name="camera" size={ms(14)} color="#fff" />
+                  }
+                </View>
+              </TouchableOpacity>
+              <Text style={s.avatarHint}>Tap to update photo</Text>
+              {photoError ? <Text style={s.photoError}>{photoError}</Text> : null}
+            </View>
             <SectionHead icon="person-circle-outline" label="Personal Details" color="#8B1E3F" sub="Basic identity information" />
             <FormField label="FULL NAME" value={fullName} onChangeText={(v) => { setFullName(v); setErrors((p) => ({ ...p, fullName: "" })); }}
               placeholder="e.g. Rahul Kumar Sharma" error={errors.fullName} icon="person-outline" maxLength={120} clearable />
@@ -321,6 +374,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
               placeholder="e.g. 9876543210" keyboardType="phone-pad" error={errors.phone} icon="call-outline" />
           </View>
         );
+      }
 
       case 1:
         return (
@@ -470,6 +524,26 @@ export function EditStudentScreen({ navigation, route }: Props) {
         </View>
       )}
 
+      {/* Photo picker bottom sheet */}
+      <BottomSheet visible={showPhotoPicker} onClose={() => setShowPhotoPicker(false)}>
+        <View style={s.photoSheet}>
+          <Text style={s.photoSheetTitle}>Update Photo</Text>
+          <TouchableOpacity style={s.photoOption} onPress={() => handlePickPhoto(true)} activeOpacity={0.8}>
+            <View style={[s.photoOptionIcon, { backgroundColor: "#8B1E3F18" }]}>
+              <Ionicons name="camera-outline" size={ms(22)} color="#8B1E3F" />
+            </View>
+            <Text style={s.photoOptionLabel}>Take Photo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.photoOption} onPress={() => handlePickPhoto(false)} activeOpacity={0.8}>
+            <View style={[s.photoOptionIcon, { backgroundColor: "#2563A818" }]}>
+              <Ionicons name="image-outline" size={ms(22)} color="#2563A8" />
+            </View>
+            <Text style={s.photoOptionLabel}>Choose from Gallery</Text>
+          </TouchableOpacity>
+          <View style={{ height: ms(20) }} />
+        </View>
+      </BottomSheet>
+
       {/* Full-screen success card */}
       {updated !== null && (
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
@@ -567,4 +641,18 @@ const s = StyleSheet.create({
   doneBtnWrap:    { width: "100%" },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
   doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+
+  avatarWrap:     { alignItems: "center", paddingVertical: ms(16), marginBottom: ms(8) },
+  avatarCircle:   { width: ms(88), height: ms(88), borderRadius: ms(44), backgroundColor: "#8B1E3F18", borderWidth: 2.5, borderColor: "#8B1E3F", overflow: "hidden", justifyContent: "center", alignItems: "center" },
+  avatarImg:      { width: ms(88), height: ms(88), borderRadius: ms(44) },
+  avatarInitials: { fontSize: fs(28), fontWeight: "800", color: "#8B1E3F" },
+  avatarBadge:    { position: "absolute", bottom: 0, right: 0, width: ms(28), height: ms(28), borderRadius: ms(14), backgroundColor: "#8B1E3F", justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" },
+  avatarHint:     { fontSize: fs(11), color: "#8A7F82", marginTop: ms(6) },
+  photoError:     { fontSize: fs(11), color: "#C0392B", marginTop: ms(4), textAlign: "center" },
+
+  photoSheet:       { paddingTop: ms(20), paddingHorizontal: ms(20), paddingBottom: ms(8) },
+  photoSheetTitle:  { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(20), textAlign: "center" },
+  photoOption:      { flexDirection: "row", alignItems: "center", gap: ms(14), paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
+  photoOptionIcon:  { width: ms(44), height: ms(44), borderRadius: ms(12), justifyContent: "center", alignItems: "center" },
+  photoOptionLabel: { fontSize: fs(15), fontWeight: "700", color: "#2B1B1F" },
 });
