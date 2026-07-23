@@ -4,5 +4,8 @@
 # switch to HTTPS with a free auto-renewing certificate — no other change needed.
 
 :80 {
+	handle_path /qa/* {
+		reverse_proxy api-qa:4000
+	}
 	reverse_proxy api:4000
 }

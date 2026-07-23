@@ -1,8 +1,8 @@
-name: Deploy
+name: Deploy Quality
 
 on:
   push:
-    branches: [main]
+    branches: [quality]
 
 jobs:
   test:
@@ -61,7 +61,7 @@ jobs:
           file: apps/api/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/institute-os-api:latest
+          tags: ghcr.io/${{ github.repository_owner }}/institute-os-api:quality
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
@@ -70,9 +70,10 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_DEPLOY_KEY }}
           script: |
-            cat > ~/institute-os/infra/.env << 'ENVEOF'
-            ${{ secrets.PROD_ENV_FILE }}
+            cat > ~/institute-os/infra/.env.quality << 'ENVEOF'
+            ${{ secrets.QA_ENV_FILE }}
             ENVEOF
             cd ~/institute-os/infra
-            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api
-            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d api postgres caddy
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api-qa
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d postgres-qa api-qa
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx prisma migrate deploy --schema apps/api/prisma/schema.prisma

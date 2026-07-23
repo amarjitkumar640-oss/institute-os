@@ -1,0 +1,25 @@
+services:
+  api-qa:
+    image: ghcr.io/amarjitkumar640-oss/institute-os-api:quality
+    restart: always
+    env_file:
+      - .env.quality
+    depends_on:
+      - postgres-qa
+    expose:
+      - "4000"
+
+  postgres-qa:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: institute
+      POSTGRES_DB: institute_os_qa
+    env_file:
+      - .env.quality
+    volumes:
+      - postgres-qa-data:/var/lib/postgresql/data
+    # deliberately no "ports:" — unreachable from outside this Docker network
+
+volumes:
+  postgres-qa-data:
