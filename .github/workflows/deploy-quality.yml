@@ -63,6 +63,16 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/institute-os-api:quality
 
+      - name: Sync infra config to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_DEPLOY_KEY }}
+          source: "infra/docker-compose.prod.yml,infra/docker-compose.quality.yml,infra/Caddyfile"
+          target: "~/institute-os"
+          strip_components: 0
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -77,3 +87,4 @@ jobs:
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api-qa
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d postgres-qa api-qa
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
