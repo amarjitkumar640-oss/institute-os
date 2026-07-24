@@ -471,7 +471,7 @@ const s = StyleSheet.create({
   loader:  { flex: 1, backgroundColor: "#FFFBF0", justifyContent: "center", alignItems: "center", gap: ms(14) },
   loaderT: { fontSize: fs(13), color: "#8A7F82" },
   scroll:  { flex: 1, backgroundColor: "#FFFBF0" },
-  body:    { padding: ms(16), paddingBottom: ms(48) },
+  body:    { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(48) },
 
   // Course card
   courseCard:       { backgroundColor: "#FFFFFF", borderRadius: ms(16), padding: ms(14), marginBottom: ms(20), borderWidth: 1, borderColor: "#F0EDE8", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: ms(8), elevation: 2 },

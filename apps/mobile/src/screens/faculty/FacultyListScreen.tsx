@@ -408,13 +408,13 @@ const cs = StyleSheet.create({
   bannerLbl:  { fontSize: fs(9.5), color: C.muted, fontWeight: "600", marginTop: ms(1) },
   bannerDiv:  { width: 1, backgroundColor: "#F0EDE8", marginHorizontal: ms(4) },
 
-  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(6) },
-  searchRow:   { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(11), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
+  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
+  searchRow:   { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
   searchInput: { flex: 1, fontSize: fs(13.5), color: C.text, padding: 0, includeFontPadding: false },
 
-  filterScroll: { height: ms(44), flexShrink: 0 },
-  filterRow:    { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(44) },
-  chip:         { paddingHorizontal: ms(12), paddingVertical: ms(6), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
+  filterRow:    { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
+  chip:         { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
   chipOn:       { backgroundColor: C.primary, borderColor: C.primary },
   chipT:        { fontSize: fs(12), fontWeight: "600", color: C.muted, includeFontPadding: false, lineHeight: fs(16) },
   chipTOn:      { color: "#FFFFFF" },

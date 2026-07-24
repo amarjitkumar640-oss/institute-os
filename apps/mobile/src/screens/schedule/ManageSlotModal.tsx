@@ -713,7 +713,7 @@ const m = StyleSheet.create({
   loadingRow: { flexDirection: "row", alignItems: "center", gap: ms(8), padding: ms(16) },
   loadingT:   { fontSize: fs(12), color: C.muted },
 
-  section:  { paddingHorizontal: ms(20), paddingTop: ms(16) },
+  section:  { paddingHorizontal: ms(20), paddingTop: ms(8) },
   label:    { fontSize: fs(11), fontWeight: "700", color: C.muted, marginBottom: ms(8), textTransform: "uppercase", letterSpacing: 0.5 },
   hint:     { fontSize: fs(10), color: C.placeholder, marginTop: ms(4) },
   timeRow:  { flexDirection: "row", gap: ms(12), paddingHorizontal: ms(20), paddingTop: ms(16) },
@@ -801,7 +801,7 @@ const sg = StyleSheet.create({
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
-    margin: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(9),
+    marginHorizontal: ms(12), marginTop: ms(8), marginBottom: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(9),
     backgroundColor: C.inputBg, borderRadius: ms(10),
     borderWidth: 1, borderColor: C.border,
   },
@@ -844,7 +844,7 @@ const fg = StyleSheet.create({
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
-    margin: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(9),
+    marginHorizontal: ms(12), marginTop: ms(8), marginBottom: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(9),
     backgroundColor: C.inputBg, borderRadius: ms(10),
     borderWidth: 1, borderColor: C.border,
   },

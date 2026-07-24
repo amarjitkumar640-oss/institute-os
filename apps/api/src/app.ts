@@ -21,6 +21,15 @@ export const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use((req, res, next) => {
+  const start = Date.now();
+  console.log(`→ ${req.method} ${req.originalUrl}`);
+  res.on("finish", () => {
+    console.log(`← ${req.method} ${req.originalUrl} ${res.statusCode} (${Date.now() - start}ms)`);
+  });
+  next();
+});
+
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
 app.use("/api/auth", authRouter);

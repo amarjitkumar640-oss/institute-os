@@ -6,7 +6,7 @@ import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/role";
 import { validateBody } from "../../middleware/validate";
 import { uploadPhoto } from "../../lib/s3";
-import { generateStudentCode } from "./students.service";
+import { generateStudentCode, withPhotoUrl, withPhotoUrls } from "./students.service";
 import { centerFilter, centerIdForCreate } from "../../lib/centerFilter";
 import { BatchFullError, createEnrollment } from "../enrollments/enrollments.service";
 import { generateReceiptNo, generateSchedule } from "../fees/fees.service";
@@ -22,14 +22,14 @@ studentsRouter.get("/", requireAuth, async (req, res) => {
       where: { batchId, status: "active" },
       include: { student: true },
     });
-    return res.json(enrollments.map((e) => e.student));
+    return res.json(await withPhotoUrls(enrollments.map((e) => e.student)));
   }
   const students = await prisma.student.findMany({
     where:   centerFilter(req),
     include: { center: { select: { id: true, name: true } } },
     orderBy: { createdAt: "desc" },
   });
-  res.json(students);
+  res.json(await withPhotoUrls(students));
 });
 
 studentsRouter.get("/:id", requireAuth, async (req, res) => {
@@ -38,7 +38,7 @@ studentsRouter.get("/:id", requireAuth, async (req, res) => {
     include: { enrollments: { include: { batch: true } } },
   });
   if (!student) return res.status(404).json({ error: "Student not found" });
-  res.json(student);
+  res.json(await withPhotoUrl(student));
 });
 
 studentsRouter.post(
@@ -53,7 +53,7 @@ studentsRouter.post(
     const student = await prisma.student.create({
       data: { ...req.body, studentCode, centerId },
     });
-    res.status(201).json(student);
+    res.status(201).json(await withPhotoUrl(student));
   }
 );
 
@@ -195,7 +195,7 @@ studentsRouter.post(
         return { student, enrollment };
       });
 
-      res.status(201).json(result);
+      res.status(201).json({ ...result, student: await withPhotoUrl(result.student) });
     } catch (err) {
       if (err instanceof BatchFullError) {
         return res.status(409).json({ batchFull: true, message: err.message });
@@ -217,7 +217,7 @@ studentsRouter.patch(
       where: { id: req.params.id },
       data: req.body,
     });
-    res.json(updated);
+    res.json(await withPhotoUrl(updated));
   }
 );
 
@@ -229,11 +229,11 @@ studentsRouter.post(
   async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Missing photo file" });
     const key = `students/${req.params.id}/${Date.now()}-${req.file.originalname}`;
-    const photoUrl = await uploadPhoto(key, req.file.buffer, req.file.mimetype);
+    await uploadPhoto(key, req.file.buffer, req.file.mimetype);
     const student = await prisma.student.update({
       where: { id: req.params.id },
-      data: { photoUrl },
+      data: { photoUrl: key },
     });
-    res.json(student);
+    res.json(await withPhotoUrl(student));
   }
 );

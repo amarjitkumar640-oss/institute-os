@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
+  View, Text, StyleSheet, KeyboardAvoidingView,
   Platform, StatusBar, Animated, TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
@@ -13,12 +13,19 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { updateSubject, type ExamCategory, type SubjectItem } from "../../api/subjects";
-import { ms, fs } from "../../utils/responsive";
+import { ms, fs, sw } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditSubject">;
 
 type CategoryOption = { key: ExamCategory | null; label: string; sub: string; color: string; icon: string };
+
+const CONTENT_H_PAD = ms(20);
+const SECTION_PAD   = ms(16);
+const CAT_GAP       = ms(8);
+// Fallback estimate for the very first render, before the grid has been
+// measured — avoids a flash of zero-width cards.
+const CAT_CARD_W_FALLBACK = (sw - 2 * CONTENT_H_PAD - 2 * SECTION_PAD - CAT_GAP) / 2;
 
 const CATEGORIES: CategoryOption[] = [
   { key: null,       label: "Shared",  sub: "Applies to all exam categories",   color: "#E8752C", icon: "grid-outline"          },
@@ -43,6 +50,8 @@ export function EditSubjectScreen({ navigation, route }: Props) {
   const [submitError, setSubmitError] = useState<string | undefined>();
   const [loading, setLoading]     = useState(false);
   const [updated, setUpdated]     = useState<UpdatedSubject | null>(null);
+  const [gridWidth, setGridWidth] = useState(0);
+  const catCardW = gridWidth > 0 ? (gridWidth - CAT_GAP) / 2 : CAT_CARD_W_FALLBACK;
 
   const checkScale  = useRef(new Animated.Value(0)).current;
   const cardSlide   = useRef(new Animated.Value(ms(60))).current;
@@ -107,7 +116,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
       <ScreenHeader title="Edit Subject" onBack={handleBack} />
 
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={s.content}>
 
           {/* ── Name ── */}
           <View style={s.section}>
@@ -129,13 +138,13 @@ export function EditSubjectScreen({ navigation, route }: Props) {
           <View style={s.section}>
             <SectionHead dot="#2563A8" title="Exam Category" />
             <Text style={s.catHint}>Choose which exam this subject belongs to.</Text>
-            <View style={s.catGrid}>
+            <View style={s.catGrid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
               {CATEGORIES.map((opt) => {
                 const active = category === opt.key;
                 return (
                   <TouchableOpacity
                     key={String(opt.key)}
-                    style={[s.catCard, active && { borderColor: opt.color, borderWidth: 2, backgroundColor: opt.color + "0C" }]}
+                    style={[s.catCard, { width: catCardW }, active && { borderColor: opt.color, borderWidth: 2, backgroundColor: opt.color + "0C" }]}
                     onPress={() => setCategory(opt.key)}
                     activeOpacity={0.75}
                   >
@@ -188,7 +197,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
               />
             )}
           </View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
 
       {/* Full-screen loader */}
@@ -273,26 +282,25 @@ const dr = StyleSheet.create({
 const s = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: "#8B1E3F" },
   flex:          { flex: 1 },
-  scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
-  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(24), paddingBottom: ms(40) },
+  content:       { flex: 1, backgroundColor: "#FFFBF0", paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(8), paddingBottom: ms(16) },
 
-  section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(16) },
+  section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: SECTION_PAD, marginBottom: ms(10), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(10) },
   sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2) },
   sectionTitle:  { fontSize: fs(12), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textTransform: "uppercase" },
 
-  catHint:       { fontSize: fs(12), color: "#8A7F82", marginBottom: ms(14) },
-  catGrid:       { flexDirection: "row", flexWrap: "wrap", gap: ms(10) },
-  catCard:       { width: "47%", borderRadius: ms(14), padding: ms(14), backgroundColor: "#FAFAFA", borderWidth: 1.5, borderColor: "#E8E0DC", gap: ms(6), position: "relative" },
-  catIcon:       { width: ms(40), height: ms(40), borderRadius: ms(12), justifyContent: "center", alignItems: "center", marginBottom: ms(4) },
-  catName:       { fontSize: fs(14), fontWeight: "800", color: "#2B1B1F" },
-  catSub:        { fontSize: fs(10.5), color: "#8A7F82", lineHeight: fs(14) },
-  catCheck:      { position: "absolute", top: ms(10), right: ms(10), width: ms(18), height: ms(18), borderRadius: ms(9), justifyContent: "center", alignItems: "center" },
+  catHint:       { fontSize: fs(12), color: "#8A7F82", marginBottom: ms(8) },
+  catGrid:       { flexDirection: "row", flexWrap: "wrap", gap: CAT_GAP },
+  catCard:       { borderRadius: ms(12), padding: ms(10), backgroundColor: "#FAFAFA", borderWidth: 1.5, borderColor: "#E8E0DC", gap: ms(4), position: "relative" },
+  catIcon:       { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center", marginBottom: ms(2) },
+  catName:       { fontSize: fs(13), fontWeight: "800", color: "#2B1B1F" },
+  catSub:        { fontSize: fs(10), color: "#8A7F82", lineHeight: fs(13) },
+  catCheck:      { position: "absolute", top: ms(8), right: ms(8), width: ms(16), height: ms(16), borderRadius: ms(8), justifyContent: "center", alignItems: "center" },
 
-  infoBox:       { flexDirection: "row", alignItems: "flex-start", gap: ms(10), backgroundColor: "#EFF4FF", borderRadius: ms(12), padding: ms(14), marginBottom: ms(16), borderWidth: 1, borderColor: "#BFD0F5" },
-  infoT:         { fontSize: fs(12.5), color: "#2563A8", flex: 1, lineHeight: fs(18) },
+  infoBox:       { flexDirection: "row", alignItems: "flex-start", gap: ms(10), backgroundColor: "#EFF4FF", borderRadius: ms(12), padding: ms(10), marginBottom: ms(10), borderWidth: 1, borderColor: "#BFD0F5" },
+  infoT:         { fontSize: fs(12), color: "#2563A8", flex: 1, lineHeight: fs(16) },
 
-  submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },
+  submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(12), marginBottom: ms(10) },
   submitErrorT:  { fontSize: fs(13), color: "#C0392B", lineHeight: fs(18) },
   buttonGroup:   { gap: ms(12) },
 

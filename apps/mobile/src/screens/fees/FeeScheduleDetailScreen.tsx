@@ -858,7 +858,7 @@ const sc = StyleSheet.create({
   progressLbl: { fontSize: fs(11), color: "rgba(255,255,255,0.80)", fontWeight: "700", flexShrink: 0 },
 
   // ── Body ──
-  scroll:       { paddingTop: ms(16), paddingBottom: ms(60) },
+  scroll:       { paddingTop: ms(8), paddingBottom: ms(60) },
   sectionTitle: {
     fontSize:         fs(12),
     fontWeight:       "700",
@@ -973,7 +973,7 @@ const pm = StyleSheet.create({
     alignItems:      "center",
     flexShrink:      0,
   },
-  divider: { height: 1, backgroundColor: "#F0EDE8", marginBottom: ms(16) },
+  divider: { height: 1, backgroundColor: "#F0EDE8", marginBottom: ms(8) },
 
   label:    { fontSize: fs(12), fontWeight: "700", color: "#8A7F82", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: ms(8) },
   optional: { fontWeight: "400", textTransform: "none" },

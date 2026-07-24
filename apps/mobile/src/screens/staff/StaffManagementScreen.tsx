@@ -575,7 +575,7 @@ const mc = StyleSheet.create({
   sheet:    { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingHorizontal: ms(20), paddingTop: ms(8) },
   drag:     { width: ms(36), height: ms(4), backgroundColor: C.border, borderRadius: ms(2), alignSelf: "center", marginBottom: ms(16) },
 
-  header:     { flexDirection: "row", alignItems: "center", gap: ms(12), marginBottom: ms(16) },
+  header:     { flexDirection: "row", alignItems: "center", gap: ms(12), marginBottom: ms(8) },
   headerIcon: { width: ms(44), height: ms(44), borderRadius: ms(12), backgroundColor: "#EEE9F6", justifyContent: "center", alignItems: "center" },
   title:      { fontSize: fs(17), fontWeight: "800", color: C.text },
   subtitle:   { fontSize: fs(12), color: C.muted, marginTop: 2 },
@@ -1058,7 +1058,7 @@ const s = StyleSheet.create({
   loader:  { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: ms(10) },
   loaderT: { fontSize: fs(13), color: C.muted, fontWeight: "500" },
 
-  searchWrap:  { backgroundColor: C.bg, paddingHorizontal: ms(14), paddingTop: ms(12), paddingBottom: ms(6) },
+  searchWrap:  { backgroundColor: C.bg, paddingHorizontal: ms(14), paddingTop: ms(8), paddingBottom: ms(6) },
   searchBar:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), borderWidth: 1, borderColor: C.border },
   searchInput: { flex: 1, fontSize: fs(13), color: C.text, padding: 0 },
 
@@ -1096,7 +1096,7 @@ const md = StyleSheet.create({
   drag:     { width: ms(36), height: ms(4), backgroundColor: C.border, borderRadius: ms(2), alignSelf: "center", marginBottom: ms(16) },
   title:    { fontSize: fs(18), fontWeight: "800", color: C.text, marginBottom: ms(4) },
 
-  sectionLabel: { fontSize: fs(11), fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginTop: ms(16), marginBottom: ms(8) },
+  sectionLabel: { fontSize: fs(11), fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginTop: ms(8), marginBottom: ms(8) },
   input:        { backgroundColor: C.bg, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(14), color: C.text, borderWidth: 1, borderColor: C.border, marginBottom: ms(10) },
   pwRow:        { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(6) },
   eyeBtn:       { padding: ms(4) },

@@ -461,7 +461,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
 const sd = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.primary },
   center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: C.bg },
-  body:   { padding: ms(16), paddingBottom: ms(48), gap: ms(12) },
+  body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(48), gap: ms(12) },
 
   emptyIllus: {
     width: ms(90), height: ms(90), borderRadius: ms(24),
@@ -567,7 +567,7 @@ const sd = StyleSheet.create({
   pickerClose: { width: ms(32), height: ms(32), borderRadius: ms(8), alignItems: "center", justifyContent: "center", backgroundColor: C.inputBg },
   pickerSearch: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
-    margin: ms(12), marginBottom: ms(4),
+    marginHorizontal: ms(12), marginTop: ms(8), marginBottom: ms(4),
     backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: 1, borderColor: C.border,
     paddingHorizontal: ms(10), height: ms(40),
   },

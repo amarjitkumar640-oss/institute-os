@@ -651,7 +651,7 @@ const cp = StyleSheet.create({
   headerTitle: { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F" },
   headerSub:   { fontSize: fs(11.5), color: "#8A7F82", marginTop: ms(1) },
   closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "#F5F1EE", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  searchWrap:  { backgroundColor: "#FFFFFF", paddingHorizontal: ms(16), paddingVertical: ms(10), borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
+  searchWrap:  { backgroundColor: "#FFFFFF", paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(10), borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
   searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: "#F5F1EE", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10) },
   searchInput: { flex: 1, fontSize: fs(14), color: "#2B1B1F", includeFontPadding: false, padding: 0 },
   list:        { flex: 1, backgroundColor: "#FAFAF8" },
@@ -850,7 +850,7 @@ const qpm = StyleSheet.create({
   headerTitle: { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F" },
   headerSub:   { fontSize: fs(11.5), color: "#8A7F82", marginTop: ms(1) },
   closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "#F5F1EE", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  body:        { padding: ms(20), paddingBottom: ms(48) },
+  body:        { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(48) },
   grid:        { flexDirection: "row", flexWrap: "wrap", gap: ms(14) },
   card:        { width: "47%", alignItems: "center", paddingTop: ms(22), paddingBottom: ms(16), paddingHorizontal: ms(8), borderRadius: ms(18), backgroundColor: "#FFFFFF", borderWidth: 1.5, borderColor: "#C8EAEA", gap: ms(8), position: "relative" },
   iconWrap:    { width: ms(56), height: ms(56), borderRadius: ms(18), justifyContent: "center", alignItems: "center" },
@@ -1719,7 +1719,7 @@ const s = StyleSheet.create({
   safe:        { flex: 1, backgroundColor: "#8B1E3F" },
   flex:        { flex: 1 },
   scroll:      { flex: 1, backgroundColor: "#FFFBF0" },
-  body:        { paddingHorizontal: ms(16), paddingTop: ms(16), paddingBottom: ms(40) },
+  body:        { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(40) },
 
   stepContent: { gap: ms(2) },
   card:        { backgroundColor: "#FFFFFF", borderRadius: ms(20), padding: ms(18), marginBottom: ms(14), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
@@ -1847,7 +1847,7 @@ const tm = StyleSheet.create({
   closeBtn:   { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "#F5F1EE", justifyContent: "center", alignItems: "center", flexShrink: 0 },
   divider:    { height: 1, backgroundColor: "#F0EDE8" },
 
-  body:       { padding: ms(16), gap: ms(12), paddingBottom: ms(8) },
+  body:       { paddingHorizontal: ms(16), paddingTop: ms(8), gap: ms(12), paddingBottom: ms(8) },
 
   alertBox: {
     flexDirection:   "row",

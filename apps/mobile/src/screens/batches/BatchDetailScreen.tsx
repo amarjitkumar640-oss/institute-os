@@ -225,7 +225,7 @@ function AddStudentModal({ visible, batch, enrolledIds, onClose, onEnrolled }: {
 const am = StyleSheet.create({
   sheetPad:     { paddingTop: ms(12), paddingHorizontal: ms(16), paddingBottom: ms(8) },
   handle:       { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
-  header:       { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(12) },
+  header:       { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(8) },
   title:        { flex: 1, fontSize: fs(16), fontWeight: "800", color: C.text },
   pill:         { borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(4) },
   pillT:        { fontSize: fs(11.5), fontWeight: "800" },
@@ -489,7 +489,7 @@ export function BatchDetailScreen({ navigation, route }: Props) {
 const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.primary },
   scroll: { flex: 1, backgroundColor: C.bg },
-  body:   { paddingHorizontal: ms(16), paddingTop: ms(16), paddingBottom: ms(16), gap: ms(14) },
+  body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16), gap: ms(14) },
 
   // Combined info card
   infoCard: {

@@ -495,7 +495,7 @@ const cs = StyleSheet.create({
   loaderT: { fontSize: fs(14), color: C.muted },
 
 
-  banner:     { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(10), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
+  banner:     { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
   bannerNum:  { fontSize: fs(18), fontWeight: "800" },
   bannerLbl:  { fontSize: fs(9.5), color: "#8A7F82", fontWeight: "600", marginTop: ms(2) },

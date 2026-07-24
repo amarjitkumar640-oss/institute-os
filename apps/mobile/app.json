@@ -29,6 +29,7 @@
         "barStyle": "light-content"
       },
       "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "pan",
       "package": "com.anonymous.mobile"
     },
     "web": {

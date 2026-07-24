@@ -4,13 +4,15 @@ import {
   Animated,
   Easing,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -138,6 +140,32 @@ export function LoginScreen() {
   const pressScale    = useRef(new Animated.Value(1)).current;
   const emailShakeX   = useRef(new Animated.Value(0)).current;
   const passwordShakeX = useRef(new Animated.Value(0)).current;
+  const keyboardLift  = useRef(new Animated.Value(0)).current;
+
+  // ── Keyboard-aware sheet lift — slides the whole card upward over the hero,
+  //    like a rising bottom sheet, instead of shrinking/scrolling its content.
+  //    Native-driven so it's smooth and matches the entrance animation's driver. ──
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const animateTo = (toValue: number, duration?: number) => {
+      Animated.timing(keyboardLift, {
+        toValue,
+        duration: duration && duration > 0 ? duration : 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const showSub = Keyboard.addListener(showEvent, (e) => animateTo(-e.endCoordinates.height, e.duration));
+    const hideSub = Keyboard.addListener(hideEvent, (e) => animateTo(0, e.duration));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // ── Entrance sequence ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -240,7 +268,8 @@ export function LoginScreen() {
   const topInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) + 10 : 54;
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+    <View style={styles.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* ── Hero ── */}
@@ -278,8 +307,13 @@ export function LoginScreen() {
       </Animated.View>
 
       {/* ── Form sheet ── */}
-      <Animated.View style={[styles.sheet, { opacity: sheetOpacity, transform: [{ translateY: sheetY }] }]}>
-
+      <Animated.View style={[styles.sheet, { opacity: sheetOpacity, transform: [{ translateY: sheetY }, { translateY: keyboardLift }] }]}>
+       <ScrollView
+        style={styles.sheetScroll}
+        contentContainerStyle={styles.sheetScrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+       >
         <View style={styles.formTop}>
           {/* Header */}
           <Animated.View style={[styles.sheetHeader, { opacity: headerOpacity, transform: [{ translateY: headerY }] }]}>
@@ -416,8 +450,10 @@ export function LoginScreen() {
             <Text style={styles.legalLink}>Terms &amp; conditions</Text>
           </View>
         </Animated.View>
+       </ScrollView>
       </Animated.View>
-    </KeyboardAvoidingView>
+    </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -450,10 +486,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     marginTop: -24,
     borderTopLeftRadius: 30, borderTopRightRadius: 30,
-    paddingHorizontal: 22, paddingTop: 26, paddingBottom: 22,
-    justifyContent: "space-between",
     shadowColor: "#3A1020", shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.10, shadowRadius: 14, elevation: 12,
+  },
+  sheetScroll: { flex: 1 },
+  sheetScrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 22, paddingTop: 26, paddingBottom: 22,
+    justifyContent: "space-between",
   },
   formTop:    { gap: 18 },
   sheetHeader: { gap: 4 },

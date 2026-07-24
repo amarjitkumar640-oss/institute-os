@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, ActivityIndicator, StatusBar,
-  RefreshControl, KeyboardAvoidingView, Platform,
+  RefreshControl, Animated, Easing, Platform,
+  Keyboard, TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -49,6 +50,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
   const [phone,   setPhone]   = useState("");
   const [saving,  setSaving]  = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+  const keyboardPad = useRef(new Animated.Value(0)).current;
 
   const isEdit = !!center;
 
@@ -58,8 +60,33 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
       setAddress(center?.address ?? "");
       setPhone(center?.phone   ?? "");
       setFocused(null);
+      keyboardPad.setValue(0);
     }
   }, [visible, center]);
+
+  // ── Keyboard-aware sheet padding — driven directly by keyboard events rather
+  //    than KeyboardAvoidingView, which can settle on a stale offset inside a Modal.
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const animateTo = (toValue: number, duration?: number) => {
+      Animated.timing(keyboardPad, {
+        toValue,
+        duration: duration && duration > 0 ? duration : 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const showSub = Keyboard.addListener(showEvent, (e) => animateTo(e.endCoordinates.height, e.duration));
+    const hideSub = Keyboard.addListener(hideEvent, (e) => animateTo(0, e.duration));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   async function save() {
     if (!name.trim()) {
@@ -88,12 +115,10 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={m.overlay}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <View style={m.overlay}>
         <TouchableOpacity style={m.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={m.sheet}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <Animated.View style={[m.sheet, { paddingBottom: Animated.add(ms(36), keyboardPad) }]}>
 
           {/* Drag handle */}
           <View style={m.drag} />
@@ -123,7 +148,12 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
           <View style={m.fDivider} />
 
           {/* Fields */}
-          <View style={m.fields}>
+          <ScrollView
+            style={m.fieldsScroll}
+            contentContainerStyle={m.fields}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
 
             <View style={m.fieldWrap}>
               <View style={m.fieldLabelRow}>
@@ -184,7 +214,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
               </View>
             </View>
 
-          </View>
+          </ScrollView>
 
           {/* Submit button */}
           <TouchableOpacity
@@ -213,8 +243,9 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
             </LinearGradient>
           </TouchableOpacity>
 
-        </View>
-      </KeyboardAvoidingView>
+        </Animated.View>
+        </TouchableWithoutFeedback>
+      </View>
     </Modal>
   );
 }
@@ -637,7 +668,7 @@ const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: "#8B1E3F" },
 
   scroll: { flex: 1, backgroundColor: C.bg },
-  body:   { padding: ms(16) },
+  body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
   loader: { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: ms(12) },
   loaderT:{ fontSize: fs(13), color: C.muted },
 
@@ -691,7 +722,7 @@ const m = StyleSheet.create({
   // ── Shared shell ────────────────────────────────────────────────────────────
   overlay:  { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(16,4,8,0.50)" },
-  sheet:    { backgroundColor: "#fff", borderTopLeftRadius: ms(28), borderTopRightRadius: ms(28), paddingBottom: ms(36) },
+  sheet:    { backgroundColor: "#fff", borderTopLeftRadius: ms(28), borderTopRightRadius: ms(28) },
   drag:     { width: ms(36), height: ms(4), backgroundColor: "#DDD5D0", borderRadius: ms(2), alignSelf: "center", marginTop: ms(10), marginBottom: ms(16) },
   btnDim:   { opacity: 0.6 },
 
@@ -702,9 +733,10 @@ const m = StyleSheet.create({
   fTitle:      { fontSize: fs(16), fontWeight: "800", color: C.text },
   fSubtitle:   { fontSize: fs(11.5), color: C.muted, marginTop: 1 },
   closeBtn:    { width: ms(34), height: ms(34), borderRadius: ms(10), backgroundColor: C.bg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  fDivider:    { height: 1, backgroundColor: C.border, marginBottom: ms(18) },
+  fDivider:    { height: 1, backgroundColor: C.border, marginBottom: ms(8) },
 
   // ── CenterFormModal fields ───────────────────────────────────────────────────
+  fieldsScroll:   { flexGrow: 0 },
   fields:         { paddingHorizontal: ms(20), gap: ms(14) },
   fieldWrap:      { gap: ms(7) },
   fieldLabelRow:  { flexDirection: "row", alignItems: "center", gap: ms(6) },
@@ -721,7 +753,7 @@ const m = StyleSheet.create({
   btnT:    { fontSize: fs(15), fontWeight: "800", color: "#fff" },
 
   // ── AssignStaffModal ─────────────────────────────────────────────────────────
-  title:      { fontSize: fs(17), fontWeight: "800", color: C.text, marginBottom: ms(16), paddingHorizontal: ms(20) },
+  title:      { fontSize: fs(17), fontWeight: "800", color: C.text, marginBottom: ms(8), paddingHorizontal: ms(20) },
   label:      { fontSize: fs(12), fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: ms(6), marginTop: ms(10), paddingHorizontal: ms(20) },
   rolePicker: { flexDirection: "row", gap: ms(8), marginBottom: ms(4), paddingHorizontal: ms(20) },
   roleChip:   { flex: 1, alignItems: "center", paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: C.bg, borderWidth: 1, borderColor: C.border },

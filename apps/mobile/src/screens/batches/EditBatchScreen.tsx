@@ -142,7 +142,7 @@ function DatePickerModal({ visible, value, minYear = 2020, maxYear = 2035, onCon
 const dp = StyleSheet.create({
   sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
-  title:       { fontSize: fs(16), fontWeight: "800", color: C.text, marginBottom: ms(16), textAlign: "center" },
+  title:       { fontSize: fs(16), fontWeight: "800", color: C.text, marginBottom: ms(8), textAlign: "center" },
   selectors:   { flexDirection: "row", height: ms(180), gap: ms(4) },
   selector:    { flex: 1 },
   colLabel:    { fontSize: fs(10), fontWeight: "800", color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
@@ -499,7 +499,7 @@ export function EditBatchScreen({ navigation, route }: Props) {
 const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.primary },
   scroll: { flex: 1, backgroundColor: C.bg },
-  body:   { paddingHorizontal: ms(16), paddingTop: ms(16), gap: ms(14) },
+  body:   { paddingHorizontal: ms(16), paddingTop: ms(8), gap: ms(14) },
 
   // Card
   card: {

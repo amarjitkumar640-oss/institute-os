@@ -416,7 +416,7 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
 
 const sc = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: C.primary },
-  content: { flex: 1, backgroundColor: C.bg },
+  content: { flex: 1, backgroundColor: C.bg, marginTop: ms(8) },
 
   // Tabs
   tabBar: {

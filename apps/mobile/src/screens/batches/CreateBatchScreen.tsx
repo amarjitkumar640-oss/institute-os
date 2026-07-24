@@ -126,7 +126,7 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
 const dp = StyleSheet.create({
   sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
-  title:       { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(16), textAlign: "center" },
+  title:       { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(8), textAlign: "center" },
   selectors:   { flexDirection: "row", height: ms(180), gap: ms(4) },
   selector:    { flex: 1 },
   colLabel:    { fontSize: fs(10), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
@@ -204,7 +204,7 @@ function CoursePickerModal({ visible, courses, loading, onSelect, onClose }: {
 const pm = StyleSheet.create({
   sheetPad:  { paddingTop: ms(12), paddingHorizontal: ms(16) },
   handle:    { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
-  title:     { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(16) },
+  title:     { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(8) },
   row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: "#F0EDE8", gap: ms(12) },
   tag:       { borderRadius: ms(8), paddingHorizontal: ms(9), paddingVertical: ms(4), flexShrink: 0 },
   tagT:      { fontSize: fs(11), fontWeight: "800" },
@@ -496,7 +496,7 @@ export function CreateBatchScreen({ navigation }: Props) {
 const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: "#8B1E3F" },
   scroll: { flex: 1, backgroundColor: "#FFFBF0" },
-  body:   { paddingHorizontal: ms(16), paddingTop: ms(16), paddingBottom: ms(16) },
+  body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
 
   card:        { backgroundColor: "#FFFFFF", borderRadius: ms(20), padding: ms(18), marginBottom: ms(14), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(16) },

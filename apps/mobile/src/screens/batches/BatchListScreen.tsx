@@ -268,7 +268,7 @@ const sm = StyleSheet.create({
   overlay:      { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "flex-end" },
   sheet:        { backgroundColor: "#FFFFFF", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(16), maxHeight: "85%" },
   handle:       { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
-  header:       { flexDirection: "row", alignItems: "center", marginBottom: ms(12), gap: ms(10) },
+  header:       { flexDirection: "row", alignItems: "center", marginBottom: ms(8), gap: ms(10) },
   title:        { fontSize: fs(15), fontWeight: "800", color: "#2B1B1F" },
   sub:          { fontSize: fs(11.5), color: "#8A7F82", marginTop: ms(2) },
   capacityPill: { backgroundColor: "#F4F4F4", borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(5) },
@@ -648,13 +648,13 @@ const cs = StyleSheet.create({
   loaderT: { fontSize: fs(14), color: "#8A7F82" },
 
 
-  banner:    { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(10), borderRadius: ms(14), paddingVertical: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
+  banner:    { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem:{ flex: 1, alignItems: "center" },
   bannerNum: { fontSize: fs(18), fontWeight: "800" },
   bannerLbl: { fontSize: fs(9.5), color: "#8A7F82", fontWeight: "600", marginTop: ms(2) },
   bannerDiv: { width: 1, height: ms(28), backgroundColor: "#EDE8E3" },
 
-  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(10), paddingBottom: ms(2) },
+  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
   searchRow:   { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
   searchInput: { flex: 1, fontSize: fs(13.5), color: "#2B1B1F", padding: 0, includeFontPadding: false },
 

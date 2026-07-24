@@ -136,9 +136,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function switchCenter() {
-    // Re-fetch this staff member's assigned centers from the API and re-show the picker
+    // Re-fetch this staff member's assigned centers from the API and re-show the picker.
+    // Only truly a no-op when there are zero centers to choose from — a single
+    // assignment still needs to be shown so the user can select into it (e.g. right
+    // after being auto-assigned to a newly-created center, before their session
+    // token has been refreshed to reflect it).
     const { data } = await apiClient.get<CenterInfo[]>("/centers");
-    if (data.length <= 1) return; // nothing to switch to
+    if (data.length === 0) return;
     setPendingCenters(data);
   }
 

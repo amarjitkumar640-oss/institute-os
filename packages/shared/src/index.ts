@@ -92,6 +92,7 @@ export const createFacultySchema = z.object({
   experienceYears: z.number().int().min(0).max(50).default(0),
   joiningDate:     z.coerce.date(),
   subjectIds:      z.array(z.string().uuid()).default([]),
+  centerId:        z.string().uuid().optional(),
 });
 export type CreateFacultyInput = z.infer<typeof createFacultySchema>;
 

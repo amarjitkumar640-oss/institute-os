@@ -12,6 +12,7 @@ import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
+import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
 import { createFaculty } from "../../api/faculty";
 import { listSubjects, type SubjectItem } from "../../api/subjects";
 import { ms, fs } from "../../utils/responsive";
@@ -191,6 +192,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
   const [subjects, setSubjects]         = useState<SubjectItem[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
+  const [centerPickerVisible, setCenterPickerVisible] = useState(false);
 
   const phoneRef  = useRef<TextInput>(null);
   const emailRef  = useRef<TextInput>(null);
@@ -231,7 +233,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
     ]).start();
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(overrideCenterId?: string) {
     const errs = validate(form, selectedIds);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
@@ -246,6 +248,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
         experienceYears: Number(form.experienceYears),
         joiningDate:     parseDisplayDate(form.joiningDate)!,
         subjectIds:      Array.from(selectedIds),
+        ...(overrideCenterId ? { centerId: overrideCenterId } : {}),
       });
       if (!result.ok) {
         if ("conflict" in result) {
@@ -260,8 +263,17 @@ export function CreateFacultyScreen({ navigation }: Props) {
         experienceYears: result.faculty.experienceYears,
         subjectCount:    result.faculty.subjects.length,
       });
-    } catch {
-      setErrors({ submit: "Network error — please check your connection and try again." });
+    } catch (err: any) {
+      if (err?.response?.status === 400 && typeof err?.response?.data?.error === "string" && err.response.data.error.includes("centerId")) {
+        setCenterPickerVisible(true);
+        return;
+      }
+      const message =
+        err?.response?.data?.error ??
+        (err?.code === "ERR_NETWORK" || err?.code === "ECONNREFUSED"
+          ? "Cannot reach server. Check your network or API URL."
+          : "Something went wrong. Please try again.");
+      setErrors({ submit: message });
     } finally {
       setLoading(false);
     }
@@ -313,7 +325,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
               onChangeText={(v) => setField("joiningDate", autoFormatDate(v))}
               placeholder="DD/MM/YYYY" keyboardType="number-pad" error={errors.joiningDate}
               icon="calendar-outline" hint="Date faculty joined the institute"
-              returnKeyType="done" onSubmitEditing={handleSubmit} />
+              returnKeyType="done" onSubmitEditing={() => handleSubmit()} />
           </View>
 
           {/* ── Subjects ── */}
@@ -338,7 +350,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
           )}
 
           <View style={s.buttonGroup}>
-            <PrimaryButton label="Add Faculty" onPress={handleSubmit} loading={loading} disabled={loading} icon="person-add-outline" />
+            <PrimaryButton label="Add Faculty" onPress={() => handleSubmit()} loading={loading} disabled={loading} icon="person-add-outline" />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -384,6 +396,15 @@ export function CreateFacultyScreen({ navigation }: Props) {
           </Animated.View>
         </Animated.View>
       )}
+
+      <CenterPickerSheet
+        visible={centerPickerVisible}
+        onClose={() => setCenterPickerVisible(false)}
+        onSelect={(centerId) => {
+          setCenterPickerVisible(false);
+          handleSubmit(centerId);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -428,7 +449,7 @@ const s = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: "#8B1E3F" },
   flex:          { flex: 1 },
   scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
-  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(24), paddingBottom: ms(40) },
+  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(40) },
 
   section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(18) },

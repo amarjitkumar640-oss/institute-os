@@ -594,7 +594,7 @@ const s = StyleSheet.create({
   safe:        { flex: 1, backgroundColor: "#8B1E3F" },
   flex:        { flex: 1 },
   scroll:      { flex: 1, backgroundColor: "#FFFBF0" },
-  body:        { paddingHorizontal: ms(16), paddingTop: ms(16), paddingBottom: ms(40) },
+  body:        { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(40) },
 
   stepContent: { gap: ms(2) },
   card:        { backgroundColor: "#FFFFFF", borderRadius: ms(20), padding: ms(18), marginBottom: ms(14), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
@@ -650,7 +650,7 @@ const s = StyleSheet.create({
   avatarHint:     { fontSize: fs(11), color: "#8A7F82", marginTop: ms(6) },
   photoError:     { fontSize: fs(11), color: "#C0392B", marginTop: ms(4), textAlign: "center" },
 
-  photoSheet:       { paddingTop: ms(20), paddingHorizontal: ms(20), paddingBottom: ms(8) },
+  photoSheet:       { paddingTop: ms(8), paddingHorizontal: ms(20), paddingBottom: ms(8) },
   photoSheetTitle:  { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(20), textAlign: "center" },
   photoOption:      { flexDirection: "row", alignItems: "center", gap: ms(14), paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
   photoOptionIcon:  { width: ms(44), height: ms(44), borderRadius: ms(12), justifyContent: "center", alignItems: "center" },

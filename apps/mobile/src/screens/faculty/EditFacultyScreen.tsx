@@ -289,8 +289,13 @@ export function EditFacultyScreen({ navigation, route }: Props) {
         subjectCount:    result.faculty.subjects.length,
         isActive:        result.faculty.isActive,
       });
-    } catch {
-      setErrors({ submit: "Network error — please check your connection and try again." });
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.error ??
+        (err?.code === "ERR_NETWORK" || err?.code === "ECONNREFUSED"
+          ? "Cannot reach server. Check your network or API URL."
+          : "Something went wrong. Please try again.");
+      setErrors({ submit: message });
     } finally {
       setLoading(false);
     }
@@ -474,7 +479,7 @@ const s = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: "#8B1E3F" },
   flex:          { flex: 1 },
   scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
-  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(24), paddingBottom: ms(40) },
+  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(40) },
 
   section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(18) },

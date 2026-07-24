@@ -30,6 +30,7 @@ export interface CreateFacultyPayload {
   experienceYears: number;
   joiningDate: string; // "YYYY-MM-DD"
   subjectIds: string[];
+  centerId?: string; // only needed when the session has no center pinned
 }
 
 export interface UpdateFacultyPayload {

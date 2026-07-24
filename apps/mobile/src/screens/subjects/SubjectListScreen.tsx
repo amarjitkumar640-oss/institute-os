@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, StatusBar, ActivityIndicator,
+  TextInput, StatusBar, ActivityIndicator, ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -66,88 +66,72 @@ function SubjectCard({
 
   return (
     <View style={sc.card}>
-      {/* Left accent bar */}
-      <View style={[sc.accent, { backgroundColor: color }]} />
+      {/* Category icon */}
+      <View style={[sc.iconWrap, { backgroundColor: color + "18" }]}>
+        <Ionicons name="book-outline" size={ms(19)} color={color} />
+      </View>
 
+      {/* Name + meta */}
       <View style={sc.body}>
-        {/* Top row */}
-        <View style={sc.topRow}>
-          <View style={[sc.catPill, { backgroundColor: color + "18", borderColor: color + "40" }]}>
-            <View style={[sc.catDot, { backgroundColor: color }]} />
-            <Text style={[sc.catT, { color }]}>{catLabel(subject.examCategory)}</Text>
-          </View>
-          {locked && (
-            <View style={sc.lockedPill}>
-              <Ionicons name="people-outline" size={ms(10)} color="#2563A8" />
-              <Text style={sc.lockedT}>
-                {subject.facultyCount} faculty
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Subject name */}
         <Text style={sc.name} numberOfLines={2}>{subject.name}</Text>
-
-        {/* Action row */}
-        <View style={sc.actionRow}>
+        <View style={sc.metaRow}>
+          <View style={[sc.catDot, { backgroundColor: color }]} />
+          <Text style={[sc.catT, { color }]}>{catLabel(subject.examCategory)}</Text>
           {locked && (
-            <View style={sc.lockHint}>
-              <Ionicons name="lock-closed-outline" size={ms(10)} color="#B0A9AC" />
-              <Text style={sc.lockHintT}>Unassign faculty before deleting</Text>
-            </View>
+            <>
+              <Text style={sc.metaSep}>·</Text>
+              <Ionicons name="people-outline" size={ms(11)} color="#8A7F82" />
+              <Text style={sc.metaT}>{subject.facultyCount} faculty</Text>
+            </>
           )}
-          <View style={sc.buttons}>
-            <TouchableOpacity
-              style={sc.editBtn}
-              onPress={onEdit}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="pencil-outline" size={ms(13)} color="#2563A8" />
-              <Text style={sc.editT}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[sc.delBtn, locked && sc.delBtnDisabled]}
-              onPress={locked ? undefined : onDelete}
-              activeOpacity={locked ? 1 : 0.75}
-            >
-              {deleting ? (
-                <ActivityIndicator size="small" color={locked ? "#C7BAB4" : "#C0392B"} />
-              ) : (
-                <>
-                  <Ionicons name="trash-outline" size={ms(13)} color={locked ? "#C7BAB4" : "#C0392B"} />
-                  <Text style={[sc.delT, locked && sc.delTDisabled]}>Delete</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
         </View>
+      </View>
+
+      {/* Actions */}
+      <View style={sc.actions}>
+        <TouchableOpacity
+          style={sc.iconBtn}
+          onPress={onEdit}
+          activeOpacity={0.75}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Ionicons name="pencil-outline" size={ms(16)} color="#2563A8" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[sc.iconBtn, sc.delIconBtn, locked && sc.iconBtnDisabled]}
+          onPress={locked ? undefined : onDelete}
+          activeOpacity={locked ? 1 : 0.75}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          {deleting ? (
+            <ActivityIndicator size="small" color={locked ? "#C7BAB4" : "#C0392B"} />
+          ) : (
+            <Ionicons
+              name={locked ? "lock-closed-outline" : "trash-outline"}
+              size={ms(16)}
+              color={locked ? "#C7BAB4" : "#C0392B"}
+            />
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const sc = StyleSheet.create({
-  card:         { flexDirection: "row", backgroundColor: "#FFFFFF", borderRadius: ms(16), marginHorizontal: ms(16), marginBottom: ms(10), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(3) }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, overflow: "hidden" },
-  accent:       { width: ms(4) },
-  body:         { flex: 1, padding: ms(14), gap: ms(8) },
-  topRow:       { flexDirection: "row", alignItems: "center", gap: ms(8) },
-  catPill:      { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(3), borderRadius: ms(6), borderWidth: 1 },
+  card:         { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(16), marginHorizontal: ms(16), marginBottom: ms(10), padding: ms(12), gap: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(3) }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2 },
+  iconWrap:     { width: ms(42), height: ms(42), borderRadius: ms(13), justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  body:         { flex: 1, gap: ms(4) },
+  name:         { fontSize: fs(14.5), fontWeight: "700", color: "#2B1B1F", lineHeight: fs(19) },
+  metaRow:      { flexDirection: "row", alignItems: "center", gap: ms(5) },
   catDot:       { width: ms(5), height: ms(5), borderRadius: ms(2.5) },
-  catT:         { fontSize: fs(10), fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
-  lockedPill:   { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(7), paddingVertical: ms(3), borderRadius: ms(6), backgroundColor: "#EFF4FF", borderWidth: 1, borderColor: "#BFD0F5" },
-  lockedT:      { fontSize: fs(10), fontWeight: "700", color: "#2563A8" },
-  name:         { fontSize: fs(15), fontWeight: "700", color: "#2B1B1F", lineHeight: fs(21) },
-  actionRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: ms(8) },
-  lockHint:     { flexDirection: "row", alignItems: "center", gap: ms(4), flex: 1 },
-  lockHintT:    { fontSize: fs(10), color: "#B0A9AC" },
-  buttons:      { flexDirection: "row", gap: ms(8), marginLeft: "auto" },
-  editBtn:      { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(10), paddingVertical: ms(6), borderRadius: ms(8), backgroundColor: "#EFF4FF", borderWidth: 1, borderColor: "#BFD0F5" },
-  editT:        { fontSize: fs(11), fontWeight: "700", color: "#2563A8" },
-  delBtn:       { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(10), paddingVertical: ms(6), borderRadius: ms(8), backgroundColor: "#FEF0EE", borderWidth: 1, borderColor: "#F5C6C0" },
-  delBtnDisabled: { backgroundColor: "#F7F4F2", borderColor: "#E8E0DC" },
-  delT:         { fontSize: fs(11), fontWeight: "700", color: "#C0392B" },
-  delTDisabled: { color: "#C7BAB4" },
+  catT:         { fontSize: fs(11), fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" },
+  metaSep:      { fontSize: fs(11), color: "#C7BAB4" },
+  metaT:        { fontSize: fs(11), color: "#8A7F82", fontWeight: "600" },
+  actions:      { flexDirection: "row", gap: ms(6), flexShrink: 0 },
+  iconBtn:      { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center", backgroundColor: "#EFF4FF", borderWidth: 1, borderColor: "#BFD0F5" },
+  delIconBtn:   { backgroundColor: "#FEF0EE", borderColor: "#F5C6C0" },
+  iconBtnDisabled: { backgroundColor: "#F7F4F2", borderColor: "#E8E0DC" },
 });
 
 // ── Empty state ────────────────────────────────────────────────────────────────
@@ -290,8 +274,8 @@ export function SubjectListScreen(_: Props) {
   const ListHeader = (
     <View>
       {/* Search */}
-      <View style={ls.searchRow}>
-        <View style={ls.searchBox}>
+      <View style={ls.searchWrap}>
+        <View style={ls.searchRow}>
           <Ionicons name="search-outline" size={ms(16)} color="#B0A9AC" />
           <TextInput
             style={ls.searchInput}
@@ -310,7 +294,12 @@ export function SubjectListScreen(_: Props) {
       </View>
 
       {/* Filter chips */}
-      <View style={ls.chipRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={ls.filterScroll}
+        contentContainerStyle={ls.filterRow}
+      >
         {FILTERS.map((f) => {
           const active = filter === f.key;
           return (
@@ -324,7 +313,7 @@ export function SubjectListScreen(_: Props) {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       {/* Banner — only when data loaded & no filter search */}
       {!loading && !error && subjects.length > 0 && (
@@ -396,15 +385,16 @@ export function SubjectListScreen(_: Props) {
 const ls = StyleSheet.create({
   safe:        { flex: 1, backgroundColor: "#8B1E3F" },
   root:        { flex: 1, backgroundColor: "#FFFBF0" },
-  listContent: { paddingTop: ms(16), paddingBottom: ms(100) },
+  listContent: { paddingBottom: ms(100) },
 
-  searchRow:   { paddingHorizontal: ms(16), marginBottom: ms(12) },
-  searchBox:   { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(14), paddingHorizontal: ms(14), paddingVertical: ms(10), gap: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: ms(6), elevation: 2 },
-  searchInput: { flex: 1, fontSize: fs(14), color: "#2B1B1F" },
+  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
+  searchRow:   { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), gap: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2 },
+  searchInput: { flex: 1, fontSize: fs(13.5), color: "#2B1B1F", padding: 0, includeFontPadding: false },
 
-  chipRow:     { flexDirection: "row", paddingHorizontal: ms(16), gap: ms(8), marginBottom: ms(14), flexWrap: "wrap" },
-  chip:        { paddingHorizontal: ms(14), paddingVertical: ms(7), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1.5, borderColor: "#E0D8D4" },
-  chipT:       { fontSize: fs(12), fontWeight: "700", color: "#8A7F82" },
+  filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
+  filterRow:    { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
+  chip:        { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  chipT:       { fontSize: fs(12), fontWeight: "600", color: "#8A7F82", includeFontPadding: false, lineHeight: fs(16) },
   chipTActive: { color: "#FFFFFF" },
 
   overlay:     { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(16), backgroundColor: "#FFFBF0" },
