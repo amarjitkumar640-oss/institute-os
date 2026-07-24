@@ -107,6 +107,17 @@ export async function uploadStudentPhoto(
   }
 }
 
+export async function deleteStudentPhoto(
+  id: string,
+): Promise<{ ok: true; student: StudentItem } | { ok: false; error: string }> {
+  try {
+    const { data } = await apiClient.delete<StudentItem>(`/students/${id}/photo`);
+    return { ok: true, student: data };
+  } catch (err: any) {
+    return { ok: false, error: err?.response?.data?.error ?? "Could not remove photo" };
+  }
+}
+
 export async function admitStudent(payload: AdmitStudentPayload): Promise<AdmitStudentResponse> {
   try {
     const { data } = await apiClient.post<AdmitStudentResult>("/students/admit", payload);

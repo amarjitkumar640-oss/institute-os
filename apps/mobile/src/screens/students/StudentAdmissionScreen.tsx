@@ -7,12 +7,21 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
-import { admitStudent, type AdmitStudentPayload, type AdmitStudentResult } from "../../api/students";
+import { BottomSheet } from "../../components/ui/BottomSheet";
+import {
+  admitStudent, uploadStudentPhoto, deleteStudentPhoto,
+  type AdmitStudentPayload, type AdmitStudentResult,
+} from "../../api/students";
+import {
+  listDocumentTypes, uploadStudentDocument, deleteStudentDocument,
+  type DocumentType,
+} from "../../api/documents";
 import { listBatches, type BatchItem } from "../../api/batches";
 import { listCourses, type CourseItem } from "../../api/courses";
 import { ms, fs } from "../../utils/responsive";
@@ -1025,6 +1034,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
   const [errors, setErrors]   = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [admitted, setAdmitted] = useState<AdmitStudentResult | null>(null);
+  const [docsStepDone, setDocsStepDone] = useState(false);
 
   const checkScale  = useRef(new Animated.Value(0)).current;
   const cardSlide   = useRef(new Animated.Value(ms(60))).current;
@@ -1118,6 +1128,15 @@ export function StudentAdmissionScreen({ navigation }: Props) {
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
+  function revealSuccessCard() {
+    setDocsStepDone(true);
+    Animated.parallel([
+      Animated.spring(checkScale,  { toValue: 1, useNativeDriver: true, tension: 70, friction: 7, delay: 100 }),
+      Animated.timing(cardOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
+      Animated.spring(cardSlide,   { toValue: 0, useNativeDriver: true, tension: 80, friction: 10, delay: 60 }),
+    ]).start();
+  }
+
   async function handleSubmit() {
     if (!validateStep()) return;
     setLoading(true);
@@ -1149,12 +1168,9 @@ export function StudentAdmissionScreen({ navigation }: Props) {
 
       const response = await admitStudent(payload);
       if (response.ok) {
+        // Success card animation is deferred until the Documents stage finishes
+        // (skip or continue) — see revealSuccessCard().
         setAdmitted(response.result);
-        Animated.parallel([
-          Animated.spring(checkScale,  { toValue: 1, useNativeDriver: true, tension: 70, friction: 7, delay: 100 }),
-          Animated.timing(cardOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
-          Animated.spring(cardSlide,   { toValue: 0, useNativeDriver: true, tension: 80, friction: 10, delay: 60 }),
-        ]).start();
       } else if ("batchFull" in response) {
         showInfo("warning", "Batch is Full", response.message);
       } else {
@@ -1639,8 +1655,13 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         </View>
       )}
 
+      {/* Photo + documents — shown once, before the success card, all optional */}
+      {admitted !== null && !docsStepDone && (
+        <DocumentsStep studentId={admitted.student.id} onDone={revealSuccessCard} />
+      )}
+
       {/* Full-screen success card */}
-      {admitted !== null && (
+      {admitted !== null && docsStepDone && (
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
           <ScrollView contentContainerStyle={s.successScroll} showsVerticalScrollIndicator={false}>
             <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
@@ -1873,4 +1894,204 @@ const tm = StyleSheet.create({
   btnWrap:    { padding: ms(16), backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#F0EDE8" },
   btn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: "#8B1E3F", borderRadius: ms(14), paddingVertical: ms(15) },
   btnT:       { fontSize: fs(15), fontWeight: "800", color: "#fff" },
+});
+
+// ── Documents stage — shown once, right after admission succeeds, before the
+//    success card. Photo is fixed (uses the same mechanism as EditStudentScreen);
+//    the rest come from the document-types master list, so adding a new type
+//    later needs zero changes here. Everything is optional/skippable. ─────────
+
+type UploadKey = "photo" | string; // "photo" or a documentTypeId
+
+function UploadRow({ label, uri, loading, error, onPress }: {
+  label: string; uri: string | null; loading: boolean; error?: string; onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={ds.row} onPress={onPress} activeOpacity={0.75} disabled={loading}>
+      <View style={[ds.rowIcon, uri && ds.rowIconDone]}>
+        {loading
+          ? <ActivityIndicator size="small" color="#8B1E3F" />
+          : <Ionicons name={uri ? "checkmark-circle" : "document-attach-outline"} size={ms(20)} color={uri ? "#1B9C63" : "#8A7F82"} />
+        }
+      </View>
+      <View style={ds.rowBody}>
+        <Text style={ds.rowLabel}>{label}</Text>
+        <Text style={ds.rowSub}>{uri ? "Uploaded — tap to replace" : "Not uploaded yet"}</Text>
+        {error ? <Text style={ds.rowErr}>{error}</Text> : null}
+      </View>
+      <Ionicons name="chevron-forward" size={ms(18)} color="#C7BAB4" />
+    </TouchableOpacity>
+  );
+}
+
+function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () => void }) {
+  const [docTypes, setDocTypes]         = useState<DocumentType[]>([]);
+  const [docTypesLoading, setDocTypesLoading] = useState(true);
+
+  const [photoUri, setPhotoUri]         = useState<string | null>(null);
+  const [docUris, setDocUris]           = useState<Record<string, string>>({});
+  const [loadingKey, setLoadingKey]     = useState<UploadKey | null>(null);
+  const [errorKey, setErrorKey]         = useState<{ key: UploadKey; message: string } | null>(null);
+  const [activeSheet, setActiveSheet]   = useState<UploadKey | null>(null);
+
+  useEffect(() => {
+    listDocumentTypes()
+      .then(setDocTypes)
+      .catch(() => {})
+      .finally(() => setDocTypesLoading(false));
+  }, []);
+
+  async function pickAndUpload(key: UploadKey, fromCamera: boolean) {
+    setActiveSheet(null);
+    setErrorKey(null);
+    if (fromCamera) {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") { setErrorKey({ key, message: "Camera permission is required." }); return; }
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") { setErrorKey({ key, message: "Gallery permission is required." }); return; }
+    }
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+
+    setLoadingKey(key);
+    if (key === "photo") {
+      const res = await uploadStudentPhoto(studentId, asset.uri, asset.mimeType ?? "image/jpeg");
+      setLoadingKey(null);
+      if (res.ok) setPhotoUri(res.student.photoUrl ?? asset.uri);
+      else setErrorKey({ key, message: res.error });
+    } else {
+      const res = await uploadStudentDocument(studentId, key, asset.uri, asset.mimeType ?? "image/jpeg");
+      setLoadingKey(null);
+      if (res.ok) setDocUris((prev) => ({ ...prev, [key]: res.document.fileUrl }));
+      else setErrorKey({ key, message: res.error });
+    }
+  }
+
+  async function removeUpload(key: UploadKey) {
+    setActiveSheet(null);
+    setLoadingKey(key);
+    if (key === "photo") {
+      const res = await deleteStudentPhoto(studentId);
+      setLoadingKey(null);
+      if (res.ok) setPhotoUri(null);
+      else setErrorKey({ key, message: res.error });
+    } else {
+      const res = await deleteStudentDocument(studentId, key);
+      setLoadingKey(null);
+      if (res.ok) setDocUris((prev) => { const next = { ...prev }; delete next[key]; return next; });
+      else setErrorKey({ key, message: res.error });
+    }
+  }
+
+  const activeHasUpload = activeSheet === "photo" ? !!photoUri : !!(activeSheet && docUris[activeSheet]);
+  const activeLabel = activeSheet === "photo" ? "Photo" : docTypes.find((d) => d.id === activeSheet)?.label ?? "";
+
+  return (
+    <View style={ds.overlay}>
+      <ScrollView contentContainerStyle={ds.scroll} showsVerticalScrollIndicator={false}>
+        <View style={ds.headerIcon}>
+          <Ionicons name="images-outline" size={ms(28)} color="#8B1E3F" />
+        </View>
+        <Text style={ds.title}>Photo &amp; Documents</Text>
+        <Text style={ds.sub}>Optional — add these now while you have them in hand, or later from the student's profile.</Text>
+
+        <UploadRow
+          label="Student Photo"
+          uri={photoUri}
+          loading={loadingKey === "photo"}
+          error={errorKey?.key === "photo" ? errorKey.message : undefined}
+          onPress={() => setActiveSheet("photo")}
+        />
+
+        {docTypesLoading ? (
+          <ActivityIndicator color="#8B1E3F" style={{ marginVertical: ms(16) }} />
+        ) : (
+          docTypes.map((dt) => (
+            <UploadRow
+              key={dt.id}
+              label={dt.label}
+              uri={docUris[dt.id] ?? null}
+              loading={loadingKey === dt.id}
+              error={errorKey?.key === dt.id ? errorKey.message : undefined}
+              onPress={() => setActiveSheet(dt.id)}
+            />
+          ))
+        )}
+      </ScrollView>
+
+      <View style={ds.footer}>
+        <TouchableOpacity style={ds.continueBtn} onPress={onDone} activeOpacity={0.85}>
+          <Ionicons name="arrow-forward" size={ms(18)} color="#fff" />
+          <Text style={ds.continueBtnT}>Continue</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onDone} style={ds.skipBtn}>
+          <Text style={ds.skipT}>Skip for now</Text>
+        </TouchableOpacity>
+      </View>
+
+      <BottomSheet visible={activeSheet !== null} onClose={() => setActiveSheet(null)}>
+        <View style={ds.sheetInner}>
+          <Text style={ds.sheetTitle}>Update {activeLabel}</Text>
+          <TouchableOpacity style={ds.sheetOption} onPress={() => activeSheet && pickAndUpload(activeSheet, true)} activeOpacity={0.8}>
+            <View style={[ds.sheetOptionIcon, { backgroundColor: "#8B1E3F18" }]}>
+              <Ionicons name="camera-outline" size={ms(22)} color="#8B1E3F" />
+            </View>
+            <Text style={ds.sheetOptionLabel}>Take Photo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={ds.sheetOption} onPress={() => activeSheet && pickAndUpload(activeSheet, false)} activeOpacity={0.8}>
+            <View style={[ds.sheetOptionIcon, { backgroundColor: "#2563A818" }]}>
+              <Ionicons name="image-outline" size={ms(22)} color="#2563A8" />
+            </View>
+            <Text style={ds.sheetOptionLabel}>Choose from Gallery</Text>
+          </TouchableOpacity>
+          {activeHasUpload && (
+            <TouchableOpacity style={ds.sheetOption} onPress={() => activeSheet && removeUpload(activeSheet)} activeOpacity={0.8}>
+              <View style={[ds.sheetOptionIcon, { backgroundColor: "#C0392B18" }]}>
+                <Ionicons name="trash-outline" size={ms(22)} color="#C0392B" />
+              </View>
+              <Text style={[ds.sheetOptionLabel, { color: "#C0392B" }]}>Remove</Text>
+            </TouchableOpacity>
+          )}
+          <View style={{ height: ms(20) }} />
+        </View>
+      </BottomSheet>
+    </View>
+  );
+}
+
+const ds = StyleSheet.create({
+  overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0" },
+  scroll:  { padding: ms(20), paddingBottom: ms(30) },
+
+  headerIcon: { width: ms(56), height: ms(56), borderRadius: ms(18), backgroundColor: "#8B1E3F18", justifyContent: "center", alignItems: "center", alignSelf: "center", marginBottom: ms(14) },
+  title:      { fontSize: fs(19), fontWeight: "800", color: "#2B1B1F", textAlign: "center", marginBottom: ms(6) },
+  sub:        { fontSize: fs(12.5), color: "#8A7F82", textAlign: "center", lineHeight: fs(18), marginBottom: ms(20) },
+
+  row: {
+    flexDirection: "row", alignItems: "center", gap: ms(12),
+    backgroundColor: "#FFFFFF", borderRadius: ms(14), padding: ms(12), marginBottom: ms(10),
+    shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: ms(6), elevation: 2,
+  },
+  rowIcon:     { width: ms(40), height: ms(40), borderRadius: ms(12), backgroundColor: "#F4F4F4", justifyContent: "center", alignItems: "center" },
+  rowIconDone: { backgroundColor: "#E7F7EF" },
+  rowBody:     { flex: 1 },
+  rowLabel:    { fontSize: fs(14), fontWeight: "700", color: "#2B1B1F" },
+  rowSub:      { fontSize: fs(11.5), color: "#8A7F82", marginTop: ms(2) },
+  rowErr:      { fontSize: fs(11), color: "#C0392B", marginTop: ms(3) },
+
+  footer: { padding: ms(16), backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#F0EDE8", gap: ms(10) },
+  continueBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: "#8B1E3F", borderRadius: ms(14), paddingVertical: ms(15) },
+  continueBtnT: { fontSize: fs(15), fontWeight: "800", color: "#fff" },
+  skipBtn:  { alignItems: "center", paddingVertical: ms(4) },
+  skipT:    { fontSize: fs(13), fontWeight: "700", color: "#8A7F82" },
+
+  sheetInner:  { padding: ms(20) },
+  sheetTitle:  { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(14) },
+  sheetOption: { flexDirection: "row", alignItems: "center", gap: ms(14), paddingVertical: ms(12) },
+  sheetOptionIcon: { width: ms(42), height: ms(42), borderRadius: ms(12), justifyContent: "center", alignItems: "center" },
+  sheetOptionLabel: { fontSize: fs(14.5), fontWeight: "700", color: "#2B1B1F" },
 });

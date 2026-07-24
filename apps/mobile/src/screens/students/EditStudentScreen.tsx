@@ -11,11 +11,12 @@ import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { BottomSheet } from "../../components/ui/BottomSheet";
-import { updateStudent, uploadStudentPhoto } from "../../api/students";
+import { updateStudent, uploadStudentPhoto, deleteStudentPhoto } from "../../api/students";
 import type {
   Gender, Qualification, CoursePreference, DurationPref, BatchTiming, PaymentMode, StudentItem,
 } from "../../api/students";
 import { ms, fs } from "../../utils/responsive";
+import { useAlert } from "../../context/AlertContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditStudent">;
 
@@ -184,6 +185,7 @@ const PAYMENT_OPTIONS:  { key: PaymentMode;      label: string }[] = [{ key: "ca
 
 export function EditStudentScreen({ navigation, route }: Props) {
   const { student } = route.params;
+  const { showConfirm } = useAlert();
 
   const [step, setStep]   = useState(0);
   const slideAnim         = useRef(new Animated.Value(0)).current;
@@ -220,6 +222,26 @@ export function EditStudentScreen({ navigation, route }: Props) {
     } else {
       setPhotoError(res.error);
     }
+  }
+
+  function handleRemovePhoto() {
+    setShowPhotoPicker(false);
+    showConfirm(
+      "Remove Photo?",
+      "This will delete the student's photo.",
+      async () => {
+        setPhotoError(null);
+        setPhotoLoading(true);
+        const res = await deleteStudentPhoto(student.id);
+        setPhotoLoading(false);
+        if (res.ok) {
+          setPhotoUri(res.student.photoUrl ?? null);
+        } else {
+          setPhotoError(res.error);
+        }
+      },
+      { confirmLabel: "Remove", cancelLabel: "Cancel", destructive: true },
+    );
   }
 
   // ── Step 0: Personal ──
@@ -540,6 +562,14 @@ export function EditStudentScreen({ navigation, route }: Props) {
             </View>
             <Text style={s.photoOptionLabel}>Choose from Gallery</Text>
           </TouchableOpacity>
+          {photoUri && (
+            <TouchableOpacity style={s.photoOption} onPress={handleRemovePhoto} activeOpacity={0.8}>
+              <View style={[s.photoOptionIcon, { backgroundColor: "#C0392B18" }]}>
+                <Ionicons name="trash-outline" size={ms(22)} color="#C0392B" />
+              </View>
+              <Text style={[s.photoOptionLabel, { color: "#C0392B" }]}>Remove Photo</Text>
+            </TouchableOpacity>
+          )}
           <View style={{ height: ms(20) }} />
         </View>
       </BottomSheet>

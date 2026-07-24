@@ -273,8 +273,34 @@ model Student {
 
   enrollments    Enrollment[]
   leadsConverted Lead[]       @relation("LeadConvertedStudent")
+  documents      StudentDocument[]
 
   @@map("students")
+}
+
+model DocumentType {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  label     String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+
+  documents StudentDocument[]
+
+  @@map("document_types")
+}
+
+model StudentDocument {
+  id             String       @id @default(uuid())
+  studentId      String
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  documentTypeId String
+  documentType   DocumentType @relation(fields: [documentTypeId], references: [id])
+  fileUrl        String
+  uploadedAt     DateTime     @default(now())
+
+  @@unique([studentId, documentTypeId])
+  @@map("student_documents")
 }
 
 model Enrollment {

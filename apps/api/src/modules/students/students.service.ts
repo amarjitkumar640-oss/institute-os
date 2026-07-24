@@ -23,3 +23,29 @@ export async function withPhotoUrl<T extends { photoUrl: string | null }>(studen
 export async function withPhotoUrls<T extends { photoUrl: string | null }>(students: T[]): Promise<T[]> {
   return Promise.all(students.map(withPhotoUrl));
 }
+
+// Documents (Aadhar scan, marksheet, etc.) — dynamic master-data-driven
+// uploads, separate from the fixed `photoUrl` above. `fileUrl` stores a bare
+// S3 key the same way `photoUrl` does; resolve to a signed URL on the way out.
+type StudentDocumentWithType = {
+  id:             string;
+  documentTypeId: string;
+  fileUrl:        string;
+  uploadedAt:     Date;
+  documentType:   { key: string; label: string };
+};
+
+export async function serializeStudentDocument(doc: StudentDocumentWithType) {
+  return {
+    id:             doc.id,
+    documentTypeId: doc.documentTypeId,
+    key:            doc.documentType.key,
+    label:          doc.documentType.label,
+    fileUrl:        await getSignedPhotoUrl(doc.fileUrl),
+    uploadedAt:     doc.uploadedAt,
+  };
+}
+
+export async function serializeStudentDocuments(docs: StudentDocumentWithType[]) {
+  return Promise.all(docs.map(serializeStudentDocument));
+}

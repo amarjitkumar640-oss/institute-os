@@ -5,8 +5,8 @@ import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/role";
 import { validateBody } from "../../middleware/validate";
-import { uploadPhoto } from "../../lib/s3";
-import { generateStudentCode, withPhotoUrl, withPhotoUrls } from "./students.service";
+import { deletePhoto, uploadPhoto } from "../../lib/s3";
+import { generateStudentCode, withPhotoUrl, withPhotoUrls, serializeStudentDocument, serializeStudentDocuments } from "./students.service";
 import { centerFilter, centerIdForCreate } from "../../lib/centerFilter";
 import { BatchFullError, createEnrollment } from "../enrollments/enrollments.service";
 import { generateReceiptNo, generateSchedule } from "../fees/fees.service";
@@ -235,5 +235,91 @@ studentsRouter.post(
       data: { photoUrl: key },
     });
     res.json(await withPhotoUrl(student));
+  }
+);
+
+studentsRouter.delete(
+  "/:id/photo",
+  requireAuth,
+  requireRole("admin", "frontdesk"),
+  async (req, res) => {
+    const existing = await prisma.student.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Student not found" });
+
+    if (existing.photoUrl) {
+      // Best-effort — don't let a missing/already-gone S3 object block clearing the DB field.
+      await deletePhoto(existing.photoUrl).catch(() => {});
+    }
+
+    const student = await prisma.student.update({
+      where: { id: req.params.id },
+      data: { photoUrl: null },
+    });
+    res.json(await withPhotoUrl(student));
+  }
+);
+
+// ── Documents (Aadhar scan, marksheet, etc.) — dynamic, master-data-driven ────
+
+studentsRouter.get(
+  "/:id/documents",
+  requireAuth,
+  requireRole("admin", "frontdesk"),
+  async (req, res) => {
+    const docs = await prisma.studentDocument.findMany({
+      where:   { studentId: req.params.id },
+      include: { documentType: true },
+      orderBy: { documentType: { sortOrder: "asc" } },
+    });
+    res.json(await serializeStudentDocuments(docs));
+  }
+);
+
+studentsRouter.post(
+  "/:id/documents/:documentTypeId",
+  requireAuth,
+  requireRole("admin", "frontdesk"),
+  upload.single("document"),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "Missing document file" });
+    const { id: studentId, documentTypeId } = req.params;
+
+    const existing = await prisma.studentDocument.findUnique({
+      where: { studentId_documentTypeId: { studentId, documentTypeId } },
+    });
+    if (existing) {
+      // Best-effort — don't let a missing/already-gone S3 object block replacing the row.
+      await deletePhoto(existing.fileUrl).catch(() => {});
+    }
+
+    const key = `student-docs/${documentTypeId}/${studentId}/${Date.now()}-${req.file.originalname}`;
+    await uploadPhoto(key, req.file.buffer, req.file.mimetype);
+
+    const doc = await prisma.studentDocument.upsert({
+      where:   { studentId_documentTypeId: { studentId, documentTypeId } },
+      update:  { fileUrl: key },
+      create:  { studentId, documentTypeId, fileUrl: key },
+      include: { documentType: true },
+    });
+    res.json(await serializeStudentDocument(doc));
+  }
+);
+
+studentsRouter.delete(
+  "/:id/documents/:documentTypeId",
+  requireAuth,
+  requireRole("admin", "frontdesk"),
+  async (req, res) => {
+    const { id: studentId, documentTypeId } = req.params;
+    const existing = await prisma.studentDocument.findUnique({
+      where: { studentId_documentTypeId: { studentId, documentTypeId } },
+    });
+    if (!existing) return res.status(404).json({ error: "Document not found" });
+
+    await deletePhoto(existing.fileUrl).catch(() => {});
+    await prisma.studentDocument.delete({
+      where: { studentId_documentTypeId: { studentId, documentTypeId } },
+    });
+    res.json({ deleted: true });
   }
 );
