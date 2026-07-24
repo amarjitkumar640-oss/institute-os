@@ -264,7 +264,15 @@ export function CreateFacultyScreen({ navigation }: Props) {
         subjectCount:    result.faculty.subjects.length,
       });
     } catch (err: any) {
-      if (err?.response?.status === 400 && typeof err?.response?.data?.error === "string" && err.response.data.error.includes("centerId")) {
+      if (
+        err?.response?.status === 400 &&
+        typeof err?.response?.data?.error === "string" &&
+        err.response.data.error.includes("centerId") &&
+        !overrideCenterId
+      ) {
+        // Only offer the fallback picker on the first attempt — if we already supplied
+        // a centerId (manually or via the single-center auto-select) and it still
+        // failed, retrying again would loop forever instead of surfacing the real problem.
         setCenterPickerVisible(true);
         return;
       }

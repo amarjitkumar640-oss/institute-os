@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, StatusBar, TextInput, Animated, TouchableOpacity,
+  Platform, StatusBar, TextInput, Animated, Easing, TouchableOpacity,
   ActivityIndicator, Modal, Linking, Share,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path } from "react-native-svg";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -14,6 +16,7 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { BottomSheet } from "../../components/ui/BottomSheet";
+import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
 import {
   admitStudent, uploadStudentPhoto, deleteStudentPhoto,
   type AdmitStudentPayload, type AdmitStudentResult,
@@ -24,7 +27,8 @@ import {
 } from "../../api/documents";
 import { listBatches, type BatchItem } from "../../api/batches";
 import { listCourses, type CourseItem } from "../../api/courses";
-import { ms, fs } from "../../utils/responsive";
+import { ms, fs, sw } from "../../utils/responsive";
+import { C } from "../../theme";
 import type {
   Gender, Qualification, CoursePreference, DurationPref, BatchTiming, PaymentMode,
 } from "../../api/students";
@@ -335,45 +339,143 @@ const qr = StyleSheet.create({
 
 // ── Batch picker ──────────────────────────────────────────────────────────────
 
-const CAT_COLOR: Record<string, string> = { ssc: "#8B1E3F", banking: "#2563A8", railway: "#2CA6A4", foundation: "#7B3FA0" };
+const CAT_COLOR: Record<string, string> = { ssc: C.primary, banking: C.blue, railway: C.accent, foundation: C.purple };
 const CAT_LABEL: Record<string, string> = { ssc: "SSC",    banking: "Banking", railway: "Railway",  foundation: "Foundation" };
 
-function BatchPicker({ batches, selectedId, onSelect }: { batches: BatchItem[]; selectedId: string | null; onSelect: (id: string | null) => void }) {
+function monthsToDurationPref(months: number): DurationPref {
+  if (months <= 3) return "3months";
+  if (months <= 6) return "6months";
+  return "1year";
+}
+
+// ── Batch picker modal — same full-screen concept as Course/Qualification ─────
+
+function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
+  visible:    boolean;
+  batches:    BatchItem[];
+  selectedId: string | null;
+  onSelect:   (id: string | null) => void;
+  onClose:    () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [search, setSearch] = useState("");
+
+  useEffect(() => { if (!visible) setSearch(""); }, [visible]);
+
   const active = batches.filter((b) => b.status !== "completed");
-  if (active.length === 0) return <Text style={bp.empty}>No active batches — assign later</Text>;
+  const filtered = active.filter((b) =>
+    b.name.toLowerCase().includes(search.toLowerCase()) ||
+    b.course.name.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
-    <View style={bp.list}>
-      <TouchableOpacity style={[bp.card, !selectedId && bp.cardSel]} onPress={() => onSelect(null)} activeOpacity={0.75}>
-        <Ionicons name="close-circle-outline" size={ms(18)} color={!selectedId ? "#8B1E3F" : "#B0A9AC"} />
-        <Text style={[bp.cardName, !selectedId && { color: "#8B1E3F" }]}>Assign batch later</Text>
-      </TouchableOpacity>
-      {active.map((b) => {
-        const color = CAT_COLOR[b.course.examCategory] ?? "#8A7F82";
-        const sel   = selectedId === b.id;
-        return (
-          <TouchableOpacity key={b.id} style={[bp.card, sel && { borderColor: color, backgroundColor: color + "08" }]} onPress={() => onSelect(b.id)} activeOpacity={0.75}>
-            <View style={[bp.dot, { backgroundColor: color }]} />
-            <View style={bp.cardBody}>
-              <Text style={[bp.cardName, sel && { color }]} numberOfLines={1}>{b.name}</Text>
-              <Text style={bp.cardSub}>{b.course.name}</Text>
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={cp.safe} edges={["bottom"]}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+        {/* Header */}
+        <LinearGradient
+          colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={cp.header}
+        >
+          <View style={[cp.headerContent, { paddingTop: insets.top + ms(10) }]}>
+            <View style={cp.headerIcon}>
+              <Ionicons name="layers-outline" size={ms(18)} color="#fff" />
             </View>
-            {sel && <Ionicons name="checkmark-circle" size={ms(18)} color={color} />}
+            <View style={{ flex: 1 }}>
+              <Text style={cp.headerTitle}>Select Batch</Text>
+              <Text style={cp.headerSub}>{active.length} batch{active.length !== 1 ? "es" : ""} available</Text>
+            </View>
+            <TouchableOpacity style={cp.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={ms(20)} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <HeaderWave />
+        </LinearGradient>
+
+        {/* Search */}
+        <View style={cp.searchWrap}>
+          <View style={cp.searchRow}>
+            <Ionicons name="search-outline" size={ms(16)} color={C.muted} />
+            <TextInput
+              style={cp.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search batches…"
+              placeholderTextColor={C.placeholder}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {!!search && (
+              <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="close-circle" size={ms(16)} color={C.placeholder} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Batch grid — flat, 2 per row, category shown inside each card */}
+        <ScrollView style={cp.list} contentContainerStyle={cp.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <TouchableOpacity
+            style={[bpm.laterCard, !selectedId && bpm.laterCardSel]}
+            onPress={() => { onSelect(null); onClose(); }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="close-circle-outline" size={ms(18)} color={!selectedId ? C.primary : C.muted} />
+            <Text style={[bpm.laterCardT, !selectedId && { color: C.primary }]}>Assign batch later</Text>
+            {!selectedId && <Ionicons name="checkmark-circle" size={ms(16)} color={C.primary} />}
           </TouchableOpacity>
-        );
-      })}
-    </View>
+
+          {filtered.length === 0 ? (
+            <View style={cp.empty}>
+              <Ionicons name="layers-outline" size={ms(32)} color={C.placeholder} />
+              <Text style={cp.emptyT}>No batches found</Text>
+              <Text style={cp.emptySub}>Try a different search term</Text>
+            </View>
+          ) : (
+            <View style={cp.grid}>
+              {filtered.map((b) => {
+                const color = CAT_COLOR[b.course.examCategory] ?? C.muted;
+                const label = CAT_LABEL[b.course.examCategory] ?? b.course.examCategory;
+                const sel   = selectedId === b.id;
+                return (
+                  <TouchableOpacity
+                    key={b.id}
+                    style={[cp.gridCard, { borderColor: sel ? color : C.border }, sel && { backgroundColor: color + "10" }]}
+                    onPress={() => { onSelect(b.id); onClose(); }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={cp.gridTop}>
+                      <View style={[cp.gridCatPill, { backgroundColor: color + "16" }]}>
+                        <View style={[cp.gridDot, { backgroundColor: color }]} />
+                        <Text style={[cp.gridCat, { color }]}>{label}</Text>
+                      </View>
+                      {sel && <Ionicons name="checkmark-circle" size={ms(16)} color={color} />}
+                    </View>
+                    <Text style={[cp.gridName, sel && { color }]} numberOfLines={1}>{b.name}</Text>
+                    <Text style={bpm.gridCourse} numberOfLines={1}>{b.course.name}</Text>
+                    <View style={cp.gridMeta}>
+                      <Ionicons name="people-outline" size={ms(11)} color={C.muted} />
+                      <Text style={cp.gridDur}>{b.enrolledCount}/{b.capacity} seats</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
   );
 }
 
-const bp = StyleSheet.create({
-  list:     { gap: ms(8) },
-  empty:    { fontSize: fs(12), color: "#B0A9AC", textAlign: "center", paddingVertical: ms(12) },
-  card:     { flexDirection: "row", alignItems: "center", gap: ms(10), padding: ms(12), borderRadius: ms(12), borderWidth: 1.5, borderColor: "#E0D8D4", backgroundColor: "#FAFAFA" },
-  cardSel:  { borderColor: "#8B1E3F", backgroundColor: "#8B1E3F08" },
-  dot:      { width: ms(8), height: ms(8), borderRadius: ms(4), flexShrink: 0 },
-  cardBody: { flex: 1, minWidth: 0 },
-  cardName: { fontSize: fs(13), fontWeight: "700", color: "#2B1B1F" },
-  cardSub:  { fontSize: fs(11), color: "#8A7F82", marginTop: ms(2) },
+const bpm = StyleSheet.create({
+  laterCard:    { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, padding: ms(14), marginBottom: ms(14) },
+  laterCardSel: { borderColor: C.primary, backgroundColor: C.primary + "0C" },
+  laterCardT:   { flex: 1, fontSize: fs(13.5), fontWeight: "700", color: C.text },
+  gridCourse:   { fontSize: fs(10.5), color: C.muted, paddingHorizontal: ms(10), marginTop: ms(-2) },
 });
 
 // ── Success detail row ────────────────────────────────────────────────────────
@@ -459,7 +561,7 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={tm.safe} edges={["bottom"]}>
-        <StatusBar barStyle="dark-content" />
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
         <View style={[tm.header, { paddingTop: insets.top + ms(8) }]}>
           <View style={tm.headerIcon}>
@@ -538,6 +640,21 @@ const eb = StyleSheet.create({
   msg:   { fontSize: fs(12), color: "#B91C1C", lineHeight: fs(18) },
 });
 
+// ── Header wave — same curved-bottom edge as ScreenHeader's gradient headers ──
+
+const HEADER_WAVE_H = Math.round(ms(34));
+
+function HeaderWave() {
+  return (
+    <Svg width={sw} height={HEADER_WAVE_H} viewBox={`0 0 ${sw} 34`} preserveAspectRatio="none">
+      <Path
+        d={`M0 18 C${sw * 0.25} 36,${sw * 0.75} 2,${sw} 18 L${sw} 34 L0 34 Z`}
+        fill={C.bg}
+      />
+    </Svg>
+  );
+}
+
 // ── Course picker modal (Step 3) ──────────────────────────────────────────────
 
 function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: {
@@ -560,93 +677,91 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={cp.safe} edges={["bottom"]}>
-        <StatusBar barStyle="dark-content" />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
         {/* Header */}
-        <View style={[cp.header, { paddingTop: insets.top + ms(10) }]}>
-          <View style={cp.headerIcon}>
-            <Ionicons name="book-outline" size={ms(18)} color="#2563A8" />
+        <LinearGradient
+          colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={cp.header}
+        >
+          <View style={[cp.headerContent, { paddingTop: insets.top + ms(10) }]}>
+            <View style={cp.headerIcon}>
+              <Ionicons name="book-outline" size={ms(18)} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={cp.headerTitle}>Select Course</Text>
+              <Text style={cp.headerSub}>{courses.length} course{courses.length !== 1 ? "s" : ""} available</Text>
+            </View>
+            <TouchableOpacity style={cp.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={ms(20)} color="#fff" />
+            </TouchableOpacity>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={cp.headerTitle}>Select Course</Text>
-            <Text style={cp.headerSub}>{courses.length} course{courses.length !== 1 ? "s" : ""} available</Text>
-          </View>
-          <TouchableOpacity style={cp.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={ms(20)} color="#2B1B1F" />
-          </TouchableOpacity>
-        </View>
+          <HeaderWave />
+        </LinearGradient>
 
         {/* Search */}
         <View style={cp.searchWrap}>
           <View style={cp.searchRow}>
-            <Ionicons name="search-outline" size={ms(16)} color="#8A7F82" />
+            <Ionicons name="search-outline" size={ms(16)} color={C.muted} />
             <TextInput
               style={cp.searchInput}
               value={search}
               onChangeText={setSearch}
               placeholder="Search courses…"
-              placeholderTextColor="#C7BAB4"
+              placeholderTextColor={C.placeholder}
               returnKeyType="search"
               autoCorrect={false}
             />
             {!!search && (
               <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Ionicons name="close-circle" size={ms(16)} color="#B0A9AC" />
+                <Ionicons name="close-circle" size={ms(16)} color={C.placeholder} />
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* Course grid */}
+        {/* Course grid — flat, 2 per row, category shown inside each card */}
         <ScrollView style={cp.list} contentContainerStyle={cp.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {filtered.length === 0 ? (
             <View style={cp.empty}>
-              <Ionicons name="search-outline" size={ms(32)} color="#D5CCC8" />
+              <Ionicons name="search-outline" size={ms(32)} color={C.placeholder} />
               <Text style={cp.emptyT}>No courses found</Text>
               <Text style={cp.emptySub}>Try a different search term</Text>
             </View>
-          ) : (() => {
-            const groups: Record<string, CourseItem[]> = {};
-            filtered.forEach((c) => { if (!groups[c.examCategory]) groups[c.examCategory] = []; groups[c.examCategory].push(c); });
-            return Object.entries(groups).map(([cat, items]) => {
-              const color = CAT_COLOR[cat] ?? "#6B7280";
-              const label = CAT_LABEL[cat] ?? cat;
-              return (
-                <View key={cat} style={cp.group}>
-                  <View style={cp.groupHeader}>
-                    <View style={[cp.groupDot, { backgroundColor: color }]} />
-                    <Text style={[cp.groupLabel, { color }]}>{label}</Text>
-                    <Text style={cp.groupCount}>{items.length} course{items.length !== 1 ? "s" : ""}</Text>
-                  </View>
-                  <View style={cp.grid}>
-                    {items.map((course) => {
-                      const sel = selectedId === course.id;
-                      return (
-                        <TouchableOpacity
-                          key={course.id}
-                          style={[cp.gridCard, { borderColor: sel ? color : "#E8E3DC" }, sel && { backgroundColor: color + "10" }]}
-                          onPress={() => onSelect(course)}
-                          activeOpacity={0.75}
-                        >
-                          <View style={[cp.gridTop, { backgroundColor: color + "14" }]}>
-                            <View style={[cp.gridDot, { backgroundColor: color }]} />
-                            {sel && <Ionicons name="checkmark-circle" size={ms(15)} color={color} />}
-                          </View>
-                          <Text style={[cp.gridName, sel && { color }]} numberOfLines={2}>{course.name}</Text>
-                          <View style={cp.gridMeta}>
-                            <Text style={cp.gridDur}>{course.durationMonths}mo</Text>
-                            {course.defaultFee > 0 && (
-                              <Text style={cp.gridFee}>₹{Number(course.defaultFee / 1000).toFixed(0)}k</Text>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              );
-            });
-          })()}
+          ) : (
+            <View style={cp.grid}>
+              {filtered.map((course) => {
+                const color = CAT_COLOR[course.examCategory] ?? C.muted;
+                const label = CAT_LABEL[course.examCategory] ?? course.examCategory;
+                const sel   = selectedId === course.id;
+                return (
+                  <TouchableOpacity
+                    key={course.id}
+                    style={[cp.gridCard, { borderColor: sel ? color : C.border }, sel && { backgroundColor: color + "10" }]}
+                    onPress={() => onSelect(course)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={cp.gridTop}>
+                      <View style={[cp.gridCatPill, { backgroundColor: color + "16" }]}>
+                        <View style={[cp.gridDot, { backgroundColor: color }]} />
+                        <Text style={[cp.gridCat, { color }]}>{label}</Text>
+                      </View>
+                      {sel && <Ionicons name="checkmark-circle" size={ms(16)} color={color} />}
+                    </View>
+                    <Text style={[cp.gridName, sel && { color }]} numberOfLines={2}>{course.name}</Text>
+                    <View style={cp.gridMeta}>
+                      <Text style={cp.gridDur}>{course.durationMonths}mo</Text>
+                      {course.defaultFee > 0 && (
+                        <Text style={cp.gridFee}>₹{Number(course.defaultFee / 1000).toFixed(0)}k</Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -654,33 +769,31 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
 }
 
 const cp = StyleSheet.create({
-  safe:        { flex: 1, backgroundColor: "#FFFBF0" },
-  header:      { flexDirection: "row", alignItems: "center", gap: ms(10), paddingHorizontal: ms(18), paddingBottom: ms(14), backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
-  headerIcon:  { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "#EFF4FF", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  headerTitle: { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F" },
-  headerSub:   { fontSize: fs(11.5), color: "#8A7F82", marginTop: ms(1) },
-  closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "#F5F1EE", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  searchWrap:  { backgroundColor: "#FFFFFF", paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(10), borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
-  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: "#F5F1EE", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10) },
-  searchInput: { flex: 1, fontSize: fs(14), color: "#2B1B1F", includeFontPadding: false, padding: 0 },
-  list:        { flex: 1, backgroundColor: "#FAFAF8" },
-  listContent: { paddingBottom: ms(40) },
+  safe:        { flex: 1, backgroundColor: C.bg },
+  header:      { overflow: "hidden" },
+  headerContent: { flexDirection: "row", alignItems: "center", gap: ms(10), paddingHorizontal: ms(18), paddingBottom: ms(14) },
+  headerIcon:  { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  headerTitle: { fontSize: fs(16), fontWeight: "800", color: "#fff" },
+  headerSub:   { fontSize: fs(11.5), color: "rgba(255,255,255,0.8)", marginTop: ms(1) },
+  closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(10), paddingBottom: ms(2) },
+  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2 },
+  searchInput: { flex: 1, fontSize: fs(14), color: C.text, includeFontPadding: false, padding: 0 },
+  list:        { flex: 1, backgroundColor: C.bg },
+  listContent: { paddingHorizontal: ms(16), paddingTop: ms(14), paddingBottom: ms(40) },
   empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(48) },
-  emptyT:      { fontSize: fs(14), fontWeight: "700", color: "#8A7F82" },
-  emptySub:    { fontSize: fs(12), color: "#B0A9AC" },
-  group:       { paddingHorizontal: ms(16), paddingBottom: ms(8) },
-  groupHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), paddingTop: ms(14), paddingBottom: ms(10) },
-  groupDot:    { width: ms(8), height: ms(8), borderRadius: ms(4), flexShrink: 0 },
-  groupLabel:  { fontSize: fs(11), fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", flex: 1 },
-  groupCount:  { fontSize: fs(10.5), color: "#B0A9AC" },
+  emptyT:      { fontSize: fs(14), fontWeight: "700", color: C.muted },
+  emptySub:    { fontSize: fs(12), color: C.placeholder },
   grid:        { flexDirection: "row", flexWrap: "wrap", gap: ms(10) },
-  gridCard:    { width: "47%", backgroundColor: "#FFFFFF", borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
+  gridCard:    { width: "47%", backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
   gridTop:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(10), paddingVertical: ms(8) },
-  gridDot:     { width: ms(10), height: ms(10), borderRadius: ms(5) },
-  gridName:    { fontSize: fs(12.5), fontWeight: "700", color: "#2B1B1F", paddingHorizontal: ms(10), paddingVertical: ms(4), lineHeight: fs(18) },
+  gridCatPill: { flexDirection: "row", alignItems: "center", gap: ms(5), borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  gridDot:     { width: ms(6), height: ms(6), borderRadius: ms(3) },
+  gridCat:     { fontSize: fs(9.5), fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  gridName:    { fontSize: fs(12.5), fontWeight: "700", color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(4), lineHeight: fs(18) },
   gridMeta:    { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(10), paddingBottom: ms(10) },
-  gridDur:     { fontSize: fs(10.5), color: "#8A7F82", fontWeight: "600" },
-  gridFee:     { fontSize: fs(10.5), color: "#1B9C63", fontWeight: "700" },
+  gridDur:     { fontSize: fs(10.5), color: C.muted, fontWeight: "600" },
+  gridFee:     { fontSize: fs(10.5), color: C.green, fontWeight: "700" },
 });
 
 // ── Duration picker (Step 3) ──────────────────────────────────────────────────
@@ -690,7 +803,7 @@ function DurationPicker({ value, onSelect, error }: {
   onSelect: (k: DurationPref) => void;
   error?: string;
 }) {
-  const BLUE  = "#2563A8";
+  const BLUE  = C.blue;
   const items: { key: DurationPref; label: string; hint: string }[] = [
     { key: "3months", label: "3 Months", hint: "Short-term"  },
     { key: "6months", label: "6 Months", hint: "Standard"    },
@@ -726,11 +839,11 @@ function DurationPicker({ value, onSelect, error }: {
 
 const dp = StyleSheet.create({
   row:   { flexDirection: "row", gap: ms(8) },
-  card:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(12), backgroundColor: "#FAFAF8", borderWidth: 1.5, borderColor: "#E8E3DC", gap: ms(3) },
-  label: { fontSize: fs(14), fontWeight: "800", color: "#2B1B1F" },
-  hint:  { fontSize: fs(10.5), color: "#8A7F82" },
+  card:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border, gap: ms(3) },
+  label: { fontSize: fs(14), fontWeight: "800", color: C.text },
+  hint:  { fontSize: fs(10.5), color: C.muted },
   err:   { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(8) },
-  errT:  { fontSize: fs(11.5), color: "#C0392B", flex: 1 },
+  errT:  { fontSize: fs(11.5), color: C.red, flex: 1 },
 });
 
 // ── Qualification grid (Step 3) ───────────────────────────────────────────────
@@ -795,7 +908,7 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
   onClose:  () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const TEAL   = "#2CA6A4";
+  const TEAL   = C.accent;
   const items: { key: Qualification; icon: string; label: string; sub: string }[] = [
     { key: "class10",         icon: "book-outline",    label: "Class 10",        sub: "Secondary"        },
     { key: "class12",         icon: "library-outline", label: "Class 12",        sub: "Senior Secondary" },
@@ -806,20 +919,28 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={qpm.safe} edges={["bottom"]}>
-        <StatusBar barStyle="dark-content" />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-        <View style={[qpm.header, { paddingTop: insets.top + ms(10) }]}>
-          <View style={qpm.headerIcon}>
-            <Ionicons name="ribbon-outline" size={ms(18)} color={TEAL} />
+        <LinearGradient
+          colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={qpm.header}
+        >
+          <View style={[qpm.headerContent, { paddingTop: insets.top + ms(10) }]}>
+            <View style={qpm.headerIcon}>
+              <Ionicons name="ribbon-outline" size={ms(18)} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={qpm.headerTitle}>Highest Qualification</Text>
+              <Text style={qpm.headerSub}>Select your most recent education level</Text>
+            </View>
+            <TouchableOpacity style={qpm.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={ms(20)} color="#fff" />
+            </TouchableOpacity>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={qpm.headerTitle}>Highest Qualification</Text>
-            <Text style={qpm.headerSub}>Select your most recent education level</Text>
-          </View>
-          <TouchableOpacity style={qpm.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={ms(20)} color="#2B1B1F" />
-          </TouchableOpacity>
-        </View>
+          <HeaderWave />
+        </LinearGradient>
 
         <ScrollView contentContainerStyle={qpm.body} showsVerticalScrollIndicator={false}>
           <View style={qpm.grid}>
@@ -853,18 +974,19 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
 }
 
 const qpm = StyleSheet.create({
-  safe:        { flex: 1, backgroundColor: "#F4FAFA" },
-  header:      { flexDirection: "row", alignItems: "center", gap: ms(10), paddingHorizontal: ms(18), paddingBottom: ms(14), backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#D4EDED" },
-  headerIcon:  { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "#E4F7F7", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  headerTitle: { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F" },
-  headerSub:   { fontSize: fs(11.5), color: "#8A7F82", marginTop: ms(1) },
-  closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "#F5F1EE", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  safe:        { flex: 1, backgroundColor: C.bg },
+  header:      { overflow: "hidden" },
+  headerContent: { flexDirection: "row", alignItems: "center", gap: ms(10), paddingHorizontal: ms(18), paddingBottom: ms(14) },
+  headerIcon:  { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  headerTitle: { fontSize: fs(16), fontWeight: "800", color: "#fff" },
+  headerSub:   { fontSize: fs(11.5), color: "rgba(255,255,255,0.8)", marginTop: ms(1) },
+  closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
   body:        { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(48) },
   grid:        { flexDirection: "row", flexWrap: "wrap", gap: ms(14) },
-  card:        { width: "47%", alignItems: "center", paddingTop: ms(22), paddingBottom: ms(16), paddingHorizontal: ms(8), borderRadius: ms(18), backgroundColor: "#FFFFFF", borderWidth: 1.5, borderColor: "#C8EAEA", gap: ms(8), position: "relative" },
+  card:        { width: "47%", alignItems: "center", paddingTop: ms(22), paddingBottom: ms(16), paddingHorizontal: ms(8), borderRadius: ms(18), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, gap: ms(8), position: "relative" },
   iconWrap:    { width: ms(56), height: ms(56), borderRadius: ms(18), justifyContent: "center", alignItems: "center" },
-  cardLabel:   { fontSize: fs(13.5), fontWeight: "800", color: "#2B1B1F", textAlign: "center" },
-  cardSub:     { fontSize: fs(10.5), color: "#8A7F82", textAlign: "center" },
+  cardLabel:   { fontSize: fs(13.5), fontWeight: "800", color: C.text, textAlign: "center" },
+  cardSub:     { fontSize: fs(10.5), color: C.muted, textAlign: "center" },
   checkBadge:  { position: "absolute", top: ms(8), right: ms(8) },
 });
 
@@ -915,7 +1037,7 @@ function PaymentModePicker({ value, onSelect, error }: {
   onSelect: (k: PaymentMode) => void;
   error?:   string;
 }) {
-  const GREEN = "#1B9C63";
+  const GREEN = C.green;
   const modes: { key: PaymentMode; icon: string; label: string; sub: string }[] = [
     { key: "cash",   icon: "cash-outline", label: "Cash",   sub: "Collect physically" },
     { key: "online", icon: "card-outline", label: "Online", sub: "UPI / NEFT / IMPS"  },
@@ -933,11 +1055,13 @@ function PaymentModePicker({ value, onSelect, error }: {
               activeOpacity={0.75}
             >
               <View style={[pmp.iconWrap, { backgroundColor: active ? GREEN : GREEN + "18" }]}>
-                <Ionicons name={icon as any} size={ms(24)} color={active ? "#fff" : GREEN} />
+                <Ionicons name={icon as any} size={ms(16)} color={active ? "#fff" : GREEN} />
               </View>
-              <Text style={[pmp.label, active && { color: GREEN }]}>{label}</Text>
-              <Text style={pmp.sub}>{sub}</Text>
-              {active && <Ionicons name="checkmark-circle" size={ms(16)} color={GREEN} />}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[pmp.label, active && { color: GREEN }]} numberOfLines={1}>{label}</Text>
+                <Text style={pmp.sub} numberOfLines={1}>{sub}</Text>
+              </View>
+              {active && <Ionicons name="checkmark-circle" size={ms(15)} color={GREEN} />}
             </TouchableOpacity>
           );
         })}
@@ -953,13 +1077,13 @@ function PaymentModePicker({ value, onSelect, error }: {
 }
 
 const pmp = StyleSheet.create({
-  row:     { flexDirection: "row", gap: ms(12) },
-  card:    { flex: 1, alignItems: "center", paddingVertical: ms(18), borderRadius: ms(16), backgroundColor: "#F0FDF8", borderWidth: 1.5, borderColor: "#A7F3D0", gap: ms(6) },
-  iconWrap: { width: ms(50), height: ms(50), borderRadius: ms(16), justifyContent: "center", alignItems: "center" },
-  label:   { fontSize: fs(14), fontWeight: "800", color: "#2B1B1F" },
-  sub:     { fontSize: fs(10.5), color: "#8A7F82" },
+  row:     { flexDirection: "row", gap: ms(10) },
+  card:    { flex: 1, flexDirection: "row", alignItems: "center", paddingVertical: ms(10), paddingHorizontal: ms(10), borderRadius: ms(12), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, gap: ms(8) },
+  iconWrap: { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  label:   { fontSize: fs(12.5), fontWeight: "800", color: C.text },
+  sub:     { fontSize: fs(9.5), color: C.muted, marginTop: ms(1) },
   err:     { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(8) },
-  errT:    { fontSize: fs(11.5), color: "#C0392B", flex: 1 },
+  errT:    { fontSize: fs(11.5), color: C.red, flex: 1 },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -1026,6 +1150,8 @@ export function StudentAdmissionScreen({ navigation }: Props) {
   const [batches, setBatches]             = useState<BatchItem[]>([]);
   const [batchesLoading, setBatchesLoading] = useState(true);
   const [batchId, setBatchId]             = useState<string | null>(null);
+  const [batchPickerOpen, setBatchPickerOpen] = useState(false);
+  const selectedBatch = batches.find((b) => b.id === batchId) ?? null;
   const [preferredTiming, setPreferredTiming] = useState<BatchTiming | null>(null);
   const [paymentMode, setPaymentMode]     = useState<PaymentMode | null>(null);
   const [amountPaid, setAmountPaid]       = useState("");
@@ -1035,10 +1161,16 @@ export function StudentAdmissionScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [admitted, setAdmitted] = useState<AdmitStudentResult | null>(null);
   const [docsStepDone, setDocsStepDone] = useState(false);
+  const [centerPickerVisible, setCenterPickerVisible] = useState(false);
 
-  const checkScale  = useRef(new Animated.Value(0)).current;
-  const cardSlide   = useRef(new Animated.Value(ms(60))).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const checkScale     = useRef(new Animated.Value(0)).current;
+  const cardSlide      = useRef(new Animated.Value(ms(60))).current;
+  const cardOpacity    = useRef(new Animated.Value(0)).current;
+  const ringScale      = useRef(new Animated.Value(0)).current;
+  const ringOpacity    = useRef(new Animated.Value(0)).current;
+  const sparkle        = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentY       = useRef(new Animated.Value(ms(10))).current;
 
   useEffect(() => {
     listBatches()
@@ -1131,17 +1263,26 @@ export function StudentAdmissionScreen({ navigation }: Props) {
   function revealSuccessCard() {
     setDocsStepDone(true);
     Animated.parallel([
-      Animated.spring(checkScale,  { toValue: 1, useNativeDriver: true, tension: 70, friction: 7, delay: 100 }),
-      Animated.timing(cardOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
-      Animated.spring(cardSlide,   { toValue: 0, useNativeDriver: true, tension: 80, friction: 10, delay: 60 }),
+      Animated.timing(cardOpacity, { toValue: 1, duration: 260, useNativeDriver: true }),
+      Animated.spring(cardSlide,   { toValue: 0, useNativeDriver: true, tension: 80, friction: 10, delay: 40 }),
+      Animated.spring(checkScale,  { toValue: 1, useNativeDriver: true, tension: 62, friction: 6, delay: 160 }),
+      Animated.sequence([
+        Animated.timing(ringOpacity, { toValue: 0.4, duration: 1,   useNativeDriver: true, delay: 170 }),
+        Animated.timing(ringOpacity, { toValue: 0,   duration: 550, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+      ]),
+      Animated.timing(ringScale, { toValue: 1, duration: 650, easing: Easing.out(Easing.ease), useNativeDriver: true, delay: 170 }),
+      Animated.spring(sparkle,   { toValue: 1, useNativeDriver: true, tension: 90, friction: 8, delay: 320 }),
+      Animated.timing(contentOpacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true, delay: 260 }),
+      Animated.spring(contentY,       { toValue: 0, useNativeDriver: true, tension: 80, friction: 11, delay: 260 }),
     ]).start();
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(overrideCenterId?: string) {
     if (!validateStep()) return;
     setLoading(true);
     try {
       const payload: AdmitStudentPayload = {
+        ...(overrideCenterId ? { centerId: overrideCenterId } : {}),
         fullName:           fullName.trim(),
         phone:              phone.trim(),
         email:              email.trim() || null,
@@ -1173,6 +1314,11 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         setAdmitted(response.result);
       } else if ("batchFull" in response) {
         showInfo("warning", "Batch is Full", response.message);
+      } else if (typeof response.error === "string" && response.error.includes("centerId") && !overrideCenterId) {
+        // Only offer the fallback picker on the first attempt — if we already supplied
+        // a centerId (manually or via the single-center auto-select) and it still
+        // failed, retrying again would loop forever instead of surfacing the real problem.
+        setCenterPickerVisible(true);
       } else {
         const errDetail = typeof response.error === "string"
           ? response.error
@@ -1208,7 +1354,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       // ─── Step 1: Personal ────────────────────────────────────────────────
       case 0: return (
         <View style={s.stepContent}>
-          <SectionHead icon="person-outline" label="Personal Details" color="#8B1E3F" />
+          <SectionHead icon="person-outline" label="Personal Details" color={C.primary} />
 
           {/* Aadhaar QR scan button */}
           <TouchableOpacity
@@ -1250,7 +1396,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       // ─── Step 2: Family ──────────────────────────────────────────────────
       case 1: return (
         <View style={s.stepContent}>
-          <SectionHead icon="people-outline" label="Family Details" color="#E8752C" sub="Optional — fill what's available" />
+          <SectionHead icon="people-outline" label="Family Details" color={C.primary} sub="Optional — fill what's available" />
           <FormField label="FATHER'S NAME" value={fatherName} onChangeText={setFatherName}
             placeholder="e.g. Rajesh Kumar Sharma" icon="person-outline" returnKeyType="next" />
           <FormField label="MOTHER'S NAME" value={motherName} onChangeText={setMotherName}
@@ -1267,7 +1413,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         <View style={s.stepContent}>
 
           {/* ── Course Interest ─────────────────────────── */}
-          <SectionHead icon="book-outline" label="Course Interest" color="#2563A8" />
+          <SectionHead icon="book-outline" label="Course Interest" color={C.primary} />
 
           <View style={s.fieldBlock}>
             <View style={s.reqLabelRow}>
@@ -1320,7 +1466,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
 
           {/* ── Academic Background ─────────────────────── */}
           <View style={s.sectionDivider} />
-          <SectionHead icon="ribbon-outline" label="Academic Background" color="#2CA6A4" />
+          <SectionHead icon="ribbon-outline" label="Academic Background" color={C.primary} />
 
           <View style={s.fieldBlock}>
             <View style={s.reqLabelRow}>
@@ -1370,7 +1516,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       // ─── Step 4: Contact ─────────────────────────────────────────────────
       case 3: return (
         <View style={s.stepContent}>
-          <SectionHead icon="chatbubble-outline" label="Contact Details" color="#2CA6A4" />
+          <SectionHead icon="chatbubble-outline" label="Contact Details" color={C.primary} />
           <FormField label="SELF WHATSAPP NUMBER" value={whatsapp} onChangeText={(v) => setWhatsapp(v.replace(/\D/g, ""))}
             placeholder="e.g. 9876543210" keyboardType="phone-pad" icon="logo-whatsapp" />
           <FormField label="PARENTS CONTACT NUMBER" value={guardianPhone} onChangeText={(v) => setGuardianPhone(v.replace(/\D/g, ""))}
@@ -1425,11 +1571,32 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           </View>
 
           {/* ── Batch Assignment ─────────────────────── */}
-          <SectionHead icon="layers-outline" label="Batch Assignment" color="#2563A8" />
-          {batchesLoading
-            ? <View style={s.batchLoad}><ActivityIndicator size="small" color="#2563A8" /><Text style={s.batchLoadT}>Loading batches…</Text></View>
-            : <BatchPicker batches={batches} selectedId={batchId} onSelect={setBatchId} />
-          }
+          <SectionHead icon="layers-outline" label="Batch Assignment" color={C.primary} />
+          <TouchableOpacity
+            style={s.courseSel}
+            onPress={() => setBatchPickerOpen(true)}
+            activeOpacity={0.75}
+            disabled={batchesLoading}
+          >
+            {batchesLoading ? (
+              <>
+                <ActivityIndicator size="small" color={C.muted} />
+                <Text style={s.courseSelPlaceholder}>Loading batches…</Text>
+              </>
+            ) : selectedBatch ? (
+              <>
+                <View style={[s.courseSelDot, { backgroundColor: CAT_COLOR[selectedBatch.course.examCategory] ?? C.primary }]} />
+                <Text style={s.courseSelValue} numberOfLines={1}>{selectedBatch.name}</Text>
+                <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
+              </>
+            ) : (
+              <>
+                <Ionicons name="close-circle-outline" size={ms(16)} color={C.muted} />
+                <Text style={s.courseSelValue}>Assign batch later</Text>
+                <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
+              </>
+            )}
+          </TouchableOpacity>
 
           <View style={[s.fieldBlock, { marginTop: ms(18) }]}>
             <Text style={s.fieldLabel}>PREFERRED BATCH TIMING</Text>
@@ -1439,7 +1606,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           <View style={s.sectionDivider} />
 
           {/* ── Payment Details ──────────────────────── */}
-          <SectionHead icon="cash-outline" label="Payment Details" color="#1B9C63" sub="Record initial fee collected at admission" />
+          <SectionHead icon="cash-outline" label="Payment Details" color={C.primary} sub="Record initial fee collected at admission" />
 
           <View style={s.fieldBlock}>
             <Text style={[s.fieldLabel, !!errors.amountPaid && { color: "#C0392B" }]}>AMOUNT COLLECTED (₹)</Text>
@@ -1520,7 +1687,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
                 <Ionicons name="chevron-forward" size={ms(18)} color="#fff" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: "#1B9C63" }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: "#1B9C63" }]} onPress={() => handleSubmit()} disabled={loading} activeOpacity={0.85}>
                 {loading
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <>
@@ -1554,7 +1721,8 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           setSelectedCourseId(course.id);
           setSelectedCourseName(course.name);
           setCoursePreference(course.examCategory as CoursePreference);
-          setErrors((p) => ({ ...p, coursePreference: "" }));
+          setDurationPreference(monthsToDurationPref(course.durationMonths));
+          setErrors((p) => ({ ...p, coursePreference: "", durationPreference: "" }));
           setCoursePickerOpen(false);
         }}
       />
@@ -1568,6 +1736,15 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           setQualification(k);
           setErrors((p) => ({ ...p, qualification: "" }));
         }}
+      />
+
+      {/* Batch picker modal */}
+      <BatchPickerModal
+        visible={batchPickerOpen}
+        batches={batches}
+        selectedId={batchId}
+        onClose={() => setBatchPickerOpen(false)}
+        onSelect={setBatchId}
       />
 
       {/* Terms & Conditions modal */}
@@ -1655,6 +1832,15 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         </View>
       )}
 
+      <CenterPickerSheet
+        visible={centerPickerVisible}
+        onClose={() => setCenterPickerVisible(false)}
+        onSelect={(centerId) => {
+          setCenterPickerVisible(false);
+          handleSubmit(centerId);
+        }}
+      />
+
       {/* Photo + documents — shown once, before the success card, all optional */}
       {admitted !== null && !docsStepDone && (
         <DocumentsStep studentId={admitted.student.id} onDone={revealSuccessCard} />
@@ -1665,67 +1851,96 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
           <ScrollView contentContainerStyle={s.successScroll} showsVerticalScrollIndicator={false}>
             <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
-              <Animated.View style={{ transform: [{ scale: checkScale }], marginBottom: ms(20) }}>
-                <View style={[s.checkCircle, { backgroundColor: "#1B9C63" }]}>
-                  <Ionicons name="checkmark" size={ms(44)} color="#fff" />
+
+              <View style={s.checkStage}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    s.pingRing,
+                    {
+                      opacity: ringOpacity,
+                      transform: [{ scale: ringScale.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.55] }) }],
+                    },
+                  ]}
+                />
+                <View style={s.checkGlow} />
+
+                <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+                  <LinearGradient colors={[C.green, "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
+                    <Ionicons name="checkmark" size={ms(42)} color="#fff" />
+                  </LinearGradient>
+                </Animated.View>
+
+                <Animated.View style={[s.sparkleTL, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
+                  <Ionicons name="sparkles" size={ms(14)} color={C.secondary} />
+                </Animated.View>
+                <Animated.View style={[s.sparkleBR, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
+                  <Ionicons name="sparkles" size={ms(10)} color={C.accent} />
+                </Animated.View>
+              </View>
+
+              <Animated.View style={[s.successContent, { opacity: contentOpacity, transform: [{ translateY: contentY }] }]}>
+                <Text style={s.successTitle}>Admission Complete!</Text>
+                <View style={s.regCodeRow}>
+                  <Ionicons name="id-card-outline" size={ms(14)} color={C.primary} />
+                  <Text style={s.regCode}>{admitted.student.studentCode}</Text>
                 </View>
+                <Text style={s.successSub}>Student registered successfully</Text>
+
+                <View style={s.detailBox}>
+                  <DetailRow icon="person-outline"    label="Student Name"    value={admitted.student.fullName}                                                                   color="#8B1E3F" />
+                  <DetailRow icon="call-outline"      label="Phone"           value={admitted.student.phone}                                                                       color="#2CA6A4" />
+                  {admitted.student.coursePreference && (
+                    <DetailRow icon="book-outline"    label="Course Pref."    value={admitted.student.coursePreference.toUpperCase()}                                              color="#2563A8" />
+                  )}
+                  {admitted.enrollment && (
+                    <DetailRow icon="layers-outline"  label="Batch Assigned"  value={batches.find((b) => b.id === admitted.enrollment?.batchId)?.name ?? "Assigned"}              color="#1B9C63" />
+                  )}
+                  {admitted.student.amountPaid && (
+                    <DetailRow icon="cash-outline"    label="Amount Paid"     value={`₹ ${Number(admitted.student.amountPaid).toLocaleString("en-IN")}`}                          color="#1B9C63" />
+                  )}
+                  {admitted.student.paymentMode && (
+                    <DetailRow icon="card-outline"    label="Payment Mode"    value={admitted.student.paymentMode === "cash" ? "Cash" : "Online Payment"}          color="#E8752C" last />
+                  )}
+                </View>
+
+                <View style={s.termsBox}>
+                  <View style={s.termsTitleRow}>
+                    <Ionicons name="checkmark-circle-outline" size={ms(14)} color={C.primary} />
+                    <Text style={s.termsT}>Terms &amp; Conditions Acknowledged</Text>
+                  </View>
+                  <Text style={s.termsSub}>
+                    Fees once paid are non-refundable. Student must attend all classes regularly.
+                  </Text>
+                </View>
+
+                {/* WhatsApp share */}
+                <TouchableOpacity
+                  style={s.doneBtnWrap}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    const contact = admitted.student.whatsapp || admitted.student.phone;
+                    const text    = buildWhatsAppText(
+                      admitted,
+                      batches.find((b) => b.id === admitted.enrollment?.batchId)?.name,
+                    );
+                    openWhatsApp(contact, text);
+                  }}
+                >
+                  <LinearGradient colors={[C.green, "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.whatsappBtn}>
+                    <Ionicons name="logo-whatsapp" size={ms(18)} color="#fff" />
+                    <Text style={s.doneBtnT}>Send T&amp;C via WhatsApp</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
+                  <LinearGradient colors={[C.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+                    <Ionicons name="school-outline" size={ms(18)} color="#fff" />
+                    <Text style={s.doneBtnT}>View All Students</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
               </Animated.View>
 
-              <Text style={s.successTitle}>Admission Complete!</Text>
-              <View style={s.regCodeRow}>
-                <Ionicons name="id-card-outline" size={ms(14)} color="#8B1E3F" />
-                <Text style={s.regCode}>{admitted.student.studentCode}</Text>
-              </View>
-              <Text style={s.successSub}>Student registered successfully</Text>
-
-              <View style={s.detailBox}>
-                <DetailRow icon="person-outline"    label="Student Name"    value={admitted.student.fullName}                                                                   color="#8B1E3F" />
-                <DetailRow icon="call-outline"      label="Phone"           value={admitted.student.phone}                                                                       color="#2CA6A4" />
-                {admitted.student.coursePreference && (
-                  <DetailRow icon="book-outline"    label="Course Pref."    value={admitted.student.coursePreference.toUpperCase()}                                              color="#2563A8" />
-                )}
-                {admitted.enrollment && (
-                  <DetailRow icon="layers-outline"  label="Batch Assigned"  value={batches.find((b) => b.id === admitted.enrollment?.batchId)?.name ?? "Assigned"}              color="#1B9C63" />
-                )}
-                {admitted.student.amountPaid && (
-                  <DetailRow icon="cash-outline"    label="Amount Paid"     value={`₹ ${Number(admitted.student.amountPaid).toLocaleString("en-IN")}`}                          color="#1B9C63" />
-                )}
-                {admitted.student.paymentMode && (
-                  <DetailRow icon="card-outline"    label="Payment Mode"    value={admitted.student.paymentMode === "cash" ? "Cash" : "Online Payment"}          color="#E8752C" last />
-                )}
-              </View>
-
-              <View style={s.termsBox}>
-                <View style={s.termsTitleRow}>
-                  <Ionicons name="checkmark-circle-outline" size={ms(14)} color="#8B1E3F" />
-                  <Text style={s.termsT}>Terms &amp; Conditions Acknowledged</Text>
-                </View>
-                <Text style={s.termsSub}>
-                  Fees once paid are non-refundable. Student must attend all classes regularly.
-                </Text>
-              </View>
-
-              {/* WhatsApp share */}
-              <TouchableOpacity
-                style={[s.doneBtnWrap, s.whatsappBtn]}
-                activeOpacity={0.85}
-                onPress={() => {
-                  const contact = admitted.student.whatsapp || admitted.student.phone;
-                  const text    = buildWhatsAppText(
-                    admitted,
-                    batches.find((b) => b.id === admitted.enrollment?.batchId)?.name,
-                  );
-                  openWhatsApp(contact, text);
-                }}
-              >
-                <Ionicons name="logo-whatsapp" size={ms(18)} color="#fff" />
-                <Text style={s.doneBtnT}>Send T&amp;C via WhatsApp</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={[s.doneBtnWrap, s.doneBtn]}>
-                <Ionicons name="school-outline" size={ms(18)} color="#fff" />
-                <Text style={s.doneBtnT}>View All Students</Text>
-              </TouchableOpacity>
             </Animated.View>
           </ScrollView>
         </Animated.View>
@@ -1754,7 +1969,7 @@ const s = StyleSheet.create({
 
   // Field blocks
   fieldBlock:      { marginBottom: ms(16), gap: ms(10) },
-  fieldLabel:      { fontSize: fs(11), fontWeight: "800", color: "#8A7F82", letterSpacing: 0.8, textTransform: "uppercase" },
+  fieldLabel:      { fontSize: fs(11), fontWeight: "800", color: C.text, letterSpacing: 0.8, textTransform: "uppercase" },
   twoCol:          { flexDirection: "row", gap: ms(10) },
   reqLabelRow:     { flexDirection: "row", alignItems: "center" },
   reqAsterisk:     { fontSize: fs(13), color: "#C0392B", fontWeight: "800", lineHeight: fs(14) },
@@ -1781,19 +1996,17 @@ const s = StyleSheet.create({
   divider:         { height: 1, backgroundColor: "#EFF4FF", marginVertical: ms(16) },
 
   // Amount input
-  amountRow:    { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(14), borderWidth: 1.5, borderColor: "#C5E8D8", paddingHorizontal: ms(16), paddingVertical: ms(10), gap: ms(8) },
-  amountRowErr: { borderColor: "#C0392B", backgroundColor: "#FEF8F8" },
-  amountPrefix: { fontSize: fs(22), fontWeight: "800", color: "#1B9C63" },
-  amountInput:  { flex: 1, fontSize: fs(24), fontWeight: "800", color: "#2B1B1F", includeFontPadding: false, padding: 0 },
-  batchLoad:     { flexDirection: "row", alignItems: "center", gap: ms(10), paddingVertical: ms(12) },
-  batchLoadT:    { fontSize: fs(12), color: "#8A7F82" },
+  amountRow:    { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1.5, borderColor: "#C5E8D8", paddingHorizontal: ms(14), paddingVertical: ms(12), gap: ms(8) },
+  amountRowErr: { borderColor: C.red, backgroundColor: "#FEF8F8" },
+  amountPrefix: { fontSize: fs(15), fontWeight: "800", color: C.green },
+  amountInput:  { flex: 1, fontSize: fs(15), fontWeight: "800", color: C.text, includeFontPadding: false, padding: 0 },
 
   // Course selector
-  courseSel:            { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: "#FAFAF8", borderRadius: ms(14), borderWidth: 1.5, borderColor: "#E8E3DC", paddingHorizontal: ms(14), paddingVertical: ms(14) },
-  courseSelErr:         { borderColor: "#C0392B", backgroundColor: "#FEF8F8" },
+  courseSel:            { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(14) },
+  courseSelErr:         { borderColor: C.red, backgroundColor: "#FEF8F8" },
   courseSelDot:         { width: ms(10), height: ms(10), borderRadius: ms(5), flexShrink: 0 },
-  courseSelValue:       { flex: 1, fontSize: fs(14), fontWeight: "700", color: "#2B1B1F" },
-  courseSelPlaceholder: { flex: 1, fontSize: fs(14), color: "#C7BAB4" },
+  courseSelValue:       { flex: 1, fontSize: fs(14), fontWeight: "700", color: C.text },
+  courseSelPlaceholder: { flex: 1, fontSize: fs(14), color: C.placeholder },
 
   // Errors
   submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginTop: ms(8) },
@@ -1818,21 +2031,29 @@ const s = StyleSheet.create({
   loaderSub:     { fontSize: fs(12), color: "#8A7F82" },
 
   // Success
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0" },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg },
   successScroll:  { flexGrow: 1, justifyContent: "center", paddingHorizontal: ms(20), paddingVertical: ms(32) },
-  successCard:    { backgroundColor: "#FFFFFF", borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
-  checkCircle:    { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
-  successTitle:   { fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(8) },
+  successCard:    { backgroundColor: C.card, borderRadius: ms(30), padding: ms(26), alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
+
+  checkStage:   { width: ms(130), height: ms(130), justifyContent: "center", alignItems: "center", marginBottom: ms(14) },
+  checkGlow:    { position: "absolute", width: ms(112), height: ms(112), borderRadius: ms(56), backgroundColor: C.greenBg },
+  pingRing:     { position: "absolute", width: ms(88), height: ms(88), borderRadius: ms(44), borderWidth: 2, borderColor: C.green },
+  checkCircle:  { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
+  sparkleTL:    { position: "absolute", top: ms(4), left: ms(12) },
+  sparkleBR:    { position: "absolute", bottom: ms(10), right: ms(6) },
+
+  successContent: { width: "100%", alignItems: "center" },
+  successTitle:   { fontSize: fs(23), fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(8) },
   regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF4F4", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(6), marginBottom: ms(8) },
-  regCode:        { fontSize: fs(14), fontWeight: "800", color: "#8B1E3F", letterSpacing: 1 },
-  successSub:     { fontSize: fs(13), color: "#8A7F82", marginBottom: ms(20), textAlign: "center" },
-  detailBox:      { width: "100%", backgroundColor: "#FAFAFA", borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(16), borderWidth: 1, borderColor: "#F0EDE8" },
-  termsBox:       { width: "100%", backgroundColor: "#FFFBF0", borderRadius: ms(12), padding: ms(12), marginBottom: ms(12), borderWidth: 1, borderColor: "#F5E6CE" },
+  regCode:        { fontSize: fs(14), fontWeight: "800", color: C.primary, letterSpacing: 1 },
+  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(20), textAlign: "center" },
+  detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(16), borderWidth: 1, borderColor: C.border },
+  termsBox:       { width: "100%", backgroundColor: C.bg, borderRadius: ms(12), padding: ms(12), marginBottom: ms(12), borderWidth: 1, borderColor: "#F5E6CE" },
   termsTitleRow:  { flexDirection: "row", alignItems: "center", gap: ms(5), marginBottom: ms(4) },
-  termsT:         { fontSize: fs(12), fontWeight: "700", color: "#8B1E3F" },
-  termsSub:       { fontSize: fs(11), color: "#8A7F82", lineHeight: fs(16) },
+  termsT:         { fontSize: fs(12), fontWeight: "700", color: C.primary },
+  termsSub:       { fontSize: fs(11), color: C.muted, lineHeight: fs(16) },
   doneBtnWrap:    { width: "100%", marginBottom: ms(10) },
-  whatsappBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(14), backgroundColor: "#1B9C63" },
+  whatsappBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(14) },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
   doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 

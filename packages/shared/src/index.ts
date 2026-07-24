@@ -123,6 +123,7 @@ export const createStudentSchema = z.object({
   dob:           z.coerce.date().nullable().optional(),
   address:       z.string().nullable().optional(),
   guardianPhone: z.string().nullable().optional(),
+  centerId:      z.string().uuid().optional(),
 });
 
 export const admitStudentSchema = z.object({
@@ -154,6 +155,7 @@ export const admitStudentSchema = z.object({
   amountPaid:         z.number().nonnegative().nullable().optional(),
   // T&C acknowledgment — front desk confirms student was informed
   tcAcknowledged:     z.boolean().optional(),
+  centerId:           z.string().uuid().optional(),
 });
 export type AdmitStudentInput = z.infer<typeof admitStudentSchema>;
 

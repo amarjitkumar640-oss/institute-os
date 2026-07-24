@@ -24,6 +24,21 @@ centersRouter.get("/", requireAuth, async (req, res) => {
   );
 });
 
+// ── GET /api/centers/assignable — every active center, id/name only ───────────
+// Used by the "pick a center for this record" fallback shown when a create
+// action fails because the session has no center pinned (all-centers mode).
+// Deliberately NOT scoped to the caller's own CenterStaff assignments like
+// GET / above — an all-centers-mode admin/frontdesk may have zero assignments
+// yet still needs to be able to attach a new record to any center that exists.
+centersRouter.get("/assignable", requireAuth, async (_req, res) => {
+  const centers = await prisma.center.findMany({
+    where:   { isActive: true },
+    orderBy: { name: "asc" },
+    select:  { id: true, name: true },
+  });
+  res.json(centers);
+});
+
 // ── GET /api/centers/all — all centers (admin only, for management UI) ────────
 centersRouter.get("/all", requireAuth, requireRole("admin"), async (_req, res) => {
   const centers = await prisma.center.findMany({

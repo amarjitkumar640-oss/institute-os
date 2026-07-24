@@ -61,6 +61,7 @@ export interface AdmitStudentPayload {
   paymentMode?:       PaymentMode | null;
   amountPaid?:        number | null;
   tcAcknowledged?:    boolean;
+  centerId?:          string; // only needed when the session has no center pinned
 }
 
 export interface AdmitStudentResult {
