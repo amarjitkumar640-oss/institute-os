@@ -87,4 +87,5 @@ jobs:
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api-qa
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d postgres-qa api-qa
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx prisma migrate deploy --schema prisma/schema.prisma
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx tsx prisma/backfillPhotoKeys.ts
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
