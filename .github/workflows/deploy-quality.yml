@@ -28,6 +28,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Load JWT/S3 config from QA_ENV_FILE secret
+        run: |
+          echo "${{ secrets.QA_ENV_FILE }}" >> "$GITHUB_ENV"
+          echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/institute_os_test" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - run: npm run build -w packages/shared
