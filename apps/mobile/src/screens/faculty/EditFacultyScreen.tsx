@@ -333,7 +333,7 @@ export function EditFacultyScreen({ navigation, route }: Props) {
 
           {/* ── Professional Info ── */}
           <View style={s.section}>
-            <SectionHead dot="#E8752C" title="Professional Details" />
+            <SectionHead dot="#8B1E3F" title="Professional Details" />
             <FormField label="QUALIFICATION" value={form.qualification} onChangeText={(v) => setField("qualification", v)}
               placeholder="e.g. M.Sc Mathematics, B.Ed" error={errors.qualification} icon="school-outline"
               maxLength={200} clearable returnKeyType="next" onSubmitEditing={() => expRef.current?.focus()} blurOnSubmit={false} />
@@ -365,7 +365,7 @@ export function EditFacultyScreen({ navigation, route }: Props) {
 
           {/* ── Subjects ── */}
           <View style={s.section}>
-            <SectionHead dot="#2563A8" title="Subjects to Teach" />
+            <SectionHead dot="#8B1E3F" title="Subjects to Teach" />
             <Text style={s.subjectHint}>Tap to add or remove subjects.</Text>
             <SubjectPicker
               subjects={subjects}

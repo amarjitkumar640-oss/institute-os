@@ -136,7 +136,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
 
           {/* ── Category ── */}
           <View style={s.section}>
-            <SectionHead dot="#2563A8" title="Exam Category" />
+            <SectionHead dot="#8B1E3F" title="Exam Category" />
             <Text style={s.catHint}>Choose which exam this subject belongs to.</Text>
             <View style={s.catGrid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
               {CATEGORIES.map((opt) => {

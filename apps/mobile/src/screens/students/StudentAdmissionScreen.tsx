@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
   Platform, StatusBar, TextInput, Animated, Easing, TouchableOpacity,
-  ActivityIndicator, Modal, Linking, Share,
+  ActivityIndicator, Modal, Linking, Share, Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -27,6 +27,7 @@ import {
 } from "../../api/documents";
 import { listBatches, type BatchItem } from "../../api/batches";
 import { listCourses, type CourseItem } from "../../api/courses";
+import { apiClient } from "../../api/client";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
 import type {
@@ -95,6 +96,21 @@ function parseAadhaarQR(raw: string): AadhaarData | null {
       address:  addrParts.join(", "),
       aadhaar:  uid ?? "",
     };
+  } catch {
+    return null;
+  }
+}
+
+// ── Silent single-center resolution ────────────────────────────────────────────
+// Used by handleSubmit to auto-resolve a centerId when the session has none
+// pinned, without ever closing the loading overlay — if it fetches and finds
+// exactly one center, the retry happens immediately under the same spinner
+// instead of flashing it closed and reopening it.
+
+async function resolveSingleCenter(): Promise<string | null> {
+  try {
+    const { data } = await apiClient.get<{ id: string; name: string }[]>("/centers/assignable");
+    return data.length === 1 ? data[0].id : null;
   } catch {
     return null;
   }
@@ -416,7 +432,7 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
           </View>
         </View>
 
-        {/* Batch grid — flat, 2 per row, category shown inside each card */}
+        {/* Batch list — one full-width card per row */}
         <ScrollView style={cp.list} contentContainerStyle={cp.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <TouchableOpacity
             style={[bpm.laterCard, !selectedId && bpm.laterCardSel]}
@@ -435,7 +451,7 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
               <Text style={cp.emptySub}>Try a different search term</Text>
             </View>
           ) : (
-            <View style={cp.grid}>
+            <View style={bpm.list}>
               {filtered.map((b) => {
                 const color = CAT_COLOR[b.course.examCategory] ?? C.muted;
                 const label = CAT_LABEL[b.course.examCategory] ?? b.course.examCategory;
@@ -443,23 +459,29 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
                 return (
                   <TouchableOpacity
                     key={b.id}
-                    style={[cp.gridCard, { borderColor: sel ? color : C.border }, sel && { backgroundColor: color + "10" }]}
+                    style={[bpm.card, { borderColor: sel ? color : C.border }, sel && { backgroundColor: color + "0A" }]}
                     onPress={() => { onSelect(b.id); onClose(); }}
                     activeOpacity={0.75}
                   >
-                    <View style={cp.gridTop}>
-                      <View style={[cp.gridCatPill, { backgroundColor: color + "16" }]}>
-                        <View style={[cp.gridDot, { backgroundColor: color }]} />
-                        <Text style={[cp.gridCat, { color }]}>{label}</Text>
+                    <View style={[bpm.cardDot, { backgroundColor: color }]} />
+                    <View style={bpm.cardBody}>
+                      <Text style={[bpm.cardName, sel && { color }]} numberOfLines={1}>{b.name}</Text>
+                      <Text style={bpm.cardCourse} numberOfLines={1}>{b.course.name}</Text>
+                      <View style={bpm.cardMetaRow}>
+                        <View style={[bpm.catPill, { backgroundColor: color + "16" }]}>
+                          <Text style={[bpm.catPillT, { color }]}>{label}</Text>
+                        </View>
+                        <View style={bpm.seatsRow}>
+                          <Ionicons name="people-outline" size={ms(11)} color={C.muted} />
+                          <Text style={bpm.seatsT}>{b.enrolledCount}/{b.capacity} seats</Text>
+                        </View>
                       </View>
-                      {sel && <Ionicons name="checkmark-circle" size={ms(16)} color={color} />}
                     </View>
-                    <Text style={[cp.gridName, sel && { color }]} numberOfLines={1}>{b.name}</Text>
-                    <Text style={bpm.gridCourse} numberOfLines={1}>{b.course.name}</Text>
-                    <View style={cp.gridMeta}>
-                      <Ionicons name="people-outline" size={ms(11)} color={C.muted} />
-                      <Text style={cp.gridDur}>{b.enrolledCount}/{b.capacity} seats</Text>
-                    </View>
+                    <Ionicons
+                      name={sel ? "checkmark-circle" : "chevron-forward"}
+                      size={ms(sel ? 20 : 16)}
+                      color={sel ? color : C.muted}
+                    />
                   </TouchableOpacity>
                 );
               })}
@@ -475,7 +497,22 @@ const bpm = StyleSheet.create({
   laterCard:    { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, padding: ms(14), marginBottom: ms(14) },
   laterCardSel: { borderColor: C.primary, backgroundColor: C.primary + "0C" },
   laterCardT:   { flex: 1, fontSize: fs(13.5), fontWeight: "700", color: C.text },
-  gridCourse:   { fontSize: fs(10.5), color: C.muted, paddingHorizontal: ms(10), marginTop: ms(-2) },
+
+  list: { gap: ms(10) },
+  card: {
+    flexDirection: "row", alignItems: "center", gap: ms(12),
+    backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5,
+    paddingHorizontal: ms(14), paddingVertical: ms(12),
+  },
+  cardDot:  { width: ms(9), height: ms(9), borderRadius: ms(5), flexShrink: 0 },
+  cardBody: { flex: 1, minWidth: 0 },
+  cardName: { fontSize: fs(14), fontWeight: "700", color: C.text },
+  cardCourse: { fontSize: fs(11.5), color: C.muted, marginTop: ms(1) },
+  cardMetaRow: { flexDirection: "row", alignItems: "center", gap: ms(8), marginTop: ms(6) },
+  catPill:   { borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  catPillT:  { fontSize: fs(9.5), fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  seatsRow:  { flexDirection: "row", alignItems: "center", gap: ms(4) },
+  seatsT:    { fontSize: fs(10.5), color: C.muted, fontWeight: "600" },
 });
 
 // ── Success detail row ────────────────────────────────────────────────────────
@@ -495,7 +532,7 @@ function DetailRow({ icon, label, value, color, last = false }: { icon: string; 
 }
 
 const dr = StyleSheet.create({
-  row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(10), gap: ms(10) },
+  row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(7), gap: ms(10) },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
   iconWrap:  { width: ms(28), height: ms(28), borderRadius: ms(7), justifyContent: "center", alignItems: "center", flexShrink: 0 },
   col:       { flex: 1 },
@@ -1089,6 +1126,7 @@ const pmp = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function StudentAdmissionScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const [step, setStep]  = useState(0);
   const slideAnim        = useRef(new Animated.Value(0)).current;
   const scrollRef        = useRef<import("react-native").ScrollView>(null);
@@ -1315,9 +1353,17 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       } else if ("batchFull" in response) {
         showInfo("warning", "Batch is Full", response.message);
       } else if (typeof response.error === "string" && response.error.includes("centerId") && !overrideCenterId) {
-        // Only offer the fallback picker on the first attempt — if we already supplied
-        // a centerId (manually or via the single-center auto-select) and it still
-        // failed, retrying again would loop forever instead of surfacing the real problem.
+        // Try to silently resolve a single available center before bothering the user —
+        // stays inside this same try block (loading never flips false) so the retry
+        // happens under one continuous spinner instead of flashing it closed and
+        // reopening it. Only offer the manual picker when there's a genuine choice
+        // (or an error) to show; if we already supplied a centerId and it still
+        // failed, don't retry again — that would loop forever.
+        const resolvedCenterId = await resolveSingleCenter();
+        if (resolvedCenterId) {
+          await handleSubmit(resolvedCenterId);
+          return;
+        }
         setCenterPickerVisible(true);
       } else {
         const errDetail = typeof response.error === "string"
@@ -1687,7 +1733,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
                 <Ionicons name="chevron-forward" size={ms(18)} color="#fff" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: "#1B9C63" }]} onPress={() => handleSubmit()} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: "#8B1E3F" }]} onPress={() => handleSubmit()} disabled={loading} activeOpacity={0.85}>
                 {loading
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <>
@@ -1849,8 +1895,9 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       {/* Full-screen success card */}
       {admitted !== null && docsStepDone && (
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
-          <ScrollView contentContainerStyle={s.successScroll} showsVerticalScrollIndicator={false}>
-            <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
+          <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+          <View style={[s.successStatusBarBg, { height: insets.top }]} />
+          <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
 
               <View style={s.checkStage}>
                 <Animated.View
@@ -1867,7 +1914,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
 
                 <Animated.View style={{ transform: [{ scale: checkScale }] }}>
                   <LinearGradient colors={[C.green, "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
-                    <Ionicons name="checkmark" size={ms(42)} color="#fff" />
+                    <Ionicons name="checkmark" size={ms(34)} color="#fff" />
                   </LinearGradient>
                 </Animated.View>
 
@@ -1941,8 +1988,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
                 </TouchableOpacity>
               </Animated.View>
 
-            </Animated.View>
-          </ScrollView>
+          </Animated.View>
         </Animated.View>
       )}
     </SafeAreaView>
@@ -2031,30 +2077,30 @@ const s = StyleSheet.create({
   loaderSub:     { fontSize: fs(12), color: "#8A7F82" },
 
   // Success
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg },
-  successScroll:  { flexGrow: 1, justifyContent: "center", paddingHorizontal: ms(20), paddingVertical: ms(32) },
-  successCard:    { backgroundColor: C.card, borderRadius: ms(30), padding: ms(26), alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
+  successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: C.primary },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(22), alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
 
-  checkStage:   { width: ms(130), height: ms(130), justifyContent: "center", alignItems: "center", marginBottom: ms(14) },
-  checkGlow:    { position: "absolute", width: ms(112), height: ms(112), borderRadius: ms(56), backgroundColor: C.greenBg },
-  pingRing:     { position: "absolute", width: ms(88), height: ms(88), borderRadius: ms(44), borderWidth: 2, borderColor: C.green },
-  checkCircle:  { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
-  sparkleTL:    { position: "absolute", top: ms(4), left: ms(12) },
-  sparkleBR:    { position: "absolute", bottom: ms(10), right: ms(6) },
+  checkStage:   { width: ms(104), height: ms(104), justifyContent: "center", alignItems: "center", marginBottom: ms(8) },
+  checkGlow:    { position: "absolute", width: ms(90), height: ms(90), borderRadius: ms(45), backgroundColor: C.greenBg },
+  pingRing:     { position: "absolute", width: ms(70), height: ms(70), borderRadius: ms(35), borderWidth: 2, borderColor: C.green },
+  checkCircle:  { width: ms(70), height: ms(70), borderRadius: ms(35), justifyContent: "center", alignItems: "center" },
+  sparkleTL:    { position: "absolute", top: ms(2), left: ms(8) },
+  sparkleBR:    { position: "absolute", bottom: ms(6), right: ms(4) },
 
   successContent: { width: "100%", alignItems: "center" },
-  successTitle:   { fontSize: fs(23), fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(8) },
-  regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF4F4", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(6), marginBottom: ms(8) },
+  successTitle:   { fontSize: fs(21), fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
+  regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF4F4", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(5), marginBottom: ms(6) },
   regCode:        { fontSize: fs(14), fontWeight: "800", color: C.primary, letterSpacing: 1 },
-  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(20), textAlign: "center" },
-  detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(16), borderWidth: 1, borderColor: C.border },
-  termsBox:       { width: "100%", backgroundColor: C.bg, borderRadius: ms(12), padding: ms(12), marginBottom: ms(12), borderWidth: 1, borderColor: "#F5E6CE" },
+  successSub:     { fontSize: fs(12.5), color: C.muted, marginBottom: ms(12), textAlign: "center" },
+  detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(12), borderWidth: 1, borderColor: C.border },
+  termsBox:       { width: "100%", backgroundColor: C.bg, borderRadius: ms(12), padding: ms(10), marginBottom: ms(10), borderWidth: 1, borderColor: "#F5E6CE" },
   termsTitleRow:  { flexDirection: "row", alignItems: "center", gap: ms(5), marginBottom: ms(4) },
   termsT:         { fontSize: fs(12), fontWeight: "700", color: C.primary },
-  termsSub:       { fontSize: fs(11), color: C.muted, lineHeight: fs(16) },
-  doneBtnWrap:    { width: "100%", marginBottom: ms(10) },
-  whatsappBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(14) },
-  doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
+  termsSub:       { fontSize: fs(11), color: C.muted, lineHeight: fs(15) },
+  doneBtnWrap:    { width: "100%", marginBottom: ms(8) },
+  whatsappBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(12) },
+  doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(13) },
   doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 
   // ── Discard modal ──
@@ -2124,28 +2170,39 @@ const tm = StyleSheet.create({
 
 type UploadKey = "photo" | string; // "photo" or a documentTypeId
 
-function UploadRow({ label, uri, loading, error, onPress }: {
-  label: string; uri: string | null; loading: boolean; error?: string; onPress: () => void;
+function UploadRow({ label, uri, loading, error, onPress, onView }: {
+  label: string; uri: string | null; loading: boolean; error?: string; onPress: () => void; onView: () => void;
 }) {
   return (
-    <TouchableOpacity style={ds.row} onPress={onPress} activeOpacity={0.75} disabled={loading}>
-      <View style={[ds.rowIcon, uri && ds.rowIconDone]}>
-        {loading
-          ? <ActivityIndicator size="small" color="#8B1E3F" />
-          : <Ionicons name={uri ? "checkmark-circle" : "document-attach-outline"} size={ms(20)} color={uri ? "#1B9C63" : "#8A7F82"} />
-        }
-      </View>
-      <View style={ds.rowBody}>
+    <View style={ds.row}>
+      <TouchableOpacity
+        style={[ds.rowIcon, uri && ds.rowIconDone]}
+        onPress={uri ? onView : onPress}
+        activeOpacity={0.75}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color="#8B1E3F" />
+        ) : uri ? (
+          <Image source={{ uri }} style={ds.rowThumb} />
+        ) : (
+          <Ionicons name="document-attach-outline" size={ms(20)} color="#8A7F82" />
+        )}
+      </TouchableOpacity>
+      <TouchableOpacity style={ds.rowBody} onPress={onPress} activeOpacity={0.75} disabled={loading}>
         <Text style={ds.rowLabel}>{label}</Text>
-        <Text style={ds.rowSub}>{uri ? "Uploaded — tap to replace" : "Not uploaded yet"}</Text>
+        <Text style={ds.rowSub}>{uri ? "Uploaded — tap photo to view, or here to replace" : "Not uploaded yet"}</Text>
         {error ? <Text style={ds.rowErr}>{error}</Text> : null}
-      </View>
-      <Ionicons name="chevron-forward" size={ms(18)} color="#C7BAB4" />
-    </TouchableOpacity>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.6} disabled={loading} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Ionicons name="chevron-forward" size={ms(18)} color="#C7BAB4" />
+      </TouchableOpacity>
+    </View>
   );
 }
 
 function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () => void }) {
+  const insets = useSafeAreaInsets();
   const [docTypes, setDocTypes]         = useState<DocumentType[]>([]);
   const [docTypesLoading, setDocTypesLoading] = useState(true);
 
@@ -2154,6 +2211,7 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
   const [loadingKey, setLoadingKey]     = useState<UploadKey | null>(null);
   const [errorKey, setErrorKey]         = useState<{ key: UploadKey; message: string } | null>(null);
   const [activeSheet, setActiveSheet]   = useState<UploadKey | null>(null);
+  const [previewUri, setPreviewUri]     = useState<string | null>(null);
 
   useEffect(() => {
     listDocumentTypes()
@@ -2213,12 +2271,30 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
 
   return (
     <View style={ds.overlay}>
-      <ScrollView contentContainerStyle={ds.scroll} showsVerticalScrollIndicator={false}>
-        <View style={ds.headerIcon}>
-          <Ionicons name="images-outline" size={ms(28)} color="#8B1E3F" />
+      {/* Header */}
+      <LinearGradient
+        colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={ds.header}
+      >
+        <View style={[ds.headerContent, { paddingTop: insets.top + ms(10) }]}>
+          <View style={ds.headerIconWrap}>
+            <Ionicons name="images-outline" size={ms(18)} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={ds.headerTitle}>Photo &amp; Documents</Text>
+            <Text style={ds.headerSub}>Optional — add now or later</Text>
+          </View>
+          <TouchableOpacity style={ds.closeBtn} onPress={onDone} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={ms(20)} color="#fff" />
+          </TouchableOpacity>
         </View>
-        <Text style={ds.title}>Photo &amp; Documents</Text>
-        <Text style={ds.sub}>Optional — add these now while you have them in hand, or later from the student's profile.</Text>
+        <HeaderWave />
+      </LinearGradient>
+
+      <ScrollView contentContainerStyle={ds.scroll} showsVerticalScrollIndicator={false}>
+        <Text style={ds.note}>Add these now while you have them in hand, or later from the student's profile.</Text>
 
         <UploadRow
           label="Student Photo"
@@ -2226,6 +2302,7 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
           loading={loadingKey === "photo"}
           error={errorKey?.key === "photo" ? errorKey.message : undefined}
           onPress={() => setActiveSheet("photo")}
+          onView={() => setPreviewUri(photoUri)}
         />
 
         {docTypesLoading ? (
@@ -2239,6 +2316,7 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
               loading={loadingKey === dt.id}
               error={errorKey?.key === dt.id ? errorKey.message : undefined}
               onPress={() => setActiveSheet(dt.id)}
+              onView={() => setPreviewUri(docUris[dt.id] ?? null)}
             />
           ))
         )}
@@ -2280,25 +2358,47 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
           <View style={{ height: ms(20) }} />
         </View>
       </BottomSheet>
+
+      {/* Full-screen document/photo preview */}
+      <Modal visible={previewUri !== null} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
+        <View style={ds.previewOverlay}>
+          <TouchableOpacity
+            style={[ds.previewCloseBtn, { top: insets.top + ms(12) }]}
+            onPress={() => setPreviewUri(null)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close" size={ms(22)} color="#fff" />
+          </TouchableOpacity>
+          {previewUri && (
+            <Image source={{ uri: previewUri }} style={ds.previewImg} resizeMode="contain" />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const ds = StyleSheet.create({
-  overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0" },
+  overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg },
   scroll:  { padding: ms(20), paddingBottom: ms(30) },
 
-  headerIcon: { width: ms(56), height: ms(56), borderRadius: ms(18), backgroundColor: "#8B1E3F18", justifyContent: "center", alignItems: "center", alignSelf: "center", marginBottom: ms(14) },
-  title:      { fontSize: fs(19), fontWeight: "800", color: "#2B1B1F", textAlign: "center", marginBottom: ms(6) },
-  sub:        { fontSize: fs(12.5), color: "#8A7F82", textAlign: "center", lineHeight: fs(18), marginBottom: ms(20) },
+  header:        { overflow: "hidden" },
+  headerContent: { flexDirection: "row", alignItems: "center", gap: ms(10), paddingHorizontal: ms(18), paddingBottom: ms(14) },
+  headerIconWrap: { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  headerTitle:   { fontSize: fs(16), fontWeight: "800", color: "#fff" },
+  headerSub:     { fontSize: fs(11.5), color: "rgba(255,255,255,0.8)", marginTop: ms(1) },
+  closeBtn:      { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+
+  note: { fontSize: fs(12.5), color: C.muted, lineHeight: fs(18), marginBottom: ms(16) },
 
   row: {
     flexDirection: "row", alignItems: "center", gap: ms(12),
     backgroundColor: "#FFFFFF", borderRadius: ms(14), padding: ms(12), marginBottom: ms(10),
     shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: ms(6), elevation: 2,
   },
-  rowIcon:     { width: ms(40), height: ms(40), borderRadius: ms(12), backgroundColor: "#F4F4F4", justifyContent: "center", alignItems: "center" },
+  rowIcon:     { width: ms(40), height: ms(40), borderRadius: ms(12), backgroundColor: "#F4F4F4", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   rowIconDone: { backgroundColor: "#E7F7EF" },
+  rowThumb:    { width: ms(40), height: ms(40) },
   rowBody:     { flex: 1 },
   rowLabel:    { fontSize: fs(14), fontWeight: "700", color: "#2B1B1F" },
   rowSub:      { fontSize: fs(11.5), color: "#8A7F82", marginTop: ms(2) },
@@ -2315,4 +2415,8 @@ const ds = StyleSheet.create({
   sheetOption: { flexDirection: "row", alignItems: "center", gap: ms(14), paddingVertical: ms(12) },
   sheetOptionIcon: { width: ms(42), height: ms(42), borderRadius: ms(12), justifyContent: "center", alignItems: "center" },
   sheetOptionLabel: { fontSize: fs(14.5), fontWeight: "700", color: "#2B1B1F" },
+
+  previewOverlay:  { flex: 1, backgroundColor: "rgba(10,4,7,0.95)", justifyContent: "center", alignItems: "center" },
+  previewCloseBtn: { position: "absolute", right: ms(16), width: ms(38), height: ms(38), borderRadius: ms(19), backgroundColor: "rgba(255,255,255,0.16)", justifyContent: "center", alignItems: "center", zIndex: 1 },
+  previewImg:      { width: "100%", height: "80%" },
 });

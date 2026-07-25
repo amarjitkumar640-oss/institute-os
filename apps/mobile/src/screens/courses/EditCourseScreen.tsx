@@ -215,7 +215,7 @@ export function EditCourseScreen({ navigation, route }: Props) {
           {/* Schedule & Fee */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <View style={[s.sectionDot, { backgroundColor: "#E8752C" }]} />
+              <View style={s.sectionDot} />
               <Text style={s.sectionTitle}>Schedule & Fee</Text>
             </View>
 

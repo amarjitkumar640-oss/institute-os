@@ -1,7 +1,7 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ActivityIndicator, Button, StatusBar, View } from "react-native";
+import { ActivityIndicator, StatusBar, View } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { AlertProvider } from "../context/AlertContext";
 import { NetworkProvider } from "../context/NetworkContext";
@@ -37,16 +37,12 @@ import { FeesScreen }             from "../screens/fees/FeesScreen";
 import { FeeScheduleDetailScreen } from "../screens/fees/FeeScheduleDetailScreen";
 import { FeeStructureScreen }      from "../screens/fees/FeeStructureScreen";
 import { LeadsScreen }       from "../screens/leads/LeadsScreen";
+import { AddLeadScreen }     from "../screens/leads/AddLeadScreen";
 import { StudentsScreen }    from "../screens/students/StudentsScreen";
 import { BatchScheduleScreen } from "../screens/schedule/BatchScheduleScreen";
 import { SessionDetailScreen } from "../screens/schedule/SessionDetailScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-function LogoutButton() {
-  const { logout } = useAuth();
-  return <Button title="Log out" onPress={logout} />;
-}
 
 function RootNavigatorInner() {
   const { staff, isLoading, pendingCenters } = useAuth();
@@ -89,6 +85,10 @@ function RootNavigatorInner() {
         <Stack.Screen name="NewAdmission" component={StudentAdmissionScreen} options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="EditStudent"  component={EditStudentScreen}     options={{ animation: "slide_from_bottom" }} />
 
+        {/* Leads */}
+        <Stack.Screen name="Leads"   component={LeadsScreen} />
+        <Stack.Screen name="AddLead" component={AddLeadScreen} options={{ animation: "slide_from_bottom" }} />
+
         {/* Fees */}
         <Stack.Screen name="FeesList"          component={FeesScreen}             />
         <Stack.Screen name="FeeScheduleDetail" component={FeeScheduleDetailScreen} />
@@ -103,7 +103,6 @@ function RootNavigatorInner() {
         <Stack.Screen name="StaffManagement"  component={StaffManagementScreen} />
 
         {/* Legacy screens */}
-        <Stack.Screen name="Leads"    component={LeadsScreen}    options={{ headerShown: true, headerRight: LogoutButton }} />
         <Stack.Screen name="Students" component={StudentsScreen} options={{ headerShown: true }} />
       </Stack.Navigator>
     </NavigationContainer>

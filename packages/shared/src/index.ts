@@ -74,6 +74,7 @@ export const createLeadSchema = z.object({
   source: z.string().min(1),
   assignedTo: z.string().uuid().nullable().optional(),
   notes: z.string().optional(),
+  centerId: z.string().uuid().optional(),
 });
 
 export const convertLeadSchema = z.object({

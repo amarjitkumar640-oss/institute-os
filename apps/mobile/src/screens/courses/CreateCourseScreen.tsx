@@ -231,7 +231,7 @@ export function CreateCourseScreen({ navigation }: Props) {
           {/* Schedule & Fee */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <View style={[s.sectionDot, { backgroundColor: "#E8752C" }]} />
+              <View style={s.sectionDot} />
               <Text style={s.sectionTitle}>Schedule & Fee</Text>
             </View>
 
@@ -377,10 +377,10 @@ const s = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: "#8B1E3F" },
   flex:          { flex: 1 },
   scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
-  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(40) },
+  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(20) },
 
-  section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(18) },
+  section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(12) },
   sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2), backgroundColor: "#8B1E3F" },
   sectionTitle:  { fontSize: fs(12), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textTransform: "uppercase" },
 

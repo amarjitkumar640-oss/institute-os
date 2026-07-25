@@ -6,7 +6,6 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
 
@@ -70,35 +69,28 @@ export function PrimaryButton({
     );
   }
 
-  // Primary — gradient button
+  // Primary — flat maroon button (matches the solid maroon submit buttons used elsewhere in the app)
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={0.82}
-      style={isDisabled ? s.disabledSolid : undefined}
+      style={[s.primaryBtn, { backgroundColor: isDisabled ? "#C4B3B7" : "#8B1E3F" }]}
     >
-      <LinearGradient
-        colors={isDisabled ? ["#C4B3B7", "#C4B3B7"] : ["#8B1E3F", "#C64A3E", "#E8752C"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={s.gradient}
-      >
-        {loading ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <View style={s.inner}>
-            {icon && <Ionicons name={icon} size={17} color="#fff" />}
-            <Text style={s.solidT}>{label}</Text>
-          </View>
-        )}
-      </LinearGradient>
+      {loading ? (
+        <ActivityIndicator size="small" color="#fff" />
+      ) : (
+        <View style={s.inner}>
+          {icon && <Ionicons name={icon} size={17} color="#fff" />}
+          <Text style={s.solidT}>{label}</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
 
 const s = StyleSheet.create({
-  gradient:      { paddingVertical: ms(14), borderRadius: ms(14), justifyContent: "center", alignItems: "center" },
+  primaryBtn:    { paddingVertical: ms(14), borderRadius: ms(14), justifyContent: "center", alignItems: "center" },
   outlineBtn:    { paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1.5, borderColor: "#8B1E3F", justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" },
   dangerBtn:     { paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: "#C0392B", justifyContent: "center", alignItems: "center" },
   disabledSolid: { opacity: 0.55 },

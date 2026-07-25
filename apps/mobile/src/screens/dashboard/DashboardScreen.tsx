@@ -1,7 +1,7 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, Dimensions, ActivityIndicator, RefreshControl,
+  StatusBar, Dimensions, ActivityIndicator, RefreshControl, Animated,
 } from "react-native";
 import { ms, fs } from "../../utils/responsive";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -145,6 +145,46 @@ function SkeletonCard() {
   );
 }
 
+// ── FAB speed-dial mini action — sits on an arc around the FAB ────────────────
+
+const DIAL_RADIUS = ms(104);
+const DIAL_SIZE   = ms(48);
+const FAB_SIZE    = ms(52);
+
+// angle measured counter-clockwise from the positive x-axis (0° = right, 90° = straight up)
+function arcOffset(angleDeg: number) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { dx: DIAL_RADIUS * Math.cos(rad), dy: -DIAL_RADIUS * Math.sin(rad) };
+}
+
+function DialAction({ anim, icon, color, angle, onPress }: {
+  anim: Animated.Value; icon: keyof typeof Ionicons.glyphMap; color: string; angle: number; onPress: () => void;
+}) {
+  const { dx, dy } = arcOffset(angle);
+  return (
+    <Animated.View
+      pointerEvents="box-none"
+      style={[
+        s.dialItem,
+        {
+          opacity: anim,
+          transform: [
+            { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) },
+            { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) },
+            { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
+          ],
+        },
+      ]}
+    >
+      <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+        <View style={[s.dialBtn, { backgroundColor: color }]}>
+          <Ionicons name={icon} size={20} color="#fff" />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function DashboardScreen() {
@@ -158,6 +198,35 @@ export function DashboardScreen() {
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]       = useState(false);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
+  const fabRotate = useRef(new Animated.Value(0)).current;
+  const dialAdmission = useRef(new Animated.Value(0)).current;
+  const dialLead       = useRef(new Animated.Value(0)).current;
+  const dialLeadsList  = useRef(new Animated.Value(0)).current;
+
+  function toggleFabMenu() {
+    const opening = !fabMenuOpen;
+    setFabMenuOpen(opening);
+    Animated.timing(fabRotate, { toValue: opening ? 1 : 0, duration: opening ? 200 : 150, useNativeDriver: true }).start();
+    if (opening) {
+      Animated.stagger(70, [
+        Animated.spring(dialAdmission, { toValue: 1, useNativeDriver: true, tension: 120, friction: 9 }),
+        Animated.spring(dialLead,      { toValue: 1, useNativeDriver: true, tension: 120, friction: 9 }),
+        Animated.spring(dialLeadsList, { toValue: 1, useNativeDriver: true, tension: 120, friction: 9 }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(dialAdmission, { toValue: 0, duration: 120, useNativeDriver: true }),
+        Animated.timing(dialLead,      { toValue: 0, duration: 120, useNativeDriver: true }),
+        Animated.timing(dialLeadsList, { toValue: 0, duration: 120, useNativeDriver: true }),
+      ]).start();
+    }
+  }
+
+  function handleDialPress(screen: "NewAdmission" | "AddLead" | "Leads") {
+    toggleFabMenu();
+    navigation.navigate(screen);
+  }
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -566,6 +635,14 @@ export function DashboardScreen() {
 
         </ScrollView>
 
+        {/* ── Speed-dial backdrop — dims the screen while the FAB menu is open ── */}
+        <Animated.View
+          pointerEvents={fabMenuOpen ? "auto" : "none"}
+          style={[s.fabBackdrop, { opacity: fabRotate.interpolate({ inputRange: [0, 1], outputRange: [0, 0.45] }) }]}
+        >
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={toggleFabMenu} />
+        </Animated.View>
+
         {/* ── Bottom nav (stays fixed) ── */}
         <View style={s.nav}>
           <TouchableOpacity style={s.navI}>
@@ -578,9 +655,16 @@ export function DashboardScreen() {
             <Text style={s.navL}>Students</Text>
           </TouchableOpacity>
           <View style={s.fabW}>
-            <TouchableOpacity onPress={() => navigation.navigate("NewAdmission")}>
-              <LinearGradient colors={[C.secondary, C.orange]} style={s.fab}>
-                <Ionicons name="add" size={28} color="#2B1B1F" />
+            <View pointerEvents={fabMenuOpen ? "auto" : "none"} style={s.dialLayer}>
+              <DialAction anim={dialAdmission} icon="school-outline"     color={C.primary} angle={150} onPress={() => handleDialPress("NewAdmission")} />
+              <DialAction anim={dialLead}      icon="person-add-outline" color={C.blue}    angle={90}  onPress={() => handleDialPress("AddLead")} />
+              <DialAction anim={dialLeadsList} icon="list-outline"       color={C.purple}  angle={30}  onPress={() => handleDialPress("Leads")} />
+            </View>
+            <TouchableOpacity onPress={toggleFabMenu} activeOpacity={0.85}>
+              <LinearGradient colors={[C.primary, "#A52341"]} style={s.fab}>
+                <Animated.View style={{ transform: [{ rotate: fabRotate.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "45deg"] }) }] }}>
+                  <Ionicons name="add" size={28} color="#fff" />
+                </Animated.View>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -605,6 +689,10 @@ const s = StyleSheet.create({
   root:      { flex: 1, backgroundColor: C.bg },
   header:    { paddingTop: ms(14), overflow: "hidden" },
   hPad:      { paddingHorizontal: ms(18), paddingBottom: ms(18), gap: ms(14) },
+
+  fabBackdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#000", zIndex: 15 },
+  dialItem:    { position: "absolute", bottom: (FAB_SIZE - DIAL_SIZE) / 2, left: "50%", marginLeft: -DIAL_SIZE / 2, zIndex: 20 },
+  dialBtn:     { width: DIAL_SIZE, height: DIAL_SIZE, borderRadius: DIAL_SIZE / 2, justifyContent: "center", alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: ms(4) }, shadowOpacity: 0.3, shadowRadius: ms(8), elevation: 6 },
 
   // Date row
   dateRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -701,10 +789,11 @@ const s = StyleSheet.create({
   adminT:   { fontSize: fs(14), fontWeight: "700", color: C.text },
   adminSub: { fontSize: fs(11), color: C.muted, marginTop: 2 },
 
-  nav:    { flexDirection: "row", backgroundColor: "#fff", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(10), paddingBottom: ms(20), paddingHorizontal: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: -ms(4) }, shadowOpacity: 0.15, shadowRadius: ms(12), elevation: 10 },
+  nav:    { flexDirection: "row", backgroundColor: "#fff", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(10), paddingBottom: ms(20), paddingHorizontal: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: -ms(4) }, shadowOpacity: 0.15, shadowRadius: ms(12), elevation: 10, zIndex: 25 },
   navI:   { flex: 1, alignItems: "center", gap: ms(3) },
   navL:   { fontSize: fs(9.5), color: C.muted, fontWeight: "600" },
   navDot: { width: ms(4), height: ms(4), borderRadius: ms(2), backgroundColor: C.primary, marginTop: ms(1) },
-  fabW:   { flex: 1, alignItems: "center", marginTop: -ms(26) },
-  fab:    { width: ms(52), height: ms(52), borderRadius: ms(26), justifyContent: "center", alignItems: "center", shadowColor: C.orange, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.5, shadowRadius: ms(16), elevation: 8 },
+  fabW:      { flex: 1, alignItems: "center", marginTop: -ms(26), position: "relative" },
+  dialLayer: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  fab:    { width: ms(52), height: ms(52), borderRadius: ms(26), justifyContent: "center", alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.5, shadowRadius: ms(16), elevation: 8 },
 });

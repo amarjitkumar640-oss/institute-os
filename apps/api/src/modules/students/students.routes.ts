@@ -20,16 +20,32 @@ studentsRouter.get("/", requireAuth, async (req, res) => {
   if (batchId) {
     const enrollments = await prisma.enrollment.findMany({
       where: { batchId, status: "active" },
-      include: { student: true },
+      include: { student: true, batch: { select: { id: true, name: true } } },
     });
-    return res.json(await withPhotoUrls(enrollments.map((e) => e.student)));
+    return res.json(await withPhotoUrls(enrollments.map((e) => ({
+      ...e.student,
+      activeEnrollment: { batchId: e.batch.id, batchName: e.batch.name },
+    }))));
   }
   const students = await prisma.student.findMany({
     where:   centerFilter(req),
-    include: { center: { select: { id: true, name: true } } },
+    include: {
+      center: { select: { id: true, name: true } },
+      enrollments: {
+        where:   { status: "active" },
+        include: { batch: { select: { id: true, name: true } } },
+        take:    1,
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
-  res.json(await withPhotoUrls(students));
+  const withActiveEnrollment = students.map(({ enrollments, ...student }) => ({
+    ...student,
+    activeEnrollment: enrollments[0]
+      ? { batchId: enrollments[0].batch.id, batchName: enrollments[0].batch.name }
+      : null,
+  }));
+  res.json(await withPhotoUrls(withActiveEnrollment));
 });
 
 studentsRouter.get("/:id", requireAuth, async (req, res) => {

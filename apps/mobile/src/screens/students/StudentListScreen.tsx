@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, StatusBar, ScrollView, ActivityIndicator, RefreshControl, Modal,
+  TextInput, StatusBar, ScrollView, ActivityIndicator, RefreshControl, Modal, Image,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -18,7 +18,7 @@ import { listStudentEnrollments, enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { useAuth } from "../../context/AuthContext";
 import { C } from "../../theme";
-import { COURSE_META, EXAM_COLOR, EXAM_LABEL } from "../../constants/courseMeta";
+import { COURSE_META, EXAM_COLOR } from "../../constants/courseMeta";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StudentList">;
@@ -142,7 +142,6 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
               }
               renderItem={({ item: b }) => {
                 const color     = EXAM_COLOR[b.course.examCategory] ?? "#8A7F82";
-                const label     = EXAM_LABEL[b.course.examCategory] ?? b.course.examCategory;
                 const sm        = STATUS_META[b.status] ?? { label: b.status, color: "#8A7F82" };
                 const enrolled  = enrolledBatchIds.has(b.id);
                 const full      = isFull(b);
@@ -156,13 +155,13 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
                     activeOpacity={0.75}
                     disabled={disabled}
                   >
-                    <View style={[bm.examTag, { backgroundColor: color + "20" }]}>
-                      <Text style={[bm.examTagT, { color }]}>{label}</Text>
-                    </View>
-
                     <View style={{ flex: 1 }}>
                       <Text style={bm.batchName} numberOfLines={1}>{b.name}</Text>
                       <View style={bm.batchMeta}>
+                        <View style={[bm.courseBadge, { backgroundColor: color + "20" }]}>
+                          <Text style={[bm.courseBadgeT, { color }]} numberOfLines={1}>{b.course.name}</Text>
+                        </View>
+                        <Text style={bm.sep}>·</Text>
                         <View style={[bm.statusDot, { backgroundColor: sm.color }]} />
                         <Text style={bm.batchMetaT}>{sm.label}</Text>
                         <Text style={bm.sep}>·</Text>
@@ -217,10 +216,10 @@ const bm = StyleSheet.create({
   emptyWrap:    { alignItems: "center", paddingVertical: ms(32), gap: ms(10) },
   emptyT:       { fontSize: fs(13), color: "#B0A9AC" },
   batchRow:     { flexDirection: "row", alignItems: "center", paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: "#F0EDE8", gap: ms(12) },
-  examTag:      { borderRadius: ms(8), paddingHorizontal: ms(9), paddingVertical: ms(4), flexShrink: 0 },
-  examTagT:     { fontSize: fs(11), fontWeight: "800" },
   batchName:    { fontSize: fs(13.5), fontWeight: "700", color: "#2B1B1F" },
-  batchMeta:    { flexDirection: "row", alignItems: "center", gap: ms(5), marginTop: ms(3) },
+  batchMeta:    { flexDirection: "row", alignItems: "center", gap: ms(5), marginTop: ms(5), flexWrap: "wrap", rowGap: ms(4) },
+  courseBadge:  { borderRadius: ms(7), paddingHorizontal: ms(7), paddingVertical: ms(2.5), flexShrink: 1, maxWidth: ms(140) },
+  courseBadgeT: { fontSize: fs(10.5), fontWeight: "800" },
   statusDot:    { width: ms(6), height: ms(6), borderRadius: ms(3) },
   batchMetaT:   { fontSize: fs(11), color: "#8A7F82" },
   sep:          { fontSize: fs(11), color: "#C7BAB4" },
@@ -243,12 +242,11 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
   onEnroll: () => void;
   isAllCenters?: boolean;
 }) {
-  const meta  = (student.coursePreference ? COURSE_META[student.coursePreference] : null) ?? { label: "—", color: C.muted };
-  const color = meta.color;
-  const ini   = initials(student.fullName);
+  const meta = (student.coursePreference ? COURSE_META[student.coursePreference] : null) ?? { label: "—", color: C.muted };
+  const ini  = initials(student.fullName);
 
   return (
-    <View style={cs.card}>
+    <View style={[cs.card, { borderLeftColor: C.primary }]}>
       {isAllCenters && student.center && (
         <View style={cs.centerChip}>
           <Ionicons name="business-outline" size={ms(10)} color="#5B2D8E" />
@@ -256,8 +254,11 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
         </View>
       )}
       <View style={cs.cardTop}>
-        <View style={[cs.avatar, { backgroundColor: color }]}>
-          <Text style={cs.avatarT}>{ini}</Text>
+        <View style={cs.avatar}>
+          {student.photoUrl
+            ? <Image source={{ uri: student.photoUrl }} style={cs.avatarImg} />
+            : <Text style={cs.avatarT}>{ini}</Text>
+          }
         </View>
         <View style={cs.cardInfo}>
           <Text style={cs.studentName} numberOfLines={1}>{student.fullName}</Text>
@@ -265,11 +266,6 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
             {student.studentCode}{student.phone ? ` · ${student.phone}` : ""}
           </Text>
         </View>
-        {student.coursePreference ? (
-          <View style={[cs.courseBadge, { backgroundColor: color + "20" }]}>
-            <Text style={[cs.courseT, { color }]}>{meta.label}</Text>
-          </View>
-        ) : null}
         {showEnroll && (
           <TouchableOpacity style={cs.enrollBtn} onPress={onEnroll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="link-outline" size={ms(15)} color="#1B9C63" />
@@ -282,31 +278,43 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
 
       <View style={cs.divider} />
 
+      <View style={student.activeEnrollment ? cs.enrollStatusOn : cs.enrollStatusOff}>
+        <Ionicons
+          name={student.activeEnrollment ? "checkmark-circle" : "alert-circle-outline"}
+          size={ms(13)}
+          color={student.activeEnrollment ? "#1B9C63" : "#C0392B"}
+        />
+        <Text
+          style={[cs.enrollStatusT, { color: student.activeEnrollment ? "#1B9C63" : "#C0392B" }]}
+          numberOfLines={1}
+        >
+          {student.activeEnrollment ? `Enrolled in ${student.activeEnrollment.batchName}` : "Not enrolled in any batch"}
+        </Text>
+      </View>
+
       <View style={cs.cardBottom}>
+        {student.coursePreference ? (
+          <View style={cs.courseBadge}>
+            <Ionicons name="book-outline" size={ms(11)} color={C.primary} />
+            <Text style={cs.courseT}>{meta.label}</Text>
+          </View>
+        ) : null}
         <View style={cs.metaItem}>
-          <Ionicons name="calendar-outline" size={ms(12)} color={C.muted} />
+          <Ionicons name="calendar-outline" size={ms(11)} color={C.muted} />
           <Text style={cs.metaT}>Joined {formatDate(student.createdAt)}</Text>
         </View>
-        <View style={cs.metaRow}>
-          {student.gender ? (
-            <View style={cs.genderBadge}>
-              <Ionicons
-                name={student.gender === "female" ? "female-outline" : "male-outline"}
-                size={ms(11)}
-                color={student.gender === "female" ? "#D96AAC" : "#2563A8"}
-              />
-              <Text style={[cs.genderT, { color: student.gender === "female" ? "#D96AAC" : "#2563A8" }]}>
-                {student.gender === "female" ? "Female" : "Male"}
-              </Text>
-            </View>
-          ) : null}
-          {student.amountPaid ? (
-            <View style={cs.paidBadge}>
-              <Ionicons name="cash-outline" size={ms(11)} color="#1B9C63" />
-              <Text style={cs.paidT}>₹{Number(student.amountPaid).toLocaleString("en-IN")}</Text>
-            </View>
-          ) : null}
-        </View>
+        {student.gender ? (
+          <View style={cs.genderBadge}>
+            <Ionicons
+              name={student.gender === "female" ? "female-outline" : "male-outline"}
+              size={ms(11)}
+              color={student.gender === "female" ? "#D96AAC" : "#2563A8"}
+            />
+            <Text style={[cs.genderT, { color: student.gender === "female" ? "#D96AAC" : "#2563A8" }]}>
+              {student.gender === "female" ? "Female" : "Male"}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -513,28 +521,29 @@ const cs = StyleSheet.create({
   resultT:      { paddingHorizontal: ms(16), paddingTop: ms(4), paddingBottom: ms(4), fontSize: fs(11.5), color: "#8A7F82" },
   listContent:  { paddingHorizontal: ms(16), paddingBottom: ms(100) },
 
-  card:        { backgroundColor: "#FFFFFF", borderRadius: ms(16), padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
-  centerChip:  { flexDirection: "row", alignItems: "center", gap: ms(4), alignSelf: "flex-start", backgroundColor: "#F3EDFF", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3), marginBottom: ms(6) },
+  card:        { backgroundColor: "#FFFFFF", borderRadius: ms(16), borderLeftWidth: 3, padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
+  centerChip:  { flexDirection: "row", alignItems: "center", gap: ms(4), alignSelf: "flex-start", backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3), marginBottom: ms(6) },
   centerChipT: { fontSize: fs(11), color: "#5B2D8E", fontWeight: "600" },
   cardTop:     { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(10) },
-  avatar:      { width: ms(44), height: ms(44), borderRadius: ms(22), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  avatarT:     { fontSize: fs(14), fontWeight: "800", color: "#fff", includeFontPadding: false },
+  avatar:      { width: ms(48), height: ms(48), borderRadius: ms(24), borderWidth: 1.5, borderColor: C.primary + "40", backgroundColor: C.primary + "1C", justifyContent: "center", alignItems: "center", flexShrink: 0, overflow: "hidden" },
+  avatarImg:   { width: ms(48), height: ms(48), borderRadius: ms(24) },
+  avatarT:     { fontSize: fs(15), fontWeight: "800", includeFontPadding: false, color: C.primary },
   cardInfo:    { flex: 1, minWidth: 0 },
   studentName: { fontSize: fs(14), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(3) },
   rollT:       { fontSize: fs(11), color: "#8A7F82" },
-  courseBadge: { borderRadius: ms(8), paddingHorizontal: ms(9), paddingVertical: ms(4), flexShrink: 0 },
-  enrollBtn:   { width: ms(30), height: ms(30), borderRadius: ms(8), backgroundColor: "#E7F7EF", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  editBtn:     { width: ms(30), height: ms(30), borderRadius: ms(8), backgroundColor: "#EFF6FF", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  courseT:     { fontSize: fs(11), fontWeight: "800" },
+  courseBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.primary + "18", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  enrollBtn:   { width: ms(30), height: ms(30), borderRadius: ms(15), backgroundColor: C.greenBg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  editBtn:     { width: ms(30), height: ms(30), borderRadius: ms(15), backgroundColor: "#EFF6FF", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  courseT:     { fontSize: fs(10.5), fontWeight: "800", color: C.primary },
   divider:     { height: 1, backgroundColor: "#F0EDE8", marginBottom: ms(10) },
-  cardBottom:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  metaItem:    { flexDirection: "row", alignItems: "center", gap: ms(4) },
-  metaT:       { fontSize: fs(11), color: "#8A7F82" },
-  metaRow:     { flexDirection: "row", alignItems: "center", gap: ms(6) },
-  genderBadge: { flexDirection: "row", alignItems: "center", gap: ms(3), backgroundColor: "#F5F3FF", borderRadius: ms(20), paddingHorizontal: ms(7), paddingVertical: ms(3) },
+  enrollStatusOn:  { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.greenBg, borderRadius: ms(10), paddingHorizontal: ms(10), paddingVertical: ms(6), marginBottom: ms(10) },
+  enrollStatusOff: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF0EE", borderRadius: ms(10), paddingHorizontal: ms(10), paddingVertical: ms(6), marginBottom: ms(10) },
+  enrollStatusT:   { fontSize: fs(11.5), fontWeight: "700", flex: 1 },
+  cardBottom:  { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: ms(8) },
+  metaItem:    { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: "#F5F1EE", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  metaT:       { fontSize: fs(10.5), fontWeight: "700", color: "#8A7F82" },
+  genderBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.purpleBg, borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
   genderT:     { fontSize: fs(10.5), fontWeight: "700" },
-  paidBadge:   { flexDirection: "row", alignItems: "center", gap: ms(3), backgroundColor: "#E7F7EF", borderRadius: ms(20), paddingHorizontal: ms(7), paddingVertical: ms(3) },
-  paidT:       { fontSize: fs(10.5), fontWeight: "700", color: "#1B9C63" },
 
   empty:      { alignItems: "center", paddingTop: ms(60), gap: ms(8), paddingHorizontal: ms(32) },
   emptyTitle: { fontSize: fs(15), fontWeight: "700", color: "#B0A9AC", textAlign: "center" },

@@ -35,6 +35,7 @@ export interface StudentItem {
   createdAt:          string;
   centerId?:          string | null;
   center?:            { id: string; name: string } | null;
+  activeEnrollment?:  { batchId: string; batchName: string } | null;
 }
 
 export interface AdmitStudentPayload {
