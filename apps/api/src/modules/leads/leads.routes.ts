@@ -15,6 +15,7 @@ leadsRouter.get("/", requireAuth, requireRole("admin", "frontdesk"), async (req,
   const leads = await prisma.lead.findMany({
     where:   centerFilter(req),
     orderBy: { createdAt: "desc" },
+    include: { targetExam: true },
   });
   res.json(leads);
 });
@@ -27,7 +28,10 @@ leadsRouter.post(
   async (req, res) => {
     const centerId = centerIdForCreate(req, req.body.centerId);
     if (!centerId) return res.status(400).json({ error: "centerId required when using all-centers mode" });
-    const lead = await prisma.lead.create({ data: { ...req.body, centerId } });
+    const lead = await prisma.lead.create({
+      data:    { ...req.body, centerId },
+      include: { targetExam: true },
+    });
     res.status(201).json(lead);
   }
 );

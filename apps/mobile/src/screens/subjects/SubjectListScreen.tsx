@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, StatusBar, ActivityIndicator, ScrollView,
@@ -16,10 +16,10 @@ import type { RootStackParamList } from "../../navigation/types";
 import { ms, fs } from "../../utils/responsive";
 import {
   listSubjects, deleteSubject,
-  type SubjectItem, type ExamCategory,
+  type SubjectItem,
 } from "../../api/subjects";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { C } from "../../theme";
-import { CAT_COLOR, CAT_LABEL } from "../../constants/courseMeta";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -28,28 +28,16 @@ type Props = NativeStackScreenProps<RootStackParamList, "SubjectList">;
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-function catKey(c: ExamCategory | null): string {
-  return c ?? "shared";
+function catColor(c: ExamCategoryItem | null): string {
+  return c?.color ?? "#E8752C";
 }
-function catColor(c: ExamCategory | null): string {
-  return CAT_COLOR[catKey(c)] ?? "#8A7F82";
-}
-function catLabel(c: ExamCategory | null): string {
-  return CAT_LABEL[catKey(c)] ?? "—";
+function catLabel(c: ExamCategoryItem | null): string {
+  return c?.label ?? "Shared";
 }
 
 // ── Filter chips ──────────────────────────────────────────────────────────────
 
-type Filter = "all" | "shared" | "ssc" | "banking" | "railway" | "foundation";
-
-const FILTERS: { key: Filter; label: string; color: string }[] = [
-  { key: "all",        label: "All",        color: C.primary  },
-  { key: "shared",     label: "Shared",     color: "#E8752C"  },
-  { key: "ssc",        label: "SSC",        color: "#8B1E3F"  },
-  { key: "banking",    label: "Banking",    color: "#2563A8"  },
-  { key: "railway",    label: "Railway",    color: "#2CA6A4"  },
-  { key: "foundation", label: "Foundation", color: "#7B3FA0"  },
-];
+type Filter = "all" | "shared" | string; // "all", "shared", or an ExamCategoryItem id
 
 // ── Subject card ──────────────────────────────────────────────────────────────
 
@@ -136,11 +124,11 @@ const sc = StyleSheet.create({
 
 // ── Empty state ────────────────────────────────────────────────────────────────
 
-function SubjectEmpty({ search, filter }: { search: string; filter: Filter }) {
+function SubjectEmpty({ search, filter, filterLabel }: { search: string; filter: Filter; filterLabel: string }) {
   const title = search
     ? `No subjects match "${search}"`
     : filter !== "all"
-      ? `No ${CAT_LABEL[filter] ?? filter} subjects yet`
+      ? `No ${filterLabel} subjects yet`
       : "No subjects yet";
   return (
     <UIEmptyState
@@ -157,9 +145,9 @@ function SubjectEmpty({ search, filter }: { search: string; filter: Filter }) {
 function Banner({ subjects }: { subjects: SubjectItem[] }) {
   const total   = subjects.length;
   const shared  = subjects.filter((s) => s.examCategory === null).length;
-  const ssc     = subjects.filter((s) => s.examCategory === "ssc").length;
-  const banking = subjects.filter((s) => s.examCategory === "banking").length;
-  const railway = subjects.filter((s) => s.examCategory === "railway").length;
+  const ssc     = subjects.filter((s) => s.examCategory?.key === "ssc").length;
+  const banking = subjects.filter((s) => s.examCategory?.key === "banking").length;
+  const railway = subjects.filter((s) => s.examCategory?.key === "railway").length;
 
   return (
     <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={bn.wrap}>
@@ -206,6 +194,17 @@ export function SubjectListScreen(_: Props) {
   const [search, setSearch]       = useState("");
   const [filter, setFilter]       = useState<Filter>("all");
   const [deleting, setDeleting]   = useState<string | null>(null);
+  const [categories, setCategories] = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  const FILTERS = useMemo(() => [
+    { key: "all" as Filter,    label: "All",    color: C.primary },
+    { key: "shared" as Filter, label: "Shared", color: "#E8752C" },
+    ...categories.map((c) => ({ key: c.id as Filter, label: c.label, color: c.color })),
+  ], [categories]);
 
   const isFirstFocus = useRef(true);
 
@@ -264,8 +263,8 @@ export function SubjectListScreen(_: Props) {
   const visible = subjects.filter((s) => {
     const matchFilter =
       filter === "all" ||
-      (filter === "shared"  && s.examCategory === null) ||
-      s.examCategory === filter;
+      (filter === "shared" && s.examCategory === null) ||
+      s.examCategory?.id === filter;
     const matchSearch = search.trim() === "" ||
       s.name.toLowerCase().includes(search.trim().toLowerCase());
     return matchFilter && matchSearch;
@@ -347,7 +346,7 @@ export function SubjectListScreen(_: Props) {
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={
             !loading && !error ? (
-              <SubjectEmpty search={search} filter={filter} />
+              <SubjectEmpty search={search} filter={filter} filterLabel={FILTERS.find((f) => f.key === filter)?.label ?? ""} />
             ) : null
           }
           refreshing={refreshing}

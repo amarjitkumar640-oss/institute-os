@@ -23,6 +23,7 @@ import {
   type DocumentType,
 } from "../../api/documents";
 import { listCourses, type CourseItem } from "../../api/courses";
+import { getCourseMeta } from "../../constants/courseMeta";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
 
@@ -56,10 +57,7 @@ function parseDisplayDate(s: string): string | null {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// ── Category color/label + duration helper (shared with admission) ───────────
-
-const CAT_COLOR: Record<string, string> = { ssc: C.primary, banking: C.blue, railway: C.accent, foundation: C.purple };
-const CAT_LABEL: Record<string, string> = { ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation" };
+// ── Duration helper (shared with admission) ───────────────────────────────────
 
 function monthsToDurationPref(months: number): DurationPref {
   if (months <= 3) return "3months";
@@ -98,7 +96,7 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
 
   const filtered = courses.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (CAT_LABEL[c.examCategory] ?? "").toLowerCase().includes(search.toLowerCase())
+    (c.examCategory?.label ?? "General").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -157,8 +155,8 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
           ) : (
             <View style={cp.grid}>
               {filtered.map((course) => {
-                const color = CAT_COLOR[course.examCategory] ?? C.muted;
-                const label = CAT_LABEL[course.examCategory] ?? course.examCategory;
+                const color = course.examCategory?.color ?? C.muted;
+                const label = course.examCategory?.label ?? "General";
                 const sel   = selectedId === course.id;
                 return (
                   <TouchableOpacity
@@ -1073,14 +1071,14 @@ export function EditStudentScreen({ navigation, route }: Props) {
                   </>
                 ) : selectedCourseName ? (
                   <>
-                    <View style={[s.courseSelDot, { backgroundColor: CAT_COLOR[courses.find((c) => c.id === selectedCourseId)?.examCategory ?? ""] ?? C.primary }]} />
+                    <View style={[s.courseSelDot, { backgroundColor: courses.find((c) => c.id === selectedCourseId)?.examCategory?.color ?? C.primary }]} />
                     <Text style={s.courseSelValue} numberOfLines={1}>{selectedCourseName}</Text>
                     <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
                   </>
                 ) : coursePreference ? (
                   <>
-                    <View style={[s.courseSelDot, { backgroundColor: CAT_COLOR[coursePreference] ?? C.primary }]} />
-                    <Text style={s.courseSelValue} numberOfLines={1}>{CAT_LABEL[coursePreference] ?? coursePreference}</Text>
+                    <View style={[s.courseSelDot, { backgroundColor: getCourseMeta(coursePreference).color }]} />
+                    <Text style={s.courseSelValue} numberOfLines={1}>{getCourseMeta(coursePreference).label}</Text>
                     <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
                   </>
                 ) : (
@@ -1256,7 +1254,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
         onSelect={(course) => {
           setSelectedCourseId(course.id);
           setSelectedCourseName(course.name);
-          setCoursePreference(course.examCategory as CoursePreference);
+          setCoursePreference((course.examCategory?.key as CoursePreference) ?? null);
           setDurationPreference(monthsToDurationPref(course.durationMonths));
           setCoursePickerOpen(false);
         }}

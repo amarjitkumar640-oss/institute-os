@@ -21,12 +21,6 @@ type Props = NativeStackScreenProps<RootStackParamList, "BatchDetail">;
 
 // ── Maps ──────────────────────────────────────────────────────────────────────
 
-const EXAM_COLOR: Record<string, string> = {
-  ssc: C.blue, banking: C.green, railway: C.orange, foundation: C.purple,
-};
-const EXAM_LABEL: Record<string, string> = {
-  ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation",
-};
 
 const STATUS_META: Record<BatchStatus, { label: string; color: string; bg: string }> = {
   running:   { label: "Running",   color: C.green,   bg: C.green   + "18" },
@@ -320,8 +314,8 @@ export function BatchDetailScreen({ navigation, route }: Props) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useRefetchOnReconnect(() => load(true));
 
-  const examColor = EXAM_COLOR[batch.course.examCategory] ?? C.muted;
-  const examLabel = EXAM_LABEL[batch.course.examCategory] ?? batch.course.examCategory.toUpperCase();
+  const examColor = batch.course.examCategory?.color ?? C.muted;
+  const examLabel = batch.course.examCategory?.label ?? "General";
   const status    = STATUS_META[batch.status];
   const pct       = batch.capacity ? Math.min(batch.enrolledCount / batch.capacity, 1) : 0;
   const isFull    = batch.enrolledCount >= batch.capacity;

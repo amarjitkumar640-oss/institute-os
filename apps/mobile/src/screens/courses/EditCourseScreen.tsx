@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -21,15 +21,18 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { SelectChips } from "../../components/ui/SelectChips";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
-import { updateCourse, type ExamCategory } from "../../api/courses";
+import { updateCourse } from "../../api/courses";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditCourse">;
 
+const GENERAL_VALUE = "general";
+
 interface FormState {
   name: string;
-  examCategory: ExamCategory | "";
+  examCategory: string;
   durationMonths: string;
   defaultFee: string;
 }
@@ -44,28 +47,16 @@ interface FormErrors {
 
 interface UpdatedCourse {
   name: string;
-  examCategory: ExamCategory;
+  examCategory: ExamCategoryItem | null;
   durationMonths: number;
   defaultFee: number;
 }
-
-const EXAM_OPTIONS = [
-  { label: "SSC",     value: "ssc",     color: "#8B1E3F" },
-  { label: "Banking", value: "banking", color: "#2563A8" },
-  { label: "Railway", value: "railway", color: "#1B9C63" },
-];
-
-const CATEGORY_LABEL: Record<string, string> = {
-  ssc: "SSC", banking: "Banking", railway: "Railway",
-};
 
 function validate(form: FormState): FormErrors {
   const errors: FormErrors = {};
   const name = form.name.trim();
   if (!name) errors.name = "Course name is required.";
   else if (name.length > 120) errors.name = "Course name must be 120 characters or fewer.";
-
-  if (!form.examCategory) errors.examCategory = "Please select an exam category.";
 
   const months = Number(form.durationMonths);
   if (!form.durationMonths.trim()) errors.durationMonths = "Duration is required.";
@@ -86,7 +77,7 @@ export function EditCourseScreen({ navigation, route }: Props) {
 
   const initialForm: FormState = {
     name:           course.name,
-    examCategory:   course.examCategory,
+    examCategory:   course.examCategory?.id ?? GENERAL_VALUE,
     durationMonths: String(course.durationMonths),
     defaultFee:     String(course.defaultFee),
   };
@@ -95,6 +86,16 @@ export function EditCourseScreen({ navigation, route }: Props) {
   const [errors, setErrors]           = useState<FormErrors>({});
   const [loading, setLoading]         = useState(false);
   const [updatedCourse, setUpdatedCourse] = useState<UpdatedCourse | null>(null);
+  const [categories, setCategories]   = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  const examOptions = [
+    { label: "General (All Categories)", value: GENERAL_VALUE, color: "#8A7F82" },
+    ...categories.map((c) => ({ label: c.label, value: c.id, color: c.color })),
+  ];
 
   const durationRef = useRef<TextInput>(null);
   const feeRef      = useRef<TextInput>(null);
@@ -134,7 +135,7 @@ export function EditCourseScreen({ navigation, route }: Props) {
     try {
       const result = await updateCourse(course.id, {
         name:           form.name.trim(),
-        examCategory:   form.examCategory as ExamCategory,
+        examCategoryId: form.examCategory === GENERAL_VALUE ? null : form.examCategory,
         durationMonths: Number(form.durationMonths),
         defaultFee:     Number(form.defaultFee),
       });
@@ -205,9 +206,9 @@ export function EditCourseScreen({ navigation, route }: Props) {
 
             <SelectChips
               label="EXAM CATEGORY"
-              options={EXAM_OPTIONS}
+              options={examOptions}
               value={form.examCategory || undefined}
-              onChange={(v) => setField("examCategory", v as ExamCategory)}
+              onChange={(v) => setField("examCategory", v)}
               error={errors.examCategory}
             />
           </View>
@@ -263,7 +264,7 @@ export function EditCourseScreen({ navigation, route }: Props) {
               </View>
               <View style={s.previewRow}>
                 <Text style={s.previewKey}>Category</Text>
-                <Text style={s.previewVal}>{EXAM_OPTIONS.find((o) => o.value === form.examCategory)?.label || "—"}</Text>
+                <Text style={s.previewVal}>{examOptions.find((o) => o.value === form.examCategory)?.label || "—"}</Text>
               </View>
               <View style={s.previewRow}>
                 <Text style={s.previewKey}>Duration</Text>
@@ -327,7 +328,7 @@ export function EditCourseScreen({ navigation, route }: Props) {
 
             <View style={s.detailBox}>
               <DetailRow icon="book-outline"   label="Course Name" value={updatedCourse.name} color="#8B1E3F" />
-              <DetailRow icon="layers-outline" label="Category"    value={CATEGORY_LABEL[updatedCourse.examCategory] ?? updatedCourse.examCategory} color="#2563A8" />
+              <DetailRow icon="layers-outline" label="Category"    value={updatedCourse.examCategory?.label ?? "General (All Categories)"} color="#2563A8" />
               <DetailRow icon="time-outline"   label="Duration"    value={`${updatedCourse.durationMonths} months`} color="#E8752C" />
               <DetailRow icon="wallet-outline" label="Default Fee" value={`₹${updatedCourse.defaultFee.toLocaleString("en-IN")}`} color="#1B9C63" last />
             </View>

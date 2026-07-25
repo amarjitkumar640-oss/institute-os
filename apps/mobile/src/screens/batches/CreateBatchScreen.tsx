@@ -46,9 +46,6 @@ function fmt12h(time: string | null): string {
   return `${hour12}:${String(minute).padStart(2, "0")} ${meridiem}`;
 }
 
-const EXAM_COLOR: Record<string, string> = { ssc: "#2563A8", banking: "#1B9C63", railway: "#E8752C" };
-const EXAM_LABEL: Record<string, string> = { ssc: "SSC", banking: "Banking", railway: "Railway" };
-
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -284,8 +281,8 @@ function CoursePickerModal({ visible, courses, loading, onSelect, onClose }: {
                 </View>
               }
               renderItem={({ item: c }) => {
-                const color = EXAM_COLOR[c.examCategory] ?? "#8A7F82";
-                const label = EXAM_LABEL[c.examCategory] ?? c.examCategory.toUpperCase();
+                const color = c.examCategory?.color ?? "#8A7F82";
+                const label = c.examCategory?.label ?? "General";
                 return (
                   <TouchableOpacity style={pm.row} onPress={() => onSelect(c)} activeOpacity={0.75}>
                     <View style={[pm.tag, { backgroundColor: color + "20" }]}>
@@ -466,8 +463,8 @@ export function CreateBatchScreen({ navigation }: Props) {
     }
   }
 
-  const examColor = selectedCourse ? (EXAM_COLOR[selectedCourse.examCategory] ?? "#8A7F82") : "#8A7F82";
-  const examLabel = selectedCourse ? (EXAM_LABEL[selectedCourse.examCategory] ?? "") : "";
+  const examColor = selectedCourse?.examCategory?.color ?? "#8A7F82";
+  const examLabel = selectedCourse?.examCategory?.label ?? (selectedCourse ? "General" : "");
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>

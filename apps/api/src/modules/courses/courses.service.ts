@@ -18,17 +18,18 @@ function serializeCourse<T extends { defaultFee: Prisma.Decimal }>(
 }
 
 export async function listCourses(query: CourseQuery) {
-  const { examCategory, search, page, limit } = query;
+  const { examCategoryId, search, page, limit } = query;
 
   const where: Prisma.CourseWhereInput = {};
-  if (examCategory) where.examCategory = examCategory;
-  if (search)       where.name = { contains: search, mode: "insensitive" };
+  if (examCategoryId) where.examCategoryId = examCategoryId;
+  if (search)         where.name = { contains: search, mode: "insensitive" };
 
   const [total, rows] = await prisma.$transaction([
     prisma.course.count({ where }),
     prisma.course.findMany({
       where,
       include: {
+        examCategory: true,
         _count: { select: { batches: true } },
         batches: { select: { status: true } },
       },
@@ -50,7 +51,7 @@ export async function listCourses(query: CourseQuery) {
 export async function getCourse(id: string) {
   const course = await prisma.course.findUnique({
     where: { id },
-    include: { batches: { select: { status: true } } },
+    include: { examCategory: true, batches: { select: { status: true } } },
   });
   if (!course) return null;
 
@@ -78,13 +79,13 @@ export type CreateResult =
 export async function createCourse(data: CreateCourseInput): Promise<CreateResult> {
   const clash = await prisma.course.findFirst({
     where: {
-      name:         { equals: data.name, mode: "insensitive" },
-      examCategory: data.examCategory,
+      name:           { equals: data.name, mode: "insensitive" },
+      examCategoryId: data.examCategoryId ?? null,
     },
   });
   if (clash) return { ok: false, conflict: true };
 
-  const course = await prisma.course.create({ data });
+  const course = await prisma.course.create({ data, include: { examCategory: true } });
   return { ok: true, course: serializeCourse(course) };
 }
 
@@ -101,20 +102,20 @@ export async function updateCourse(
   if (!existing) return { ok: false, notFound: true };
 
   // Only check name uniqueness when name or category is being changed
-  if (data.name !== undefined || data.examCategory !== undefined) {
-    const nameToCheck     = data.name         ?? existing.name;
-    const categoryToCheck = data.examCategory ?? existing.examCategory;
+  if (data.name !== undefined || data.examCategoryId !== undefined) {
+    const nameToCheck     = data.name ?? existing.name;
+    const categoryToCheck = data.examCategoryId !== undefined ? data.examCategoryId : existing.examCategoryId;
     const clash = await prisma.course.findFirst({
       where: {
-        name:         { equals: nameToCheck, mode: "insensitive" },
-        examCategory: categoryToCheck,
-        NOT:          { id },
+        name:           { equals: nameToCheck, mode: "insensitive" },
+        examCategoryId: categoryToCheck,
+        NOT:            { id },
       },
     });
     if (clash) return { ok: false, conflict: true };
   }
 
-  const course = await prisma.course.update({ where: { id }, data });
+  const course = await prisma.course.update({ where: { id }, data, include: { examCategory: true } });
   return { ok: true, course: serializeCourse(course) };
 }
 

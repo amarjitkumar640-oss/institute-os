@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { ExamCategory } from "./courses";
+import type { ExamCategoryItem } from "./examCategories";
 
 export type LeadStatus = "new" | "contacted" | "visited" | "converted" | "lost";
 
@@ -7,7 +7,7 @@ export interface LeadItem {
   id:         string;
   name:       string;
   phone:      string;
-  targetExam: ExamCategory;
+  targetExam: ExamCategoryItem;
   source:     string;
   status:     LeadStatus;
   notes:      string | null;
@@ -16,12 +16,12 @@ export interface LeadItem {
 }
 
 export interface CreateLeadPayload {
-  name:       string;
-  phone:      string;
-  targetExam: ExamCategory;
-  source:     string;
-  notes?:     string;
-  centerId?:  string; // only needed when the session has no center pinned
+  name:         string;
+  phone:        string;
+  targetExamId: string;
+  source:       string;
+  notes?:       string;
+  centerId?:    string; // only needed when the session has no center pinned
 }
 
 export type CreateLeadResponse =

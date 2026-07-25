@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
   Platform, StatusBar, TextInput, TouchableOpacity, ActivityIndicator,
@@ -13,25 +13,25 @@ import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
 import { createLead, type LeadItem } from "../../api/leads";
-import type { ExamCategory } from "../../api/courses";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddLead">;
 
-const EXAM_OPTIONS: { key: ExamCategory; label: string; color: string; icon: string }[] = [
-  { key: "ssc",        label: "SSC",        color: C.primary, icon: "document-text-outline" },
-  { key: "banking",    label: "Banking",    color: C.blue,    icon: "card-outline"           },
-  { key: "railway",    label: "Railway",    color: C.accent,  icon: "train-outline"          },
-  { key: "foundation", label: "Foundation", color: C.purple,  icon: "school-outline"         },
-];
+const CATEGORY_ICON: Record<string, string> = {
+  ssc:        "document-text-outline",
+  banking:    "card-outline",
+  railway:    "train-outline",
+  foundation: "school-outline",
+};
 
 const SOURCE_CHIPS = ["Walk-in", "Referral", "Phone Call", "Social Media"];
 
 export function AddLeadScreen({ navigation }: Props) {
   const [name, setName]           = useState("");
   const [phone, setPhone]         = useState("");
-  const [targetExam, setTargetExam] = useState<ExamCategory | null>(null);
+  const [targetExam, setTargetExam] = useState<string | null>(null);
   const [source, setSource]       = useState("");
   const [notes, setNotes]         = useState("");
 
@@ -39,6 +39,18 @@ export function AddLeadScreen({ navigation }: Props) {
   const [loading, setLoading]     = useState(false);
   const [created, setCreated]     = useState<LeadItem | null>(null);
   const [centerPickerVisible, setCenterPickerVisible] = useState(false);
+  const [categories, setCategories] = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  const EXAM_OPTIONS = categories.map((c) => ({
+    key:   c.id,
+    label: c.label,
+    color: c.color,
+    icon:  CATEGORY_ICON[c.key] ?? "school-outline",
+  }));
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
@@ -59,7 +71,7 @@ export function AddLeadScreen({ navigation }: Props) {
         ...(overrideCenterId ? { centerId: overrideCenterId } : {}),
         name: name.trim(),
         phone: phone.trim(),
-        targetExam,
+        targetExamId: targetExam,
         source: source.trim(),
         notes: notes.trim() || undefined,
       });

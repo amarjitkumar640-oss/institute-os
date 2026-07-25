@@ -18,7 +18,7 @@ export const subjectsRouter = Router();
 function serialize(s: {
   id: string;
   name: string;
-  examCategory: string | null;
+  examCategory: { id: string; key: string; label: string; color: string } | null;
   _count?: { facultySubjects: number };
 }) {
   return {
@@ -33,20 +33,20 @@ function serialize(s: {
 
 subjectsRouter.get("/", requireAuth, async (req, res) => {
   const query = subjectQuerySchema.safeParse(req.query);
-  const { examCategory, search } = query.success
+  const { examCategoryId, search } = query.success
     ? query.data
-    : { examCategory: undefined, search: undefined };
+    : { examCategoryId: undefined, search: undefined };
 
   const where: Record<string, unknown> = {};
-  if (examCategory) where.examCategory = examCategory;
+  if (examCategoryId) where.examCategoryId = examCategoryId;
   if (search?.trim()) {
     where.name = { contains: search.trim(), mode: "insensitive" };
   }
 
   const subjects = await prisma.subject.findMany({
     where,
-    orderBy: [{ examCategory: "asc" }, { name: "asc" }],
-    include: { _count: { select: { facultySubjects: true } } },
+    orderBy: [{ examCategory: { sortOrder: "asc" } }, { name: "asc" }],
+    include: { examCategory: true, _count: { select: { facultySubjects: true } } },
   });
 
   res.json(subjects.map(serialize));
@@ -57,7 +57,7 @@ subjectsRouter.get("/", requireAuth, async (req, res) => {
 subjectsRouter.get("/:id", requireAuth, async (req, res) => {
   const subject = await prisma.subject.findUnique({
     where: { id: req.params.id },
-    include: { _count: { select: { facultySubjects: true } } },
+    include: { examCategory: true, _count: { select: { facultySubjects: true } } },
   });
   if (!subject) return res.status(404).json({ error: "Subject not found" });
   res.json(serialize(subject));
@@ -71,7 +71,7 @@ subjectsRouter.post(
   requireRole("admin"),
   validateBody(createSubjectSchema),
   async (req, res) => {
-    const { name, examCategory } = req.body as CreateSubjectInput;
+    const { name, examCategoryId } = req.body as CreateSubjectInput;
 
     const existing = await prisma.subject.findUnique({ where: { name } });
     if (existing) {
@@ -81,8 +81,8 @@ subjectsRouter.post(
     }
 
     const subject = await prisma.subject.create({
-      data: { name, examCategory: examCategory ?? null },
-      include: { _count: { select: { facultySubjects: true } } },
+      data: { name, examCategoryId: examCategoryId ?? null },
+      include: { examCategory: true, _count: { select: { facultySubjects: true } } },
     });
 
     res.status(201).json(serialize(subject));
@@ -100,7 +100,7 @@ subjectsRouter.patch(
     const subject = await prisma.subject.findUnique({ where: { id: req.params.id } });
     if (!subject) return res.status(404).json({ notFound: true });
 
-    const { name, examCategory } = req.body as UpdateSubjectInput;
+    const { name, examCategoryId } = req.body as UpdateSubjectInput;
 
     if (name && name !== subject.name) {
       const conflict = await prisma.subject.findUnique({ where: { name } });
@@ -115,9 +115,9 @@ subjectsRouter.patch(
       where: { id: req.params.id },
       data: {
         ...(name !== undefined ? { name } : {}),
-        ...(examCategory !== undefined ? { examCategory: examCategory ?? null } : {}),
+        ...(examCategoryId !== undefined ? { examCategoryId: examCategoryId ?? null } : {}),
       },
-      include: { _count: { select: { facultySubjects: true } } },
+      include: { examCategory: true, _count: { select: { facultySubjects: true } } },
     });
 
     res.json(serialize(updated));

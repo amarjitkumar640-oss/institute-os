@@ -15,23 +15,17 @@ import type { RootStackParamList } from "../../navigation/types";
 import { ms, fs } from "../../utils/responsive";
 import {
   listFaculty, deleteFaculty,
-  type FacultyItem, type ExamCategory,
+  type FacultyItem,
 } from "../../api/faculty";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { C } from "../../theme";
-import { CAT_COLOR } from "../../constants/courseMeta";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
 type Nav  = NativeStackNavigationProp<RootStackParamList>;
 type Props = NativeStackScreenProps<RootStackParamList, "FacultyList">;
 
-
-
-type Filter = "All" | "SSC" | "Banking" | "Railway";
-const FILTERS: Filter[] = ["All", "SSC", "Banking", "Railway"];
-const FILTER_TO_CAT: Record<Filter, ExamCategory | undefined> = {
-  All: undefined, SSC: "ssc", Banking: "banking", Railway: "railway",
-};
+type Filter = "All" | string; // "All" or an ExamCategoryItem id
 
 // Palette cycles through 6 distinct colors — adjacent cards always differ
 const CARD_PALETTE = [
@@ -118,7 +112,7 @@ function FacultyCard({
         {faculty.subjects.length > 0 && (
           <View style={cs.subRow}>
             {visibleSubs.map((s) => {
-              const sc = s.examCategory ? CAT_COLOR[s.examCategory] : C.orange;
+              const sc = s.examCategory?.color ?? C.orange;
               return (
                 <View key={s.id} style={[cs.subChip, { backgroundColor: sc + "14", borderColor: sc + "35" }]}>
                   <View style={[cs.subDot, { backgroundColor: sc }]} />
@@ -206,15 +200,20 @@ export function FacultyListScreen({ navigation }: Props) {
   const [search, setSearch]           = useState("");
   const [filter, setFilter]           = useState<Filter>("All");
   const [deletingId, setDeletingId]   = useState<string | null>(null);
+  const [categories, setCategories]   = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
 
   const fetchFaculty = useCallback(async (q: string, f: Filter, silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
     try {
       const result = await listFaculty({
-        search:       q || undefined,
-        examCategory: FILTER_TO_CAT[f],
-        limit:        100,
+        search:         q || undefined,
+        examCategoryId: f === "All" ? undefined : f,
+        limit:          100,
       });
       setFaculty(result.data);
       setTotal(result.total);
@@ -328,9 +327,12 @@ export function FacultyListScreen({ navigation }: Props) {
 
       {/* Filter chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={cs.filterScroll} contentContainerStyle={cs.filterRow}>
-        {FILTERS.map((f) => (
-          <TouchableOpacity key={f} style={[cs.chip, filter === f && cs.chipOn]} onPress={() => setFilter(f)}>
-            <Text style={[cs.chipT, filter === f && cs.chipTOn]}>{f}</Text>
+        <TouchableOpacity style={[cs.chip, filter === "All" && cs.chipOn]} onPress={() => setFilter("All")}>
+          <Text style={[cs.chipT, filter === "All" && cs.chipTOn]}>All</Text>
+        </TouchableOpacity>
+        {categories.map((cat) => (
+          <TouchableOpacity key={cat.id} style={[cs.chip, filter === cat.id && cs.chipOn]} onPress={() => setFilter(cat.id)}>
+            <Text style={[cs.chipT, filter === cat.id && cs.chipTOn]}>{cat.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>

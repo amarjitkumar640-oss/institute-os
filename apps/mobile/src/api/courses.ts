@@ -1,11 +1,10 @@
 import { apiClient } from "./client";
 import { AxiosError } from "axios";
-
-export type ExamCategory = "ssc" | "banking" | "railway" | "foundation";
+import type { ExamCategoryItem } from "./examCategories";
 
 export interface CreateCoursePayload {
   name: string;
-  examCategory: ExamCategory;
+  examCategoryId?: string | null;
   durationMonths: number;
   defaultFee: number;
 }
@@ -13,7 +12,7 @@ export interface CreateCoursePayload {
 export interface CourseItem {
   id: string;
   name: string;
-  examCategory: ExamCategory;
+  examCategory: ExamCategoryItem | null;
   durationMonths: number;
   defaultFee: number;
   batchCount: number;
@@ -55,7 +54,7 @@ export async function createCourse(
 }
 
 export async function listCourses(params?: {
-  examCategory?: ExamCategory;
+  examCategoryId?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -74,7 +73,7 @@ export async function listCourses(params?: {
 
 export interface UpdateCoursePayload {
   name?: string;
-  examCategory?: ExamCategory;
+  examCategoryId?: string | null;
   durationMonths?: number;
   defaultFee?: number;
 }

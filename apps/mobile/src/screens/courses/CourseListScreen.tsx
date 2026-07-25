@@ -13,7 +13,8 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import type { RootStackParamList } from "../../navigation/types";
 import { ms, fs } from "../../utils/responsive";
-import { listCourses, deleteCourse, type CourseItem, type ExamCategory } from "../../api/courses";
+import { listCourses, deleteCourse, type CourseItem } from "../../api/courses";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { C } from "../../theme";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
@@ -21,23 +22,18 @@ import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Props = NativeStackScreenProps<RootStackParamList, "CourseList">;
 
-const CATEGORY_META: Record<ExamCategory, { label: string; code: string; color: string }> = {
-  ssc:        { label: "SSC",        code: "SSC",  color: C.primary },
-  banking:    { label: "Banking",    code: "BANK", color: C.blue },
-  railway:    { label: "Railway",    code: "RAIL", color: C.accent },
-  foundation: { label: "Foundation", code: "FOUND", color: "#7B3FA0" },
-};
+const GENERAL_META = { label: "General", code: "ALL", color: "#8A7F82" };
 
-type Filter = "All" | "SSC" | "Banking" | "Railway" | "Foundation";
-const FILTERS: Filter[] = ["All", "SSC", "Banking", "Railway", "Foundation"];
+function courseMeta(course: CourseItem): { label: string; code: string; color: string } {
+  if (!course.examCategory) return GENERAL_META;
+  return {
+    label: course.examCategory.label,
+    code:  course.examCategory.key.slice(0, 4).toUpperCase(),
+    color: course.examCategory.color,
+  };
+}
 
-const FILTER_TO_CATEGORY: Record<Filter, ExamCategory | undefined> = {
-  All:        undefined,
-  SSC:        "ssc",
-  Banking:    "banking",
-  Railway:    "railway",
-  Foundation: "foundation",
-};
+type Filter = "All" | string; // "All" or an ExamCategoryItem id
 
 // ─── Course Card ─────────────────────────────────────────────────────────────
 
@@ -55,7 +51,7 @@ function CourseCard({
   onFeeStructure: () => void;
 }) {
   const { showAlert } = useAlert();
-  const meta = CATEGORY_META[course.examCategory];
+  const meta = courseMeta(course);
   const isActive = course.activeBatches > 0;
   const locked = course.batchCount > 0;
 
@@ -203,6 +199,11 @@ export function CourseListScreen({ navigation }: Props) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
 
   const fetchCourses = useCallback(async (q: string, f: Filter, silent = false) => {
     if (!silent) setLoading(true);
@@ -210,7 +211,7 @@ export function CourseListScreen({ navigation }: Props) {
     try {
       const result = await listCourses({
         search: q || undefined,
-        examCategory: FILTER_TO_CATEGORY[f],
+        examCategoryId: f === "All" ? undefined : f,
         limit: 100,
       });
       setCourses(result.data);
@@ -318,9 +319,12 @@ export function CourseListScreen({ navigation }: Props) {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={cs.filterScroll} contentContainerStyle={cs.filterRow}>
-        {FILTERS.map((f) => (
-          <TouchableOpacity key={f} style={[cs.chip, filter === f && cs.chipOn]} onPress={() => setFilter(f)}>
-            <Text style={[cs.chipT, filter === f && cs.chipTOn]}>{f}</Text>
+        <TouchableOpacity style={[cs.chip, filter === "All" && cs.chipOn]} onPress={() => setFilter("All")}>
+          <Text style={[cs.chipT, filter === "All" && cs.chipTOn]}>All</Text>
+        </TouchableOpacity>
+        {categories.map((cat) => (
+          <TouchableOpacity key={cat.id} style={[cs.chip, filter === cat.id && cs.chipOn]} onPress={() => setFilter(cat.id)}>
+            <Text style={[cs.chipT, filter === cat.id && cs.chipTOn]}>{cat.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>

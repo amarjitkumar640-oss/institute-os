@@ -1,12 +1,11 @@
 import { apiClient } from "./client";
 import { AxiosError } from "axios";
-
-export type ExamCategory = "ssc" | "banking" | "railway" | "foundation";
+import type { ExamCategoryItem } from "./examCategories";
 
 export interface FacultySubject {
   id: string;
   name: string;
-  examCategory: ExamCategory | null;
+  examCategory: ExamCategoryItem | null;
 }
 
 export interface FacultyItem {
@@ -48,7 +47,7 @@ export interface UpdateFacultyPayload {
 
 export async function listFaculty(params?: {
   search?: string;
-  examCategory?: ExamCategory;
+  examCategoryId?: string;
   isActive?: boolean;
   page?: number;
   limit?: number;

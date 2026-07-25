@@ -355,9 +355,6 @@ const qr = StyleSheet.create({
 
 // ── Batch picker ──────────────────────────────────────────────────────────────
 
-const CAT_COLOR: Record<string, string> = { ssc: C.primary, banking: C.blue, railway: C.accent, foundation: C.purple };
-const CAT_LABEL: Record<string, string> = { ssc: "SSC",    banking: "Banking", railway: "Railway",  foundation: "Foundation" };
-
 function monthsToDurationPref(months: number): DurationPref {
   if (months <= 3) return "3months";
   if (months <= 6) return "6months";
@@ -453,8 +450,8 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
           ) : (
             <View style={bpm.list}>
               {filtered.map((b) => {
-                const color = CAT_COLOR[b.course.examCategory] ?? C.muted;
-                const label = CAT_LABEL[b.course.examCategory] ?? b.course.examCategory;
+                const color = b.course.examCategory?.color ?? C.muted;
+                const label = b.course.examCategory?.label ?? "General";
                 const sel   = selectedId === b.id;
                 return (
                   <TouchableOpacity
@@ -708,7 +705,7 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
 
   const filtered = courses.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (CAT_LABEL[c.examCategory] ?? "").toLowerCase().includes(search.toLowerCase())
+    (c.examCategory?.label ?? "General").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -770,8 +767,8 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
           ) : (
             <View style={cp.grid}>
               {filtered.map((course) => {
-                const color = CAT_COLOR[course.examCategory] ?? C.muted;
-                const label = CAT_LABEL[course.examCategory] ?? course.examCategory;
+                const color = course.examCategory?.color ?? C.muted;
+                const label = course.examCategory?.label ?? "General";
                 const sel   = selectedId === course.id;
                 return (
                   <TouchableOpacity
@@ -1478,7 +1475,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
                 </>
               ) : selectedCourseName ? (
                 <>
-                  <View style={[s.courseSelDot, { backgroundColor: CAT_COLOR[courses.find(c => c.id === selectedCourseId)?.examCategory ?? ""] ?? "#8B1E3F" }]} />
+                  <View style={[s.courseSelDot, { backgroundColor: courses.find(c => c.id === selectedCourseId)?.examCategory?.color ?? "#8B1E3F" }]} />
                   <Text style={s.courseSelValue} numberOfLines={1}>{selectedCourseName}</Text>
                   <Ionicons name="chevron-forward" size={ms(16)} color="#8A7F82" />
                 </>
@@ -1631,7 +1628,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
               </>
             ) : selectedBatch ? (
               <>
-                <View style={[s.courseSelDot, { backgroundColor: CAT_COLOR[selectedBatch.course.examCategory] ?? C.primary }]} />
+                <View style={[s.courseSelDot, { backgroundColor: selectedBatch.course.examCategory?.color ?? C.primary }]} />
                 <Text style={s.courseSelValue} numberOfLines={1}>{selectedBatch.name}</Text>
                 <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
               </>
@@ -1766,7 +1763,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         onSelect={(course) => {
           setSelectedCourseId(course.id);
           setSelectedCourseName(course.name);
-          setCoursePreference(course.examCategory as CoursePreference);
+          setCoursePreference((course.examCategory?.key as CoursePreference) ?? null);
           setDurationPreference(monthsToDurationPref(course.durationMonths));
           setErrors((p) => ({ ...p, coursePreference: "", durationPreference: "" }));
           setCoursePickerOpen(false);

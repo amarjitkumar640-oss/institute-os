@@ -18,7 +18,7 @@ import { listStudentEnrollments, enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { useAuth } from "../../context/AuthContext";
 import { C } from "../../theme";
-import { COURSE_META, EXAM_COLOR } from "../../constants/courseMeta";
+import { COURSE_META } from "../../constants/courseMeta";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StudentList">;
@@ -141,7 +141,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
                 </View>
               }
               renderItem={({ item: b }) => {
-                const color     = EXAM_COLOR[b.course.examCategory] ?? "#8A7F82";
+                const color     = b.course.examCategory?.color ?? "#8A7F82";
                 const sm        = STATUS_META[b.status] ?? { label: b.status, color: "#8A7F82" };
                 const enrolled  = enrolledBatchIds.has(b.id);
                 const full      = isFull(b);

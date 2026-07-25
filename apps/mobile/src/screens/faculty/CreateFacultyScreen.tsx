@@ -15,6 +15,7 @@ import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
 import { createFaculty } from "../../api/faculty";
 import { listSubjects, type SubjectItem } from "../../api/subjects";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
 
@@ -97,27 +98,24 @@ function validate(form: FormState, selectedIds: Set<string>): FormErrors {
 
 // ─── Subject Picker ───────────────────────────────────────────────────────────
 
-const CAT_COLOR: Record<string, string> = {
-  ssc: "#8B1E3F", banking: "#2563A8", railway: "#2CA6A4",
-};
-const CAT_LABEL: Record<string, string> = {
-  shared: "Shared (All Exams)", ssc: "SSC", banking: "Banking", railway: "Railway",
-};
-
 function SubjectPicker({
-  subjects, loading, selectedIds, onToggle,
+  subjects, categories, loading, selectedIds, onToggle,
 }: {
   subjects: SubjectItem[];
+  categories: ExamCategoryItem[];
   loading: boolean;
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
 }) {
-  const grouped = useMemo(() => ({
-    shared:  subjects.filter((s) => s.examCategory === null),
-    ssc:     subjects.filter((s) => s.examCategory === "ssc"),
-    banking: subjects.filter((s) => s.examCategory === "banking"),
-    railway: subjects.filter((s) => s.examCategory === "railway"),
-  }), [subjects]);
+  const groups = useMemo(() => [
+    { key: "shared", label: "Shared (All Exams)", color: "#E8752C", items: subjects.filter((s) => s.examCategory === null) },
+    ...categories.map((c) => ({
+      key:   c.id,
+      label: c.label,
+      color: c.color,
+      items: subjects.filter((s) => s.examCategory?.id === c.id),
+    })),
+  ], [subjects, categories]);
 
   if (loading) {
     return (
@@ -128,12 +126,12 @@ function SubjectPicker({
     );
   }
 
-  function renderGroup(key: string, items: SubjectItem[], color: string) {
+  function renderGroup(key: string, label: string, items: SubjectItem[], color: string) {
     if (items.length === 0) return null;
     return (
       <View key={key} style={sp.group}>
         <View style={[sp.groupLabel, { borderLeftColor: color }]}>
-          <Text style={[sp.groupLabelT, { color }]}>{CAT_LABEL[key]}</Text>
+          <Text style={[sp.groupLabelT, { color }]}>{label}</Text>
         </View>
         <View style={sp.chipRow}>
           {items.map((s) => {
@@ -159,10 +157,7 @@ function SubjectPicker({
 
   return (
     <View style={sp.wrap}>
-      {renderGroup("shared",  grouped.shared,  "#E8752C")}
-      {renderGroup("ssc",     grouped.ssc,     "#8B1E3F")}
-      {renderGroup("banking", grouped.banking, "#2563A8")}
-      {renderGroup("railway", grouped.railway, "#2CA6A4")}
+      {groups.map((g) => renderGroup(g.key, g.label, g.items, g.color))}
     </View>
   );
 }
@@ -193,6 +188,11 @@ export function CreateFacultyScreen({ navigation }: Props) {
   const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
   const [centerPickerVisible, setCenterPickerVisible] = useState(false);
+  const [categories, setCategories]     = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
 
   const phoneRef  = useRef<TextInput>(null);
   const emailRef  = useRef<TextInput>(null);
@@ -342,6 +342,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
             <Text style={s.subjectHint}>Select subjects this faculty member is qualified to teach.</Text>
             <SubjectPicker
               subjects={subjects}
+              categories={categories}
               loading={subjectsLoading}
               selectedIds={selectedIds}
               onToggle={toggleSubject}

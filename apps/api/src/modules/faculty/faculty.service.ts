@@ -8,7 +8,9 @@ type FacultyQuery = z.infer<typeof facultyQuerySchema>;
 
 // ─── Shape helpers ────────────────────────────────────────────────────────────
 
-function serializeSubject(s: { id: string; name: string; examCategory: string | null }) {
+type SubjectExamCategory = { id: string; key: string; label: string; color: string } | null;
+
+function serializeSubject(s: { id: string; name: string; examCategory: SubjectExamCategory }) {
   return { id: s.id, name: s.name, examCategory: s.examCategory };
 }
 
@@ -17,7 +19,7 @@ function serializeFaculty<
     createdAt: Date;
     updatedAt: Date;
     joiningDate: Date;
-    teachingSubjects: Array<{ subject: { id: string; name: string; examCategory: string | null } }>;
+    teachingSubjects: Array<{ subject: { id: string; name: string; examCategory: SubjectExamCategory } }>;
   }
 >(f: T) {
   const { teachingSubjects, ...rest } = f;
@@ -38,7 +40,7 @@ async function nextEmployeeCode(): Promise<string> {
 // ─── List ─────────────────────────────────────────────────────────────────────
 
 export async function listFaculty(query: FacultyQuery, centerId?: string | null) {
-  const { search, examCategory, isActive, page, limit } = query;
+  const { search, examCategoryId, isActive, page, limit } = query;
 
   const where: Prisma.FacultyWhereInput = {};
   if (centerId) where.centerId = centerId;
@@ -56,13 +58,13 @@ export async function listFaculty(query: FacultyQuery, centerId?: string | null)
   }
 
   // Filter by exam category — include faculty who teach subjects of that category OR shared (null) subjects
-  if (examCategory) {
+  if (examCategoryId) {
     where.teachingSubjects = {
       some: {
         subject: {
           OR: [
-            { examCategory: examCategory },
-            { examCategory: null },
+            { examCategoryId: examCategoryId },
+            { examCategoryId: null },
           ],
         },
       },

@@ -3,9 +3,18 @@ import { resetDb } from "./setup";
 import { createEnrollment, BatchFullError } from "../modules/enrollments/enrollments.service";
 import { convertLead } from "../modules/leads/leads.service";
 
+async function ensureSscCategory() {
+  return prisma.examCategory.upsert({
+    where:  { key: "ssc" },
+    update: {},
+    create: { key: "ssc", label: "SSC" },
+  });
+}
+
 async function makeCourseAndBatch(capacity: number) {
+  const examCategory = await ensureSscCategory();
   const course = await prisma.course.create({
-    data: { name: "SSC CGL Foundation", examCategory: "ssc", durationMonths: 6, defaultFee: 10000 },
+    data: { name: "SSC CGL Foundation", examCategoryId: examCategory.id, durationMonths: 6, defaultFee: 10000 },
   });
   return prisma.batch.create({
     data: {
@@ -58,8 +67,9 @@ describe("lead conversion", () => {
 
   it("creates exactly one student + one enrollment and marks the lead converted", async () => {
     const batch = await makeCourseAndBatch(10);
+    const examCategory = await ensureSscCategory();
     const lead = await prisma.lead.create({
-      data: { name: "Lead Name", phone: "9", targetExam: "ssc", source: "walk-in" },
+      data: { name: "Lead Name", phone: "9", targetExamId: examCategory.id, source: "walk-in" },
     });
 
     const result = await convertLead(prisma, lead.id, {

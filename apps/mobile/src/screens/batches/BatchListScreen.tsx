@@ -12,8 +12,9 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import type { RootStackParamList } from "../../navigation/types";
-import { listBatches, deleteBatch, type BatchItem, type BatchStatus, type ExamCategory } from "../../api/batches";
+import { listBatches, deleteBatch, type BatchItem, type BatchStatus } from "../../api/batches";
 import { listStudents, type StudentItem } from "../../api/students";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { useAuth } from "../../context/AuthContext";
@@ -23,12 +24,10 @@ type Props = NativeStackScreenProps<RootStackParamList, "BatchList">;
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
-const EXAM_META: Record<ExamCategory, { label: string; color: string; bg: string }> = {
-  ssc:        { label: "SSC",        color: "#2563A8", bg: "#EFF6FF" },
-  banking:    { label: "Banking",    color: "#1B9C63", bg: "#F0FDF8" },
-  railway:    { label: "Railway",    color: "#E8752C", bg: "#FFF7ED" },
-  foundation: { label: "Foundation", color: "#7B3FA0", bg: "#F5F0FF" },
-};
+function examMeta(c: ExamCategoryItem | null): { label: string; color: string; bg: string } {
+  if (!c) return { label: "General", color: "#8A7F82", bg: "#F4F4F4" };
+  return { label: c.label, color: c.color, bg: c.color + "18" };
+}
 
 const STATUS_META: Record<BatchStatus, { label: string; color: string; bg: string; dot: string }> = {
   running:   { label: "Running",   color: "#1B9C63", bg: "#E7F7EF", dot: "#1B9C63" },
@@ -43,18 +42,13 @@ const COURSE_LABEL: Record<string, string> = {
   ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation", others: "Others",
 };
 
-type FilterKey = "All" | BatchStatus | ExamCategory;
+type FilterKey = "All" | BatchStatus | string; // status key or an ExamCategoryItem id
 
 const STATUS_FILTERS: { key: FilterKey; label: string }[] = [
   { key: "All",       label: "All"       },
   { key: "running",   label: "Running"   },
   { key: "upcoming",  label: "Upcoming"  },
   { key: "completed", label: "Completed" },
-];
-const EXAM_FILTERS: { key: FilterKey; label: string }[] = [
-  { key: "ssc",     label: "SSC"     },
-  { key: "banking", label: "Banking" },
-  { key: "railway", label: "Railway" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -309,7 +303,7 @@ function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStud
   onAddStudent: () => void;
   isAllCenters?: boolean;
 }) {
-  const exam   = EXAM_META[batch.course.examCategory];
+  const exam   = examMeta(batch.course.examCategory);
   const status = STATUS_META[batch.status];
   const fill   = capacityFill(batch.enrolledCount, batch.capacity);
   const isFull = batch.enrolledCount >= batch.capacity;
@@ -451,6 +445,16 @@ export function BatchListScreen({ route, navigation }: Props) {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError]   = useState("");
   const [addStudentTarget, setAddStudentTarget] = useState<BatchItem | null>(null);
+  const [categories, setCategories] = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  const EXAM_FILTERS = useMemo(
+    () => categories.map((c) => ({ key: c.id as FilterKey, label: c.label })),
+    [categories]
+  );
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -498,11 +502,11 @@ export function BatchListScreen({ route, navigation }: Props) {
     const STATUS_KEYS: string[] = ["running", "upcoming", "completed"];
     return batches.filter((b) => {
       const q = search.toLowerCase();
-      const matchSearch = !q || b.name.toLowerCase().includes(q) || b.course.name.toLowerCase().includes(q) || b.course.examCategory.includes(q);
+      const matchSearch = !q || b.name.toLowerCase().includes(q) || b.course.name.toLowerCase().includes(q) || (b.course.examCategory?.label.toLowerCase().includes(q) ?? false);
       if (!matchSearch) return false;
       if (filter === "All")             return true;
       if (STATUS_KEYS.includes(filter)) return b.status === filter;
-      return b.course.examCategory === filter;
+      return b.course.examCategory?.id === filter;
     });
   }, [batches, search, filter]);
 

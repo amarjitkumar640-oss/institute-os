@@ -9,7 +9,6 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import { listLeads, type LeadItem, type LeadStatus } from "../../api/leads";
-import { COURSE_META } from "../../constants/courseMeta";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 
@@ -30,7 +29,7 @@ function initials(name: string) {
 }
 
 function LeadCard({ lead }: { lead: LeadItem }) {
-  const exam = COURSE_META[lead.targetExam as keyof typeof COURSE_META] ?? { label: lead.targetExam, color: C.muted };
+  const exam = { label: lead.targetExam.label, color: lead.targetExam.color };
   const status = STATUS_META[lead.status] ?? { label: lead.status, color: C.muted };
 
   return (

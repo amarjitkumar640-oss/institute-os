@@ -18,12 +18,6 @@ type Props = NativeStackScreenProps<RootStackParamList, "EditBatch">;
 
 // ── Maps ──────────────────────────────────────────────────────────────────────
 
-const EXAM_COLOR: Record<string, string> = {
-  ssc: C.blue, banking: C.green, railway: C.orange, foundation: C.purple,
-};
-const EXAM_LABEL: Record<string, string> = {
-  ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation",
-};
 
 const STATUS_OPTIONS: { key: BatchStatus; label: string; color: string; icon: string }[] = [
   { key: "upcoming",  label: "Upcoming",  color: C.blue,    icon: "time-outline"           },
@@ -236,8 +230,8 @@ export function EditBatchScreen({ navigation, route }: Props) {
   const cardSlide   = useRef(new Animated.Value(ms(40))).current;
   const checkScale  = useRef(new Animated.Value(0)).current;
 
-  const examColor = EXAM_COLOR[batch.course.examCategory] ?? C.muted;
-  const examLabel = EXAM_LABEL[batch.course.examCategory] ?? batch.course.examCategory.toUpperCase();
+  const examColor = batch.course.examCategory?.color ?? C.muted;
+  const examLabel = batch.course.examCategory?.label ?? "General";
 
   function validate(): boolean {
     const errs: Record<string, string> = {};

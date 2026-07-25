@@ -28,19 +28,6 @@ interface Props {
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
-// ── Category + day meta ───────────────────────────────────────────────────────
-
-const CAT_COLOR: Record<string, string> = {
-  ssc:        C.primary,
-  banking:    C.blue,
-  railway:    C.accent,
-  foundation: C.purple,
-};
-const CAT_LABEL: Record<string, string> = {
-  ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation",
-};
-
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function timeError(t: string): string | null {
@@ -74,12 +61,13 @@ function SubjectGrid({
     ? subjects.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
     : subjects;
 
-  const groups: Record<string, SubjectItem[]> = {};
+  const groups: Record<string, { label: string; color: string; items: SubjectItem[] }> = {};
   const general: SubjectItem[] = [];
   for (const s of filtered) {
-    if (s.examCategory && CAT_COLOR[s.examCategory]) {
-      if (!groups[s.examCategory]) groups[s.examCategory] = [];
-      groups[s.examCategory].push(s);
+    if (s.examCategory) {
+      const key = s.examCategory.id;
+      if (!groups[key]) groups[key] = { label: s.examCategory.label, color: s.examCategory.color, items: [] };
+      groups[key].items.push(s);
     } else {
       general.push(s);
     }
@@ -137,11 +125,12 @@ function SubjectGrid({
           </View>
         ) : (
           <>
-            {Object.entries(groups).map(([cat, items]) => {
-              const color = CAT_COLOR[cat] ?? C.primary;
-              const label = CAT_LABEL[cat]  ?? cat;
+            {Object.entries(groups).map(([catId, group]) => {
+              const color = group.color;
+              const label = group.label;
+              const items = group.items;
               return (
-                <View key={cat} style={sg.group}>
+                <View key={catId} style={sg.group}>
                   <View style={sg.groupHeader}>
                     <View style={[sg.groupDot, { backgroundColor: color }]} />
                     <Text style={[sg.groupLabel, { color }]}>{label}</Text>

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
   Platform, StatusBar, Animated, TouchableOpacity,
@@ -12,13 +12,14 @@ import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
-import { updateSubject, type ExamCategory, type SubjectItem } from "../../api/subjects";
+import { updateSubject, type SubjectItem } from "../../api/subjects";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs, sw } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditSubject">;
 
-type CategoryOption = { key: ExamCategory | null; label: string; sub: string; color: string; icon: string };
+type CategoryOption = { key: string | null; label: string; sub: string; color: string; icon: string };
 
 const CONTENT_H_PAD = ms(20);
 const SECTION_PAD   = ms(16);
@@ -27,16 +28,22 @@ const CAT_GAP       = ms(8);
 // measured — avoids a flash of zero-width cards.
 const CAT_CARD_W_FALLBACK = (sw - 2 * CONTENT_H_PAD - 2 * SECTION_PAD - CAT_GAP) / 2;
 
-const CATEGORIES: CategoryOption[] = [
-  { key: null,       label: "Shared",  sub: "Applies to all exam categories",   color: "#E8752C", icon: "grid-outline"          },
-  { key: "ssc",      label: "SSC",     sub: "Staff Selection Commission",        color: "#8B1E3F", icon: "document-text-outline" },
-  { key: "banking",  label: "Banking", sub: "IBPS, SBI, RBI & other bank exams", color: "#2563A8", icon: "card-outline"          },
-  { key: "railway",  label: "Railway", sub: "RRB & Railway Recruitment Board",   color: "#2CA6A4", icon: "train-outline"         },
-];
+const CATEGORY_ICON: Record<string, string> = {
+  ssc:        "document-text-outline",
+  banking:    "card-outline",
+  railway:    "train-outline",
+  foundation: "school-outline",
+};
+const CATEGORY_SUB: Record<string, string> = {
+  ssc:        "Staff Selection Commission",
+  banking:    "IBPS, SBI, RBI & other bank exams",
+  railway:    "RRB & Railway Recruitment Board",
+  foundation: "School-level foundation courses",
+};
 
 interface UpdatedSubject {
   name: string;
-  examCategory: ExamCategory | null;
+  examCategory: ExamCategoryItem | null;
   facultyCount: number;
 }
 
@@ -46,18 +53,35 @@ export function EditSubjectScreen({ navigation, route }: Props) {
 
   const [name, setName]           = useState(subject.name);
   const [nameError, setNameError] = useState<string | undefined>();
-  const [category, setCategory]   = useState<ExamCategory | null>(subject.examCategory);
+  const [category, setCategory]   = useState<string | null>(subject.examCategory?.id ?? null);
   const [submitError, setSubmitError] = useState<string | undefined>();
   const [loading, setLoading]     = useState(false);
   const [updated, setUpdated]     = useState<UpdatedSubject | null>(null);
   const [gridWidth, setGridWidth] = useState(0);
+  const [examCategories, setExamCategories] = useState<ExamCategoryItem[]>([]);
   const catCardW = gridWidth > 0 ? (gridWidth - CAT_GAP) / 2 : CAT_CARD_W_FALLBACK;
+
+  useEffect(() => {
+    listExamCategories().then(setExamCategories).catch(() => {});
+  }, []);
+
+  const CATEGORIES: CategoryOption[] = [
+    { key: null, label: "Shared", sub: "Applies to all exam categories", color: "#E8752C", icon: "grid-outline" },
+    ...examCategories.map((c) => ({
+      key:   c.id,
+      label: c.label,
+      sub:   CATEGORY_SUB[c.key] ?? `${c.label} exam category`,
+      color: c.color,
+      icon:  CATEGORY_ICON[c.key] ?? "school-outline",
+    })),
+  ];
 
   const checkScale  = useRef(new Animated.Value(0)).current;
   const cardSlide   = useRef(new Animated.Value(ms(60))).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
 
-  const isDirty = name.trim() !== subject.name || category !== subject.examCategory;
+  const initialCategoryId = subject.examCategory?.id ?? null;
+  const isDirty = name.trim() !== subject.name || category !== initialCategoryId;
 
   function validate(): boolean {
     if (!name.trim()) { setNameError("Subject name is required."); return false; }
@@ -81,8 +105,8 @@ export function EditSubjectScreen({ navigation, route }: Props) {
     setSubmitError(undefined);
     try {
       const result = await updateSubject(subject.id, {
-        name:         name.trim(),
-        examCategory: category,
+        name:           name.trim(),
+        examCategoryId: category,
       });
       if (result.ok) {
         showSuccess(result.subject);
@@ -106,9 +130,8 @@ export function EditSubjectScreen({ navigation, route }: Props) {
     }
   }
 
-  const activeCat = CATEGORIES.find((c) => c.key === category);
-  const catLabel  = activeCat?.label ?? "—";
-  const catColor  = activeCat?.color ?? "#8A7F82";
+  const catLabel = updated?.examCategory?.label ?? "Shared";
+  const catColor = updated?.examCategory?.color ?? "#E8752C";
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
@@ -191,7 +214,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
             {isDirty && !loading && (
               <PrimaryButton
                 label="Reset Changes"
-                onPress={() => { setName(subject.name); setCategory(subject.examCategory); setNameError(undefined); setSubmitError(undefined); }}
+                onPress={() => { setName(subject.name); setCategory(initialCategoryId); setNameError(undefined); setSubmitError(undefined); }}
                 variant="outline"
                 icon="refresh-outline"
               />

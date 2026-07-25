@@ -16,12 +16,6 @@ enum StaffRole {
   frontdesk
 }
 
-enum ExamCategory {
-  ssc
-  banking
-  railway
-  foundation
-}
 
 enum BatchStatus {
   upcoming
@@ -166,8 +160,9 @@ model Staff {
 
 model Subject {
   id           String        @id @default(uuid())
-  name         String        @unique
-  examCategory ExamCategory?
+  name           String        @unique
+  examCategoryId String?
+  examCategory   ExamCategory? @relation(fields: [examCategoryId], references: [id])
 
   facultySubjects FacultySubject[]
   classSlots      ClassSlot[]
@@ -209,11 +204,12 @@ model FacultySubject {
 }
 
 model Course {
-  id             String       @id @default(uuid())
+  id             String        @id @default(uuid())
   name           String
-  examCategory   ExamCategory
+  examCategoryId String?
+  examCategory   ExamCategory? @relation(fields: [examCategoryId], references: [id])
   durationMonths Int
-  defaultFee     Decimal      @db.Decimal(10, 2)
+  defaultFee     Decimal       @db.Decimal(10, 2)
 
   batches     Batch[]
   feeTemplate CourseFeeTemplate?
@@ -290,6 +286,21 @@ model DocumentType {
   @@map("document_types")
 }
 
+model ExamCategory {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  label     String
+  color     String   @default("#8B1E3F")
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+
+  subjects Subject[]
+  courses  Course[]
+  leads    Lead[]
+
+  @@map("exam_categories")
+}
+
 model StudentDocument {
   id             String       @id @default(uuid())
   studentId      String
@@ -322,7 +333,8 @@ model Lead {
   id                 String       @id @default(uuid())
   name               String
   phone              String
-  targetExam         ExamCategory
+  targetExamId       String
+  targetExam         ExamCategory @relation(fields: [targetExamId], references: [id])
   source             String
   status             LeadStatus   @default(new)
   assignedToId       String?

@@ -3,9 +3,6 @@ import { z } from "zod";
 export const staffRoleSchema = z.enum(["admin", "teacher", "frontdesk"]);
 export type StaffRole = z.infer<typeof staffRoleSchema>;
 
-export const examCategorySchema = z.enum(["ssc", "banking", "railway", "foundation"]);
-export type ExamCategory = z.infer<typeof examCategorySchema>;
-
 export const batchStatusSchema = z.enum(["upcoming", "running", "completed"]);
 export const enrollmentStatusSchema = z.enum(["active", "paused", "completed", "dropped"]);
 export const leadStatusSchema = z.enum(["new", "contacted", "visited", "converted", "lost"]);
@@ -18,24 +15,24 @@ export type LoginInput = z.infer<typeof loginSchema>;
 
 export const createSubjectSchema = z.object({
   name: z.string().min(1).max(120),
-  examCategory: examCategorySchema.nullable().optional(),
+  examCategoryId: z.string().uuid().nullable().optional(),
 });
 export type CreateSubjectInput = z.infer<typeof createSubjectSchema>;
 
 export const updateSubjectSchema = z.object({
   name: z.string().min(1).max(120).optional(),
-  examCategory: examCategorySchema.nullable().optional(),
+  examCategoryId: z.string().uuid().nullable().optional(),
 });
 export type UpdateSubjectInput = z.infer<typeof updateSubjectSchema>;
 
 export const subjectQuerySchema = z.object({
-  examCategory: examCategorySchema.optional(),
-  search:       z.string().max(100).optional(),
+  examCategoryId: z.string().uuid().optional(),
+  search:         z.string().max(100).optional(),
 });
 
 export const createCourseSchema = z.object({
   name: z.string().min(1).max(120),
-  examCategory: examCategorySchema,
+  examCategoryId: z.string().uuid().nullable().optional(),
   durationMonths: z.number().int().positive().max(60),
   defaultFee: z.number().nonnegative().max(10_000_000),
 });
@@ -45,10 +42,10 @@ export const updateCourseSchema = createCourseSchema.partial();
 export type UpdateCourseInput = z.infer<typeof updateCourseSchema>;
 
 export const courseQuerySchema = z.object({
-  examCategory: examCategorySchema.optional(),
-  search:       z.string().max(100).optional(),
-  page:         z.coerce.number().int().positive().default(1),
-  limit:        z.coerce.number().int().positive().max(100).default(20),
+  examCategoryId: z.string().uuid().optional(),
+  search:         z.string().max(100).optional(),
+  page:           z.coerce.number().int().positive().default(1),
+  limit:          z.coerce.number().int().positive().max(100).default(20),
 });
 
 export const createBatchSchema = z.object({
@@ -70,7 +67,7 @@ export const updateBatchSchema = z.object({
 export const createLeadSchema = z.object({
   name: z.string().min(1),
   phone: z.string().min(1),
-  targetExam: examCategorySchema,
+  targetExamId: z.string().uuid(),
   source: z.string().min(1),
   assignedTo: z.string().uuid().nullable().optional(),
   notes: z.string().optional(),
@@ -110,11 +107,11 @@ export const updateFacultySchema = z.object({
 export type UpdateFacultyInput = z.infer<typeof updateFacultySchema>;
 
 export const facultyQuerySchema = z.object({
-  search:      z.string().max(100).optional(),
-  examCategory: examCategorySchema.optional(),
-  isActive:    z.coerce.boolean().optional(),
-  page:        z.coerce.number().int().positive().default(1),
-  limit:       z.coerce.number().int().positive().max(100).default(20),
+  search:         z.string().max(100).optional(),
+  examCategoryId: z.string().uuid().optional(),
+  isActive:       z.coerce.boolean().optional(),
+  page:           z.coerce.number().int().positive().default(1),
+  limit:          z.coerce.number().int().positive().max(100).default(20),
 });
 
 export const createStudentSchema = z.object({
