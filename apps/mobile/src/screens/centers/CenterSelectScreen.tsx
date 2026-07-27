@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth, type CenterInfo } from "../../context/AuthContext";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, darken, lighten } from "../../context/ThemeContext";
 import { ROLE_META, type Role } from "../../constants/roleMeta";
 import { useAlert } from "../../context/AlertContext";
 
@@ -149,6 +150,7 @@ function AllCentersCard({
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export function CenterSelectScreen() {
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { staff, pendingCenters, selectCenter } = useAuth();
   const { showAlert } = useAlert();
@@ -189,7 +191,7 @@ export function CenterSelectScreen() {
 
       {/* ── Hero ── */}
       <LinearGradient
-        colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[s.hero, { paddingTop: insets.top + ms(24) }]}
@@ -208,7 +210,7 @@ export function CenterSelectScreen() {
 
           {/* Institute emblem — right side */}
           <View style={s.emblem}>
-            <Ionicons name="school" size={ms(28)} color={C.primary} />
+            <Ionicons name="school" size={ms(28)} color={colors.primary} />
           </View>
         </View>
 

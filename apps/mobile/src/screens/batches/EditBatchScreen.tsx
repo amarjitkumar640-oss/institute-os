@@ -13,6 +13,7 @@ import { FormField } from "../../components/ui/FormField";
 import { updateBatch, type BatchItem, type BatchStatus } from "../../api/batches";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditBatch">;
 
@@ -59,6 +60,8 @@ function DatePickerModal({ visible, value, minYear = 2020, maxYear = 2035, onCon
   onConfirm: (d: Date) => void;
   onClose: () => void;
 }) {
+  const colors = useThemeColors();
+  const dp = useThemedStyles(makeDpStyles);
   const now = value ?? new Date();
   const [day,   setDay]   = useState(now.getDate());
   const [month, setMonth] = useState(now.getMonth());
@@ -133,7 +136,7 @@ function DatePickerModal({ visible, value, minYear = 2020, maxYear = 2035, onCon
   );
 }
 
-const dp = StyleSheet.create({
+const makeDpStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
   title:       { fontSize: fs(16), fontWeight: "800", color: C.text, marginBottom: ms(8), textAlign: "center" },
@@ -142,14 +145,14 @@ const dp = StyleSheet.create({
   colLabel:    { fontSize: fs(10), fontWeight: "800", color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
   col:         { flex: 1 },
   item:        { alignItems: "center", paddingVertical: ms(10) },
-  itemActive:  { backgroundColor: C.primary + "12", borderRadius: ms(8) },
+  itemActive:  { backgroundColor: colors.primary + "12", borderRadius: ms(8) },
   itemT:       { fontSize: fs(15), color: C.muted, fontWeight: "600" },
-  itemActiveT: { color: C.primary, fontWeight: "800" },
-  highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 1.5, borderColor: C.primary + "30", backgroundColor: C.primary + "06" },
+  itemActiveT: { color: colors.primary, fontWeight: "800" },
+  highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 1.5, borderColor: colors.primary + "30", backgroundColor: colors.primary + "06" },
   btnRow:      { flexDirection: "row", gap: ms(10), marginTop: ms(20) },
   cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg },
   cancelT:     { fontSize: fs(14), fontWeight: "700", color: C.muted },
-  confirmBtn:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: C.primary },
+  confirmBtn:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: colors.primary },
   confirmT:    { fontSize: fs(14), fontWeight: "800", color: "#fff" },
 });
 
@@ -159,6 +162,7 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
   label: string; value: string; placeholder: string;
   onPress?: () => void; readOnly?: boolean; error?: string;
 }) {
+  const colors = useThemeColors();
   return (
     <View style={{ marginBottom: ms(14) }}>
       <Text style={f.label}>{label}</Text>
@@ -171,7 +175,7 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
         <Ionicons
           name={readOnly ? "lock-closed-outline" : "calendar-outline"}
           size={ms(16)}
-          color={readOnly ? C.placeholder : value ? C.primary : C.placeholder}
+          color={readOnly ? C.placeholder : value ? colors.primary : C.placeholder}
         />
         <Text style={[f.fieldT, !value && f.placeholder, readOnly && { color: C.muted }]} numberOfLines={1}>
           {value || placeholder}
@@ -210,6 +214,8 @@ const f = StyleSheet.create({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export function EditBatchScreen({ navigation, route }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const { batch } = route.params;
 
   const [name, setName]         = useState(batch.name);
@@ -230,8 +236,10 @@ export function EditBatchScreen({ navigation, route }: Props) {
   const cardSlide   = useRef(new Animated.Value(ms(40))).current;
   const checkScale  = useRef(new Animated.Value(0)).current;
 
-  const examColor = batch.course.examCategory?.color ?? C.muted;
-  const examLabel = batch.course.examCategory?.label ?? "General";
+  const examColor = batch.course.examCategories[0]?.color ?? C.muted;
+  const examLabel = batch.course.examCategories.length
+    ? batch.course.examCategories.map((c) => c.label).join(", ")
+    : "General";
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
@@ -450,7 +458,7 @@ export function EditBatchScreen({ navigation, route }: Props) {
 
               <Text style={s.successTitle}>Batch Updated!</Text>
               <View style={s.successNameRow}>
-                <Ionicons name="layers-outline" size={ms(13)} color={C.primary} />
+                <Ionicons name="layers-outline" size={ms(13)} color={colors.primary} />
                 <Text style={s.successName} numberOfLines={1}>{updated.name}</Text>
               </View>
               <Text style={s.successSub}>All changes saved successfully</Text>
@@ -461,8 +469,8 @@ export function EditBatchScreen({ navigation, route }: Props) {
                   { icon: "book-outline",        label: "Course",   value: updated.course.name, color: C.blue   },
                   { icon: "people-outline",       label: "Capacity", value: `${updated.capacity} seats`, color: C.green  },
                   { icon: "pulse-outline",        label: "Status",   value: STATUS_OPTIONS.find((o) => o.key === updated.status)?.label ?? updated.status, color: C.orange },
-                  { icon: "calendar-outline",     label: "Starts",   value: new Date(updated.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), color: C.primary },
-                  { icon: "flag-outline",         label: "Ends",     value: new Date(updated.endDate).toLocaleDateString("en-IN",   { day: "2-digit", month: "short", year: "numeric" }), color: C.primary },
+                  { icon: "calendar-outline",     label: "Starts",   value: new Date(updated.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), color: colors.primary },
+                  { icon: "flag-outline",         label: "Ends",     value: new Date(updated.endDate).toLocaleDateString("en-IN",   { day: "2-digit", month: "short", year: "numeric" }), color: colors.primary },
                 ].map((row, i, arr) => (
                   <View key={row.label} style={[s.summaryRow, i < arr.length - 1 && s.summaryRowBorder]}>
                     <View style={[s.summaryIcon, { backgroundColor: row.color + "18" }]}>
@@ -490,8 +498,8 @@ export function EditBatchScreen({ navigation, route }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: C.primary },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.primary },
   scroll: { flex: 1, backgroundColor: C.bg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), gap: ms(14) },
 
@@ -542,10 +550,10 @@ const s = StyleSheet.create({
     alignItems:      "center",
     justifyContent:  "center",
     gap:             ms(8),
-    backgroundColor: C.primary,
+    backgroundColor: colors.primary,
     borderRadius:    ms(16),
     paddingVertical: ms(16),
-    shadowColor:     C.primary,
+    shadowColor:     colors.primary,
     shadowOffset:    { width: 0, height: ms(4) },
     shadowOpacity:   0.35,
     shadowRadius:    ms(10),
@@ -568,11 +576,11 @@ const s = StyleSheet.create({
     elevation:       10,
   },
   checkWrap:   { marginBottom: ms(20) },
-  checkCircle: { width: ms(80), height: ms(80), borderRadius: ms(40), backgroundColor: C.primary, justifyContent: "center", alignItems: "center" },
+  checkCircle: { width: ms(80), height: ms(80), borderRadius: ms(40), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
 
   successTitle:   { fontSize: fs(22), fontWeight: "800", color: C.text, marginBottom: ms(8) },
-  successNameRow: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.primary + "10", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(6), marginBottom: ms(6) },
-  successName:    { fontSize: fs(13), fontWeight: "800", color: C.primary, flex: 1 },
+  successNameRow: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: colors.primary + "10", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(6), marginBottom: ms(6) },
+  successName:    { fontSize: fs(13), fontWeight: "800", color: colors.primary, flex: 1 },
   successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(20) },
 
   summaryGrid:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(14), marginBottom: ms(20), borderWidth: 1, borderColor: C.border, overflow: "hidden" },
@@ -582,6 +590,6 @@ const s = StyleSheet.create({
   summaryLabel:     { fontSize: fs(10), color: C.muted, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
   summaryValue:     { fontSize: fs(13), fontWeight: "700", color: C.text },
 
-  goBackBtn: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: C.primary, borderRadius: ms(14), paddingVertical: ms(14) },
+  goBackBtn: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14) },
   goBackT:   { fontSize: fs(14), fontWeight: "800", color: "#fff" },
 });

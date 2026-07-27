@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
-import { C } from "../../theme";
+import { useThemeColors } from "../../context/ThemeContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,12 +26,14 @@ export interface AlertConfig {
 }
 
 // ── Meta ──────────────────────────────────────────────────────────────────────
+// These are structural/semantic (error/warning/info/success), not brand
+// tokens — fixed app-wide regardless of tenant branding.
 
 const TYPE_META: Record<AlertType, { icon: string; color: string; bg: string }> = {
-  error:   { icon: "alert-circle",       color: C.red,    bg: "#FEF0F0" },
-  warning: { icon: "warning",            color: C.orange, bg: "#FFF8EE" },
-  info:    { icon: "information-circle", color: C.blue,   bg: "#EEF4FF" },
-  success: { icon: "checkmark-circle",   color: C.green,  bg: "#EAF7F1" },
+  error:   { icon: "alert-circle",       color: "#C0392B", bg: "#FEF0F0" },
+  warning: { icon: "warning",            color: "#E8752C", bg: "#FFF8EE" },
+  info:    { icon: "information-circle", color: "#2563A8", bg: "#EEF4FF" },
+  success: { icon: "checkmark-circle",   color: "#1B9C63", bg: "#EAF7F1" },
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ interface Props {
 }
 
 export function AppAlert({ visible, config, onClose }: Props) {
+  const colors = useThemeColors();
   const scale   = useRef(new Animated.Value(0.88)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -105,8 +108,8 @@ export function AppAlert({ visible, config, onClose }: Props) {
                       >
                         <Text style={[
                           s.multiRowT,
-                          isDanger  && { color: C.red },
-                          isCancel  && { color: C.muted, fontWeight: "500" },
+                          isDanger  && { color: "#C0392B" },
+                          isCancel  && { color: "#8A7F82", fontWeight: "500" },
                         ]}>
                           {btn.label}
                         </Text>
@@ -114,7 +117,7 @@ export function AppAlert({ visible, config, onClose }: Props) {
                           <Ionicons
                             name="chevron-forward"
                             size={ms(16)}
-                            color={isDanger ? C.red : C.muted}
+                            color={isDanger ? "#C0392B" : "#8A7F82"}
                           />
                         )}
                       </TouchableOpacity>
@@ -161,7 +164,7 @@ export function AppAlert({ visible, config, onClose }: Props) {
                         !isTwo && s.btnFull,
                         isCancel ? s.btnOutline
                           : isDanger ? s.btnDanger
-                          : s.btnPrimary,
+                          : { backgroundColor: colors.primary },
                       ]}
                       onPress={() => handlePress(btn)}
                       activeOpacity={0.78}
@@ -196,7 +199,7 @@ const s = StyleSheet.create({
   },
   card: {
     width:           "100%",
-    backgroundColor: C.card,
+    backgroundColor: "#FFFFFF",
     borderRadius:    ms(24),
     overflow:        "hidden",
     shadowColor:     "#1A0010",
@@ -222,14 +225,14 @@ const s = StyleSheet.create({
   title: {
     fontSize:      fs(17),
     fontWeight:    "800",
-    color:         C.text,
+    color:         "#2B1B1F",
     textAlign:     "center",
     paddingHorizontal: ms(24),
     marginBottom:  ms(8),
   },
   message: {
     fontSize:      fs(13.5),
-    color:         C.muted,
+    color:         "#8A7F82",
     textAlign:     "center",
     lineHeight:    fs(20),
     paddingHorizontal: ms(24),
@@ -253,11 +256,10 @@ const s = StyleSheet.create({
   },
   btnFull:    { width: "100%" },
   btnHalf:    { flex: 1 },
-  btnPrimary: { backgroundColor: C.primary },
-  btnDanger:  { backgroundColor: C.red },
-  btnOutline: { borderWidth: 1.5, borderColor: C.border, backgroundColor: "transparent" },
+  btnDanger:  { backgroundColor: "#C0392B" },
+  btnOutline: { borderWidth: 1.5, borderColor: "#EDE8E3", backgroundColor: "transparent" },
   btnT:       { fontSize: fs(14), fontWeight: "700", color: "#fff" },
-  btnOutlineT:{ color: C.text },
+  btnOutlineT:{ color: "#2B1B1F" },
 
   // Multi-action
   multiHeader: {
@@ -268,16 +270,16 @@ const s = StyleSheet.create({
   multiTitle: {
     fontSize:   fs(16),
     fontWeight: "800",
-    color:      C.text,
+    color:      "#2B1B1F",
     marginBottom: ms(4),
   },
   multiMsg: {
     fontSize:   fs(12.5),
-    color:      C.muted,
+    color:      "#8A7F82",
     lineHeight: fs(18),
   },
-  divider:       { height: 1, backgroundColor: C.border, marginHorizontal: ms(0) },
+  divider:       { height: 1, backgroundColor: "#EDE8E3", marginHorizontal: ms(0) },
   multiRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(20), paddingVertical: ms(16) },
   multiRowCancel:{ paddingVertical: ms(14), justifyContent: "center" },
-  multiRowT:     { fontSize: fs(14.5), fontWeight: "600", color: C.text },
+  multiRowT:     { fontSize: fs(14.5), fontWeight: "600", color: "#2B1B1F" },
 });

@@ -20,6 +20,7 @@ import {
 } from "../../api/subjects";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -28,11 +29,12 @@ type Props = NativeStackScreenProps<RootStackParamList, "SubjectList">;
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-function catColor(c: ExamCategoryItem | null): string {
-  return c?.color ?? "#E8752C";
+function catColor(cs: ExamCategoryItem[]): string {
+  return cs[0]?.color ?? "#E8752C";
 }
-function catLabel(c: ExamCategoryItem | null): string {
-  return c?.label ?? "Shared";
+function catLabel(cs: ExamCategoryItem[]): string {
+  if (cs.length === 0) return "Shared";
+  return cs.length === 1 ? cs[0].label : `${cs[0].label} +${cs.length - 1}`;
 }
 
 // ── Filter chips ──────────────────────────────────────────────────────────────
@@ -49,7 +51,7 @@ function SubjectCard({
   onDelete: () => void;
   deleting: boolean;
 }) {
-  const color  = catColor(subject.examCategory);
+  const color  = catColor(subject.examCategories);
   const locked = subject.facultyCount > 0;
 
   return (
@@ -64,7 +66,7 @@ function SubjectCard({
         <Text style={sc.name} numberOfLines={2}>{subject.name}</Text>
         <View style={sc.metaRow}>
           <View style={[sc.catDot, { backgroundColor: color }]} />
-          <Text style={[sc.catT, { color }]}>{catLabel(subject.examCategory)}</Text>
+          <Text style={[sc.catT, { color }]}>{catLabel(subject.examCategories)}</Text>
           {locked && (
             <>
               <Text style={sc.metaSep}>·</Text>
@@ -143,14 +145,15 @@ function SubjectEmpty({ search, filter, filterLabel }: { search: string; filter:
 // ── Banner stats ───────────────────────────────────────────────────────────────
 
 function Banner({ subjects }: { subjects: SubjectItem[] }) {
+  const colors = useThemeColors();
   const total   = subjects.length;
-  const shared  = subjects.filter((s) => s.examCategory === null).length;
-  const ssc     = subjects.filter((s) => s.examCategory?.key === "ssc").length;
-  const banking = subjects.filter((s) => s.examCategory?.key === "banking").length;
-  const railway = subjects.filter((s) => s.examCategory?.key === "railway").length;
+  const shared  = subjects.filter((s) => s.examCategories.length === 0).length;
+  const ssc     = subjects.filter((s) => s.examCategories.some((ec) => ec.key === "ssc")).length;
+  const banking = subjects.filter((s) => s.examCategories.some((ec) => ec.key === "banking")).length;
+  const railway = subjects.filter((s) => s.examCategories.some((ec) => ec.key === "railway")).length;
 
   return (
-    <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={bn.wrap}>
+    <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={bn.wrap}>
       <BannerStat label="Total" value={total} color="#FFD180" />
       <View style={bn.div} />
       <BannerStat label="Shared" value={shared} color="#FFB74D" />
@@ -184,6 +187,8 @@ const bn = StyleSheet.create({
 // ── Screen ─────────────────────────────────────────────────────────────────────
 
 export function SubjectListScreen(_: Props) {
+  const colors = useThemeColors();
+  const ls = useThemedStyles(makeLsStyles);
   const nav = useNavigation<Nav>();
   const { showAlert, showConfirm } = useAlert();
 
@@ -201,10 +206,10 @@ export function SubjectListScreen(_: Props) {
   }, []);
 
   const FILTERS = useMemo(() => [
-    { key: "all" as Filter,    label: "All",    color: C.primary },
+    { key: "all" as Filter,    label: "All",    color: colors.primary },
     { key: "shared" as Filter, label: "Shared", color: "#E8752C" },
     ...categories.map((c) => ({ key: c.id as Filter, label: c.label, color: c.color })),
-  ], [categories]);
+  ], [categories, colors.primary]);
 
   const isFirstFocus = useRef(true);
 
@@ -263,8 +268,8 @@ export function SubjectListScreen(_: Props) {
   const visible = subjects.filter((s) => {
     const matchFilter =
       filter === "all" ||
-      (filter === "shared" && s.examCategory === null) ||
-      s.examCategory?.id === filter;
+      (filter === "shared" && s.examCategories.length === 0) ||
+      s.examCategories.some((ec) => ec.id === filter);
     const matchSearch = search.trim() === "" ||
       s.name.toLowerCase().includes(search.trim().toLowerCase());
     return matchFilter && matchSearch;
@@ -358,7 +363,7 @@ export function SubjectListScreen(_: Props) {
         {/* Loading overlay */}
         {loading && (
           <View style={ls.overlay}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         )}
 
@@ -381,8 +386,8 @@ export function SubjectListScreen(_: Props) {
   );
 }
 
-const ls = StyleSheet.create({
-  safe:        { flex: 1, backgroundColor: "#8B1E3F" },
+const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:        { flex: 1, backgroundColor: colors.primary },
   root:        { flex: 1, backgroundColor: "#FFFBF0" },
   listContent: { paddingBottom: ms(100) },
 
@@ -398,5 +403,5 @@ const ls = StyleSheet.create({
 
   overlay:     { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(16), backgroundColor: "#FFFBF0" },
 
-  fab:         { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: "#8B1E3F", justifyContent: "center", alignItems: "center", shadowColor: "#8B1E3F", shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
+  fab:         { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
 });

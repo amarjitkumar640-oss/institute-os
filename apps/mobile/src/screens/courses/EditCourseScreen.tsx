@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { updateCourse } from "../../api/courses";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditCourse">;
 
@@ -32,7 +33,7 @@ const GENERAL_VALUE = "general";
 
 interface FormState {
   name: string;
-  examCategory: string;
+  examCategoryIds: string[];
   durationMonths: string;
   defaultFee: string;
 }
@@ -47,9 +48,18 @@ interface FormErrors {
 
 interface UpdatedCourse {
   name: string;
-  examCategory: ExamCategoryItem | null;
+  examCategories: ExamCategoryItem[];
   durationMonths: number;
   defaultFee: number;
+}
+
+// "General" and specific categories are mutually exclusive — see the same
+// helper in CreateCourseScreen.tsx for the reasoning.
+function resolveCategorySelection(displayValue: string[], next: string[]): string[] {
+  const wasGeneral = displayValue.includes(GENERAL_VALUE);
+  const nowGeneral = next.includes(GENERAL_VALUE);
+  if (!wasGeneral && nowGeneral) return [];
+  return next.filter((v) => v !== GENERAL_VALUE);
 }
 
 function validate(form: FormState): FormErrors {
@@ -73,13 +83,15 @@ function validate(form: FormState): FormErrors {
 
 export function EditCourseScreen({ navigation, route }: Props) {
   const { showConfirm } = useAlert();
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const { course } = route.params;
 
   const initialForm: FormState = {
-    name:           course.name,
-    examCategory:   course.examCategory?.id ?? GENERAL_VALUE,
-    durationMonths: String(course.durationMonths),
-    defaultFee:     String(course.defaultFee),
+    name:            course.name,
+    examCategoryIds: course.examCategories.map((c) => c.id),
+    durationMonths:  String(course.durationMonths),
+    defaultFee:      String(course.defaultFee),
   };
 
   const [form, setForm]               = useState<FormState>(initialForm);
@@ -119,9 +131,15 @@ export function EditCourseScreen({ navigation, route }: Props) {
     }
   }
 
+  const sortedCategoryIds        = useMemo(() => [...form.examCategoryIds].sort(), [form.examCategoryIds]);
+  const initialSortedCategoryIds = useMemo(() => [...initialForm.examCategoryIds].sort(), [initialForm.examCategoryIds]);
+  const categoriesChanged =
+    sortedCategoryIds.length !== initialSortedCategoryIds.length ||
+    sortedCategoryIds.some((id, i) => id !== initialSortedCategoryIds[i]);
+
   const isDirty =
     form.name           !== initialForm.name ||
-    form.examCategory   !== initialForm.examCategory ||
+    categoriesChanged ||
     form.durationMonths !== initialForm.durationMonths ||
     form.defaultFee     !== initialForm.defaultFee;
 
@@ -134,10 +152,10 @@ export function EditCourseScreen({ navigation, route }: Props) {
 
     try {
       const result = await updateCourse(course.id, {
-        name:           form.name.trim(),
-        examCategoryId: form.examCategory === GENERAL_VALUE ? null : form.examCategory,
-        durationMonths: Number(form.durationMonths),
-        defaultFee:     Number(form.defaultFee),
+        name:            form.name.trim(),
+        examCategoryIds: form.examCategoryIds,
+        durationMonths:  Number(form.durationMonths),
+        defaultFee:      Number(form.defaultFee),
       });
 
       if (!result.ok) {
@@ -146,7 +164,7 @@ export function EditCourseScreen({ navigation, route }: Props) {
       } else {
         showSuccessCard({
           name:           result.course.name,
-          examCategory:   result.course.examCategory,
+          examCategories: result.course.examCategories,
           durationMonths: result.course.durationMonths,
           defaultFee:     result.course.defaultFee,
         });
@@ -207,8 +225,12 @@ export function EditCourseScreen({ navigation, route }: Props) {
             <SelectChips
               label="EXAM CATEGORY"
               options={examOptions}
-              value={form.examCategory || undefined}
-              onChange={(v) => setField("examCategory", v)}
+              multiple
+              value={form.examCategoryIds.length ? form.examCategoryIds : [GENERAL_VALUE]}
+              onChange={(next) => setField("examCategoryIds", resolveCategorySelection(
+                form.examCategoryIds.length ? form.examCategoryIds : [GENERAL_VALUE],
+                next,
+              ))}
               error={errors.examCategory}
             />
           </View>
@@ -264,7 +286,11 @@ export function EditCourseScreen({ navigation, route }: Props) {
               </View>
               <View style={s.previewRow}>
                 <Text style={s.previewKey}>Category</Text>
-                <Text style={s.previewVal}>{examOptions.find((o) => o.value === form.examCategory)?.label || "—"}</Text>
+                <Text style={s.previewVal}>
+                  {form.examCategoryIds.length
+                    ? form.examCategoryIds.map((id) => examOptions.find((o) => o.value === id)?.label ?? "—").join(", ")
+                    : "General (All Categories)"}
+                </Text>
               </View>
               <View style={s.previewRow}>
                 <Text style={s.previewKey}>Duration</Text>
@@ -301,7 +327,7 @@ export function EditCourseScreen({ navigation, route }: Props) {
       {loading && (
         <View style={s.loaderOverlay}>
           <View style={s.loaderCard}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderTitle}>Saving Changes…</Text>
             <Text style={s.loaderSub}>Please wait a moment</Text>
           </View>
@@ -327,15 +353,15 @@ export function EditCourseScreen({ navigation, route }: Props) {
             <Text style={s.successSub}>Changes have been saved successfully</Text>
 
             <View style={s.detailBox}>
-              <DetailRow icon="book-outline"   label="Course Name" value={updatedCourse.name} color="#8B1E3F" />
-              <DetailRow icon="layers-outline" label="Category"    value={updatedCourse.examCategory?.label ?? "General (All Categories)"} color="#2563A8" />
+              <DetailRow icon="book-outline"   label="Course Name" value={updatedCourse.name} color={colors.primary} />
+              <DetailRow icon="layers-outline" label="Category"    value={updatedCourse.examCategories.length ? updatedCourse.examCategories.map((c) => c.label).join(", ") : "General (All Categories)"} color="#2563A8" />
               <DetailRow icon="time-outline"   label="Duration"    value={`${updatedCourse.durationMonths} months`} color="#E8752C" />
               <DetailRow icon="wallet-outline" label="Default Fee" value={`₹${updatedCourse.defaultFee.toLocaleString("en-IN")}`} color="#1B9C63" last />
             </View>
 
             <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
               <LinearGradient
-                colors={["#8B1E3F", "#A52341"]}
+                colors={[colors.primary, "#A52341"]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={s.doneBtn}
               >
@@ -378,15 +404,15 @@ const dr = StyleSheet.create({
   value:     { fontSize: fs(13), color: "#2B1B1F", fontWeight: "700" },
 });
 
-const s = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:          { flex: 1, backgroundColor: colors.primary },
   flex:          { flex: 1 },
   scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
   scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(40) },
 
   section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(18) },
-  sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2), backgroundColor: "#8B1E3F" },
+  sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2), backgroundColor: colors.primary },
   sectionTitle:  { fontSize: fs(12), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textTransform: "uppercase" },
 
   submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },

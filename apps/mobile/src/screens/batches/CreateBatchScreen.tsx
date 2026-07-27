@@ -15,6 +15,7 @@ import { listCourses, type CourseItem } from "../../api/courses";
 import { createBatch, type BatchItem } from "../../api/batches";
 import { createSlot, DAY_LABELS, DAY_ORDER, type DayOfWeek } from "../../api/classSchedule";
 import { ms, fs } from "../../utils/responsive";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateBatch">;
 
@@ -79,6 +80,8 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
   const [day,   setDay]   = useState(now.getDate());
   const [month, setMonth] = useState(now.getMonth());
   const [year,  setYear]  = useState(now.getFullYear());
+  const colors = useThemeColors();
+  const dp = useThemedStyles(makeDpStyles);
 
   const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -139,7 +142,7 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
             <Text style={dp.cancelT}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity style={dp.confirmBtn} onPress={confirm} activeOpacity={0.85}>
-            <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
+            <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
               <Text style={dp.confirmT}>Done</Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -149,7 +152,7 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
   );
 }
 
-const dp = StyleSheet.create({
+const makeDpStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
   title:       { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(8), textAlign: "center" },
@@ -160,8 +163,8 @@ const dp = StyleSheet.create({
   item:        { alignItems: "center", paddingVertical: ms(10) },
   itemActive:  { backgroundColor: "#FEF4F4", borderRadius: ms(8) },
   itemT:       { fontSize: fs(15), color: "#8A7F82", fontWeight: "600" },
-  itemActiveT: { color: "#8B1E3F", fontWeight: "800" },
-  highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 2, borderColor: "#8B1E3F20", backgroundColor: "#FEF4F430" },
+  itemActiveT: { color: colors.primary, fontWeight: "800" },
+  highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 2, borderColor: colors.primary + "20", backgroundColor: "#FEF4F430" },
   btnRow:      { flexDirection: "row", gap: ms(10), marginTop: ms(20) },
   cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1.5, borderColor: "#E0D8D4" },
   cancelT:     { fontSize: fs(14), fontWeight: "700", color: "#8A7F82" },
@@ -183,6 +186,8 @@ function TimePickerModal({ visible, value, title, onConfirm, onClose }: {
   const [hour, setHour]         = useState(initial.hour12);
   const [minute, setMinute]     = useState(initial.minute);
   const [meridiem, setMeridiem] = useState<"AM" | "PM">(initial.meridiem);
+  const colors = useThemeColors();
+  const dp = useThemedStyles(makeDpStyles);
 
   useEffect(() => {
     if (!visible) return;
@@ -239,7 +244,7 @@ function TimePickerModal({ visible, value, title, onConfirm, onClose }: {
             <Text style={dp.cancelT}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity style={dp.confirmBtn} onPress={() => onConfirm(to24h(hour, minute, meridiem))} activeOpacity={0.85}>
-            <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
+            <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
               <Text style={dp.confirmT}>Done</Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -258,6 +263,7 @@ function CoursePickerModal({ visible, courses, loading, onSelect, onClose }: {
   onSelect: (c: CourseItem) => void;
   onClose: () => void;
 }) {
+  const colors = useThemeColors();
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeight="75%">
       <View style={pm.sheetPad}>
@@ -265,7 +271,7 @@ function CoursePickerModal({ visible, courses, loading, onSelect, onClose }: {
         <Text style={pm.title}>Select Course</Text>
         {loading ? (
             <View style={{ alignItems: "center", paddingVertical: ms(40) }}>
-              <ActivityIndicator size="large" color="#8B1E3F" />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={{ color: "#8A7F82", marginTop: ms(12), fontSize: fs(13) }}>Loading courses…</Text>
             </View>
           ) : (
@@ -281,8 +287,10 @@ function CoursePickerModal({ visible, courses, loading, onSelect, onClose }: {
                 </View>
               }
               renderItem={({ item: c }) => {
-                const color = c.examCategory?.color ?? "#8A7F82";
-                const label = c.examCategory?.label ?? "General";
+                const color = c.examCategories[0]?.color ?? "#8A7F82";
+                const label = c.examCategories.length
+                  ? c.examCategories.map((ec) => ec.label).join(", ")
+                  : "General";
                 return (
                   <TouchableOpacity style={pm.row} onPress={() => onSelect(c)} activeOpacity={0.75}>
                     <View style={[pm.tag, { backgroundColor: color + "20" }]}>
@@ -326,6 +334,8 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
   label: string; value: string; placeholder: string;
   onPress?: () => void; readOnly?: boolean; error?: string; required?: boolean;
 }) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   return (
     <View style={s.dateFieldWrap}>
       <Text style={s.fieldLabel}>
@@ -341,7 +351,7 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
         <Ionicons
           name={readOnly ? "lock-closed-outline" : "calendar-outline"}
           size={ms(16)}
-          color={readOnly ? "#B0A9AC" : value ? "#8B1E3F" : "#C7BAB4"}
+          color={readOnly ? "#B0A9AC" : value ? colors.primary : "#C7BAB4"}
         />
         <Text style={[s.dateFieldT, !value && s.dateFieldPlaceholder, readOnly && { color: "#8A7F82" }]} numberOfLines={1}>
           {value || placeholder}
@@ -361,6 +371,8 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function CreateBatchScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const [courses, setCourses]           = useState<CourseItem[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [pickerOpen, setPickerOpen]     = useState(false);
@@ -463,8 +475,10 @@ export function CreateBatchScreen({ navigation }: Props) {
     }
   }
 
-  const examColor = selectedCourse?.examCategory?.color ?? "#8A7F82";
-  const examLabel = selectedCourse?.examCategory?.label ?? (selectedCourse ? "General" : "");
+  const examColor = selectedCourse?.examCategories[0]?.color ?? "#8A7F82";
+  const examLabel = selectedCourse
+    ? (selectedCourse.examCategories.length ? selectedCourse.examCategories.map((ec) => ec.label).join(", ") : "General")
+    : "";
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
@@ -477,10 +491,10 @@ export function CreateBatchScreen({ navigation }: Props) {
           {/* Course */}
           <View style={s.card}>
             <View style={s.sectionHead}>
-              <View style={[s.sectionIcon, { backgroundColor: "#8B1E3F18" }]}>
-                <Ionicons name="book-outline" size={ms(16)} color="#8B1E3F" />
+              <View style={[s.sectionIcon, { backgroundColor: colors.primary + "18" }]}>
+                <Ionicons name="book-outline" size={ms(16)} color={colors.primary} />
               </View>
-              <Text style={[s.sectionLabel, { color: "#8B1E3F" }]}>COURSE</Text>
+              <Text style={[s.sectionLabel, { color: colors.primary }]}>COURSE</Text>
             </View>
 
             <View style={s.coursePickerWrap}>
@@ -507,7 +521,7 @@ export function CreateBatchScreen({ navigation }: Props) {
                 ) : (
                   <View style={s.coursePickerEmpty}>
                     {coursesLoading
-                      ? <ActivityIndicator size="small" color="#8B1E3F" />
+                      ? <ActivityIndicator size="small" color={colors.primary} />
                       : <Ionicons name="add-circle-outline" size={ms(20)} color="#8A7F82" />}
                     <Text style={s.coursePickerPlaceholder}>
                       {coursesLoading ? "Loading courses…" : "Tap to select a course"}
@@ -522,10 +536,10 @@ export function CreateBatchScreen({ navigation }: Props) {
           {/* Batch details */}
           <View style={s.card}>
             <View style={s.sectionHead}>
-              <View style={[s.sectionIcon, { backgroundColor: "#8B1E3F18" }]}>
-                <Ionicons name="layers-outline" size={ms(16)} color="#8B1E3F" />
+              <View style={[s.sectionIcon, { backgroundColor: colors.primary + "18" }]}>
+                <Ionicons name="layers-outline" size={ms(16)} color={colors.primary} />
               </View>
-              <Text style={[s.sectionLabel, { color: "#8B1E3F" }]}>BATCH DETAILS</Text>
+              <Text style={[s.sectionLabel, { color: colors.primary }]}>BATCH DETAILS</Text>
             </View>
             <FormField label="BATCH NAME" value={name}
               onChangeText={(v) => { setName(v); setErrors((p) => ({ ...p, name: "" })); }}
@@ -538,10 +552,10 @@ export function CreateBatchScreen({ navigation }: Props) {
           {/* Schedule */}
           <View style={s.card}>
             <View style={s.sectionHead}>
-              <View style={[s.sectionIcon, { backgroundColor: "#8B1E3F18" }]}>
-                <Ionicons name="calendar-outline" size={ms(16)} color="#8B1E3F" />
+              <View style={[s.sectionIcon, { backgroundColor: colors.primary + "18" }]}>
+                <Ionicons name="calendar-outline" size={ms(16)} color={colors.primary} />
               </View>
-              <Text style={[s.sectionLabel, { color: "#8B1E3F" }]}>SCHEDULE</Text>
+              <Text style={[s.sectionLabel, { color: colors.primary }]}>SCHEDULE</Text>
             </View>
 
             <DateField
@@ -564,10 +578,10 @@ export function CreateBatchScreen({ navigation }: Props) {
           {/* Class Timing — optional; can also be set later from the batch's Class Schedule screen */}
           <View style={s.card}>
             <View style={s.sectionHead}>
-              <View style={[s.sectionIcon, { backgroundColor: "#8B1E3F18" }]}>
-                <Ionicons name="time-outline" size={ms(16)} color="#8B1E3F" />
+              <View style={[s.sectionIcon, { backgroundColor: colors.primary + "18" }]}>
+                <Ionicons name="time-outline" size={ms(16)} color={colors.primary} />
               </View>
-              <Text style={[s.sectionLabel, { color: "#8B1E3F" }]}>CLASS TIMING</Text>
+              <Text style={[s.sectionLabel, { color: colors.primary }]}>CLASS TIMING</Text>
             </View>
 
             <Text style={s.fieldLabel}>CLASS DAYS</Text>
@@ -616,7 +630,7 @@ export function CreateBatchScreen({ navigation }: Props) {
           ) : null}
 
           <TouchableOpacity style={s.submitWrap} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
-            <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.submitBtn}>
+            <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.submitBtn}>
               {loading
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <>
@@ -677,7 +691,7 @@ export function CreateBatchScreen({ navigation }: Props) {
 
               <View style={s.detailBox}>
                 {[
-                  { icon: "layers-outline",     label: "Batch Name", value: created.name,                           color: "#8B1E3F" },
+                  { icon: "layers-outline",     label: "Batch Name", value: created.name,                           color: colors.primary },
                   { icon: "book-outline",        label: "Course",     value: created.course.name,                    color: "#2563A8" },
                   { icon: "people-outline",      label: "Capacity",   value: `${created.capacity} seats`,            color: "#1B9C63" },
                   { icon: "play-circle-outline", label: "Starts",     value: new Date(created.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), color: "#E8752C" },
@@ -685,7 +699,7 @@ export function CreateBatchScreen({ navigation }: Props) {
                   ...(startTimeStr && endTimeStr && selectedDays.size > 0 ? [{
                     icon: "time-outline", label: "Class Timing",
                     value: `${DAY_ORDER.filter((d) => selectedDays.has(d)).map((d) => DAY_LABELS[d]).join(", ")} · ${fmt12h(startTimeStr)} to ${fmt12h(endTimeStr)}`,
-                    color: "#8B1E3F",
+                    color: colors.primary,
                   }] : []),
                 ].map((row, i, arr) => (
                   <View key={row.label} style={[s.detailRow, i < arr.length - 1 && s.detailRowBorder]}>
@@ -701,7 +715,7 @@ export function CreateBatchScreen({ navigation }: Props) {
               </View>
 
               <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.viewAllBtn}>
-                <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.viewAllGrad}>
+                <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.viewAllGrad}>
                   <Ionicons name="layers-outline" size={ms(16)} color="#fff" />
                   <Text style={s.viewAllT}>View All Batches</Text>
                 </LinearGradient>
@@ -714,8 +728,8 @@ export function CreateBatchScreen({ navigation }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.primary },
   scroll: { flex: 1, backgroundColor: "#FFFBF0" },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
 
@@ -747,7 +761,7 @@ const s = StyleSheet.create({
 
   dayRow:      { flexDirection: "row", gap: ms(6) },
   dayChip:     { flex: 1, alignItems: "center", paddingVertical: ms(10), borderRadius: ms(10), backgroundColor: "#FAFAFA", borderWidth: 1.5, borderColor: "#E0D8D4" },
-  dayChipOn:   { backgroundColor: "#8B1E3F", borderColor: "#8B1E3F" },
+  dayChipOn:   { backgroundColor: colors.primary, borderColor: colors.primary },
   dayChipT:    { fontSize: fs(12), fontWeight: "700", color: "#8A7F82" },
   dayChipTOn:  { color: "#fff" },
 

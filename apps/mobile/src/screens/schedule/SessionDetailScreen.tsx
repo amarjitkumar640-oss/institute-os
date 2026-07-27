@@ -17,6 +17,7 @@ import {
 import { listFaculty, type FacultyItem } from "../../api/faculty";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SessionDetail">;
@@ -30,7 +31,9 @@ function fmtFullDate(iso: string) {
 
 // ── Faculty avatar helpers ────────────────────────────────────────────────────
 
-const AVATAR_COLORS = [C.primary, C.blue, C.green, C.accent, C.purple, C.orange];
+function avatarColors(colors: ThemeColors) {
+  return [colors.primary, C.blue, C.green, colors.accent, C.purple, C.orange];
+}
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -39,10 +42,11 @@ function getInitials(name: string) {
     : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function avatarColor(name: string) {
+function avatarColor(name: string, colors: ThemeColors) {
   let n = 0;
   for (let i = 0; i < name.length; i++) n += name.charCodeAt(i);
-  return AVATAR_COLORS[n % AVATAR_COLORS.length];
+  const palette = avatarColors(colors);
+  return palette[n % palette.length];
 }
 
 const STATUS_META = {
@@ -58,6 +62,7 @@ const TYPE_META = {
 } as const;
 
 function InfoRow({ icon, label, value, color = C.muted }: { icon: string; label: string; value: string; color?: string }) {
+  const sd = useThemedStyles(makeSdStyles);
   return (
     <View style={sd.infoRow}>
       <View style={[sd.infoIcon, { backgroundColor: color + "18" }]}>
@@ -72,6 +77,8 @@ function InfoRow({ icon, label, value, color = C.muted }: { icon: string; label:
 }
 
 export function SessionDetailScreen({ route, navigation }: Props) {
+  const colors = useThemeColors();
+  const sd = useThemedStyles(makeSdStyles);
   const { sessionId, batchId, batchName } = route.params;
 
   const [session, setSession]             = useState<ClassSession | null>(null);
@@ -130,7 +137,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
       <SafeAreaView style={sd.safe} edges={["bottom"]}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <ScreenHeader title="Session Detail" onBack={() => navigation.goBack()} />
-        <View style={sd.center}><ActivityIndicator size="large" color={C.primary} /></View>
+        <View style={sd.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       </SafeAreaView>
     );
   }
@@ -249,7 +256,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
             {session.slot && (
               <>
                 {(subject || faculty || session.room) && <View style={sd.divider} />}
-                <InfoRow icon="repeat-outline" label="From template" value={`${session.slot.dayOfWeek} recurring slot`} color={C.primary} />
+                <InfoRow icon="repeat-outline" label="From template" value={`${session.slot.dayOfWeek} recurring slot`} color={colors.primary} />
               </>
             )}
           </View>
@@ -404,7 +411,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
             {/* List */}
             {facultyPickerLoading ? (
               <View style={sd.pickerCenter}>
-                <ActivityIndicator color={C.primary} />
+                <ActivityIndicator color={colors.primary} />
               </View>
             ) : (
               <FlatList
@@ -415,7 +422,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
                 keyExtractor={(f) => f.id}
                 contentContainerStyle={{ padding: ms(12), gap: ms(8) }}
                 renderItem={({ item: f }) => {
-                  const color    = avatarColor(f.fullName);
+                  const color    = avatarColor(f.fullName, colors);
                   const initials = getInitials(f.fullName);
                   const selected = session?.facultyId === f.id;
                   return (
@@ -458,14 +465,14 @@ export function SessionDetailScreen({ route, navigation }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const sd = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: C.primary },
+const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.primary },
   center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: C.bg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(48), gap: ms(12) },
 
   emptyIllus: {
     width: ms(90), height: ms(90), borderRadius: ms(24),
-    backgroundColor: C.primary + "10",
+    backgroundColor: colors.primary + "10",
     alignItems: "center", justifyContent: "center",
     marginBottom: ms(12),
   },
@@ -550,8 +557,8 @@ const sd = StyleSheet.create({
   cancelBtnT: { fontSize: fs(14), fontWeight: "700", color: C.red },
 
   // Change chip on faculty row
-  changeChip:  { paddingHorizontal: ms(9), paddingVertical: ms(4), borderRadius: ms(6), backgroundColor: C.primary + "10", borderWidth: 1, borderColor: C.primary + "30" },
-  changeChipT: { fontSize: fs(10), fontWeight: "700", color: C.primary },
+  changeChip:  { paddingHorizontal: ms(9), paddingVertical: ms(4), borderRadius: ms(6), backgroundColor: colors.primary + "10", borderWidth: 1, borderColor: colors.primary + "30" },
+  changeChipT: { fontSize: fs(10), fontWeight: "700", color: colors.primary },
 
   // Faculty picker sheet (background override + bottom pad)
   pickerSheet: {

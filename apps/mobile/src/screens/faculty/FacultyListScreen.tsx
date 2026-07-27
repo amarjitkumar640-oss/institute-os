@@ -19,6 +19,7 @@ import {
 } from "../../api/faculty";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -28,17 +29,20 @@ type Props = NativeStackScreenProps<RootStackParamList, "FacultyList">;
 type Filter = "All" | string; // "All" or an ExamCategoryItem id
 
 // Palette cycles through 6 distinct colors — adjacent cards always differ
-const CARD_PALETTE = [
-  "#8B1E3F", // maroon
-  "#2CA6A4", // teal
-  "#E8752C", // orange
-  "#2563A8", // blue
-  "#5B2D8E", // purple
-  "#1B9C63", // green
-];
+function cardPalette(colors: ThemeColors): string[] {
+  return [
+    colors.primary, // brand
+    colors.accent,  // brand
+    "#E8752C", // orange
+    "#2563A8", // blue
+    "#5B2D8E", // purple
+    "#1B9C63", // green
+  ];
+}
 
-function cardColor(index: number): string {
-  return CARD_PALETTE[index % CARD_PALETTE.length];
+function cardColor(index: number, colors: ThemeColors): string {
+  const palette = cardPalette(colors);
+  return palette[index % palette.length];
 }
 
 // Format "YYYY-MM-DD" → "Jun 2022"
@@ -58,7 +62,9 @@ function FacultyCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const color       = cardColor(index);
+  const colors = useThemeColors();
+  const cs = useThemedStyles(makeCsStyles);
+  const color       = cardColor(index, colors);
   const initials    = faculty.fullName.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   const visibleSubs = faculty.subjects.slice(0, 3);
   const extraCount  = faculty.subjects.length - visibleSubs.length;
@@ -112,7 +118,7 @@ function FacultyCard({
         {faculty.subjects.length > 0 && (
           <View style={cs.subRow}>
             {visibleSubs.map((s) => {
-              const sc = s.examCategory?.color ?? C.orange;
+              const sc = s.examCategories[0]?.color ?? C.orange;
               return (
                 <View key={s.id} style={[cs.subChip, { backgroundColor: sc + "14", borderColor: sc + "35" }]}>
                   <View style={[cs.subDot, { backgroundColor: sc }]} />
@@ -189,6 +195,8 @@ function FacultyEmpty({ search }: { search: string }) {
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export function FacultyListScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const cs = useThemedStyles(makeCsStyles);
   const nav = useNavigation<Nav>();
   const { showAlert, showConfirm } = useAlert();
 
@@ -376,7 +384,7 @@ export function FacultyListScreen({ navigation }: Props) {
 
         {loading && (
           <View style={cs.overlay}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         )}
 
@@ -400,13 +408,13 @@ export function FacultyListScreen({ navigation }: Props) {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const cs = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: C.primary },
+const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.primary },
   content: { flex: 1, backgroundColor: C.bg },
 
   banner:     { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
-  bannerNum:  { fontSize: fs(17), fontWeight: "800", color: C.primary },
+  bannerNum:  { fontSize: fs(17), fontWeight: "800", color: colors.primary },
   bannerLbl:  { fontSize: fs(9.5), color: C.muted, fontWeight: "600", marginTop: ms(1) },
   bannerDiv:  { width: 1, backgroundColor: "#F0EDE8", marginHorizontal: ms(4) },
 
@@ -417,7 +425,7 @@ const cs = StyleSheet.create({
   filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
   filterRow:    { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
   chip:         { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  chipOn:       { backgroundColor: C.primary, borderColor: C.primary },
+  chipOn:       { backgroundColor: colors.primary, borderColor: colors.primary },
   chipT:        { fontSize: fs(12), fontWeight: "600", color: C.muted, includeFontPadding: false, lineHeight: fs(16) },
   chipTOn:      { color: "#FFFFFF" },
 
@@ -428,9 +436,9 @@ const cs = StyleSheet.create({
   fab: {
     position: "absolute", bottom: ms(24), right: ms(20),
     width: ms(56), height: ms(56), borderRadius: ms(28),
-    backgroundColor: C.primary,
+    backgroundColor: colors.primary,
     justifyContent: "center", alignItems: "center",
-    shadowColor: C.primary, shadowOffset: { width: 0, height: ms(6) },
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) },
     shadowOpacity: 0.45, shadowRadius: ms(12), elevation: 10,
   },
 

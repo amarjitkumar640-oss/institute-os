@@ -15,6 +15,7 @@ import {
 } from "../../api/classSchedule";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { ManageSlotModal } from "./ManageSlotModal";
 
@@ -22,15 +23,17 @@ type Props = NativeStackScreenProps<RootStackParamList, "BatchSchedule">;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const DAY_COLOR: Record<string, string> = {
-  monday:    C.blue,
-  tuesday:   C.green,
-  wednesday: C.orange,
-  thursday:  C.accent,
-  friday:    C.purple,
-  saturday:  C.primary,
-  sunday:    C.red,
-};
+function dayColorMap(colors: ThemeColors): Record<string, string> {
+  return {
+    monday:    C.blue,
+    tuesday:   C.green,
+    wednesday: C.orange,
+    thursday:  colors.accent,
+    friday:    C.purple,
+    saturday:  colors.primary,
+    sunday:    C.red,
+  };
+}
 
 function getWeekBounds(date: Date): { from: Date; to: Date } {
   const d    = new Date(date);
@@ -66,16 +69,20 @@ const STATUS_META = {
   cancelled: { label: "Cancelled", color: C.red,     bg: "#FEF0EE", icon: "close-circle-outline"      },
 } as const;
 
-const TYPE_META = {
-  regular: { label: "Regular", color: C.muted,   bg: "#F3F4F6" },
-  extra:   { label: "Extra",   color: C.accent,  bg: "#E5F5F5" },
-  makeup:  { label: "Makeup",  color: C.orange,  bg: "#FDF0E8" },
-} as const;
+function typeMeta(colors: ThemeColors) {
+  return {
+    regular: { label: "Regular", color: C.muted,   bg: "#F3F4F6" },
+    extra:   { label: "Extra",   color: colors.accent, bg: "#E5F5F5" },
+    makeup:  { label: "Makeup",  color: C.orange,  bg: "#FDF0E8" },
+  } as const;
+}
 
 // ── Slot Card ─────────────────────────────────────────────────────────────────
 
 function SlotCard({ slot, onEdit }: { slot: ClassSlot; onEdit: (slot: ClassSlot) => void }) {
-  const color = DAY_COLOR[slot.dayOfWeek] ?? C.primary;
+  const colors = useThemeColors();
+  const sc = useThemedStyles(makeScStyles);
+  const color = dayColorMap(colors)[slot.dayOfWeek] ?? colors.primary;
   return (
     <TouchableOpacity style={sc.card} onPress={() => onEdit(slot)} activeOpacity={0.78}>
       <View style={[sc.stripe, { backgroundColor: color }]} />
@@ -118,8 +125,10 @@ function SlotCard({ slot, onEdit }: { slot: ClassSlot; onEdit: (slot: ClassSlot)
 // ── Session Card ──────────────────────────────────────────────────────────────
 
 function SessionCard({ session, onPress }: { session: ClassSession; onPress: () => void }) {
+  const colors = useThemeColors();
+  const sc = useThemedStyles(makeScStyles);
   const sm = STATUS_META[session.status];
-  const tm = TYPE_META[session.type];
+  const tm = typeMeta(colors)[session.type];
   // Fall back to slot's subject/faculty for sessions generated before assignment was set
   const subject = session.subject ?? session.slot?.subject ?? null;
   const faculty = session.faculty ?? session.slot?.faculty ?? null;
@@ -186,6 +195,8 @@ function SessionCard({ session, onPress }: { session: ClassSession; onPress: () 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function BatchScheduleScreen({ route, navigation }: Props) {
+  const colors = useThemeColors();
+  const sc = useThemedStyles(makeScStyles);
   const { batchId, batchName } = route.params;
 
   const [activeTab, setActiveTab]       = useState<"template" | "week">("template");
@@ -274,7 +285,7 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
               <Ionicons
                 name={tab === "template" ? "repeat-outline" : "calendar-outline"}
                 size={ms(14)}
-                color={activeTab === tab ? C.primary : C.muted}
+                color={activeTab === tab ? colors.primary : C.muted}
               />
               <Text style={[sc.tabT, activeTab === tab && sc.tabTActive]}>
                 {tab === "template" ? "Weekly Template" : "This Week"}
@@ -287,27 +298,27 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
         {activeTab === "template" && (
           loadingSlots ? (
             <View style={sc.center}>
-              <ActivityIndicator size="large" color={C.primary} />
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
           ) : (
             <ScrollView
               contentContainerStyle={sc.listContent}
               showsVerticalScrollIndicator={false}
               refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={C.primary} colors={[C.primary]} />
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
               }
             >
               {activeDays.length === 0 ? (
                 <View style={sc.emptyBox}>
                   <View style={sc.emptyIllus}>
-                    <Ionicons name="calendar-outline" size={ms(52)} color={C.primary} />
+                    <Ionicons name="calendar-outline" size={ms(52)} color={colors.primary} />
                   </View>
                   <Text style={sc.emptyTitle}>No weekly slots yet</Text>
                   <Text style={sc.emptySub}>Tap the + button to define the first recurring class slot for this batch.</Text>
                 </View>
               ) : (
                 activeDays.map((day) => {
-                  const color = DAY_COLOR[day] ?? C.primary;
+                  const color = dayColorMap(colors)[day] ?? colors.primary;
                   return (
                     <View key={day} style={sc.daySection}>
                       <View style={sc.dayHeaderRow}>
@@ -340,17 +351,17 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
           <View style={{ flex: 1 }}>
             <View style={sc.weekNav}>
               <TouchableOpacity style={sc.weekNavBtn} onPress={prevWeek}>
-                <Ionicons name="chevron-back" size={ms(18)} color={C.primary} />
+                <Ionicons name="chevron-back" size={ms(18)} color={colors.primary} />
               </TouchableOpacity>
               <Text style={sc.weekLabel}>{fmtWeekLabel(from, to)}</Text>
               <TouchableOpacity style={sc.weekNavBtn} onPress={nextWeek}>
-                <Ionicons name="chevron-forward" size={ms(18)} color={C.primary} />
+                <Ionicons name="chevron-forward" size={ms(18)} color={colors.primary} />
               </TouchableOpacity>
             </View>
 
             {loadingWeek ? (
               <View style={sc.center}>
-                <ActivityIndicator size="large" color={C.primary} />
+                <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={sc.loadingT}>Generating sessions…</Text>
               </View>
             ) : (
@@ -358,7 +369,7 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
                 contentContainerStyle={sc.listContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                  <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={C.primary} colors={[C.primary]} />
+                  <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
                 }
               >
                 {sessions.length === 0 ? (
@@ -414,8 +425,8 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const sc = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: C.primary },
+const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.primary },
   content: { flex: 1, backgroundColor: C.bg, marginTop: ms(8) },
 
   // Tabs
@@ -435,9 +446,9 @@ const sc = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },
-  tabActive:  { borderBottomColor: C.primary },
+  tabActive:  { borderBottomColor: colors.primary },
   tabT:       { fontSize: fs(12), color: C.muted,   fontWeight: "600" },
-  tabTActive: { fontSize: fs(12), color: C.primary, fontWeight: "700" },
+  tabTActive: { fontSize: fs(12), color: colors.primary, fontWeight: "700" },
 
   // Content
   listContent: { padding: ms(16), paddingBottom: ms(96) },
@@ -454,7 +465,7 @@ const sc = StyleSheet.create({
     width:           ms(100),
     height:          ms(100),
     borderRadius:    ms(30),
-    backgroundColor: C.primary + "10",
+    backgroundColor: colors.primary + "10",
     alignItems:      "center",
     justifyContent:  "center",
     marginBottom:    ms(16),
@@ -529,7 +540,7 @@ const sc = StyleSheet.create({
   },
   weekNavBtn: {
     width: ms(36), height: ms(36), borderRadius: ms(10),
-    backgroundColor: C.primary + "10",
+    backgroundColor: colors.primary + "10",
     alignItems: "center", justifyContent: "center",
   },
   weekLabel: { fontSize: fs(13), fontWeight: "700", color: C.text },
@@ -542,10 +553,10 @@ const sc = StyleSheet.create({
     width:           ms(56),
     height:          ms(56),
     borderRadius:    ms(28),
-    backgroundColor: C.primary,
+    backgroundColor: colors.primary,
     justifyContent:  "center",
     alignItems:      "center",
-    shadowColor:     C.primary,
+    shadowColor:     colors.primary,
     shadowOffset:    { width: 0, height: ms(6) },
     shadowOpacity:   0.45,
     shadowRadius:    ms(12),

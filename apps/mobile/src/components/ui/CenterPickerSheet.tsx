@@ -5,6 +5,7 @@ import { BottomSheet } from "./BottomSheet";
 import { apiClient } from "../../api/client";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 interface CenterOption {
   id:   string;
@@ -23,6 +24,8 @@ interface Props {
 // (unlike the full-screen CenterSelectScreen used at login/switch-center,
 // which would unmount the current screen and lose any in-progress input).
 export function CenterPickerSheet({ visible, onClose, onSelect }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeStyles);
   const [centers,   setCenters]   = useState<CenterOption[] | null>(null);
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState(false);
@@ -66,7 +69,7 @@ export function CenterPickerSheet({ visible, onClose, onSelect }: Props) {
     <BottomSheet visible={showSheet} onClose={onClose}>
       <View style={s.header}>
         <View style={s.headerIcon}>
-          <Ionicons name="business-outline" size={ms(24)} color={C.primary} />
+          <Ionicons name="business-outline" size={ms(24)} color={colors.primary} />
         </View>
         <Text style={s.title}>Select a Center</Text>
         <Text style={s.sub}>Choose which center this record belongs to, then it'll be saved automatically.</Text>
@@ -102,7 +105,7 @@ export function CenterPickerSheet({ visible, onClose, onSelect }: Props) {
           activeOpacity={0.7}
         >
           <View style={s.rowIcon}>
-            <Ionicons name="business" size={ms(16)} color={C.primary} />
+            <Ionicons name="business" size={ms(16)} color={colors.primary} />
           </View>
           <Text style={s.rowT} numberOfLines={1}>{c.name}</Text>
           <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
@@ -114,11 +117,11 @@ export function CenterPickerSheet({ visible, onClose, onSelect }: Props) {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   header: { alignItems: "center", padding: ms(20), paddingBottom: ms(16) },
   headerIcon: {
     width: ms(52), height: ms(52), borderRadius: ms(16),
-    backgroundColor: C.primary + "16", justifyContent: "center", alignItems: "center",
+    backgroundColor: colors.primary + "16", justifyContent: "center", alignItems: "center",
     marginBottom: ms(10),
   },
   title:  { fontSize: fs(17), fontWeight: "800", color: C.text },
@@ -127,7 +130,7 @@ const s = StyleSheet.create({
   errT:   { fontSize: fs(13), color: C.text, textAlign: "center", lineHeight: fs(18) },
   retryBtn: {
     flexDirection: "row", alignItems: "center", gap: ms(6),
-    backgroundColor: C.primary, borderRadius: ms(12),
+    backgroundColor: colors.primary, borderRadius: ms(12),
     paddingHorizontal: ms(18), paddingVertical: ms(10), marginTop: ms(4),
   },
   retryBtnT: { fontSize: fs(13), fontWeight: "700", color: "#fff" },
@@ -139,7 +142,7 @@ const s = StyleSheet.create({
   rowFirst: { borderTopWidth: 0 },
   rowIcon: {
     width: ms(34), height: ms(34), borderRadius: ms(10),
-    backgroundColor: C.primary + "14", justifyContent: "center", alignItems: "center", flexShrink: 0,
+    backgroundColor: colors.primary + "14", justifyContent: "center", alignItems: "center", flexShrink: 0,
   },
   rowT: { flex: 1, fontSize: fs(14), fontWeight: "600", color: C.text },
   bottomSpacer: { height: ms(20) },

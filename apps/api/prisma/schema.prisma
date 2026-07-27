@@ -16,6 +16,10 @@ enum StaffRole {
   frontdesk
 }
 
+enum StaffLoginMethod {
+  phone
+  email_username
+}
 
 enum BatchStatus {
   upcoming
@@ -41,17 +45,17 @@ enum LeadStatus {
 // ── Fee system enums ──────────────────────────────────────────────────────────
 
 enum TemplateLineType {
-  fixed          // Fixed rupee amount
-  percentage     // Percentage of effective fee
-  equal_split    // Split remaining equally across N installments
-  remaining      // Whatever is left unpaid
+  fixed // Fixed rupee amount
+  percentage // Percentage of effective fee
+  equal_split // Split remaining equally across N installments
+  remaining // Whatever is left unpaid
 }
 
 enum TemplateTrigger {
-  on_admission          // Due immediately on enrollment
-  days_after_admission  // Due X days after enrollment date
-  days_after_previous   // Due X days after previous installment due date
-  monthly_recurring     // Recurring on dayOfMonth each month
+  on_admission // Due immediately on enrollment
+  days_after_admission // Due X days after enrollment date
+  days_after_previous // Due X days after previous installment due date
+  monthly_recurring // Recurring on dayOfMonth each month
 }
 
 enum FeeScheduleStatus {
@@ -108,10 +112,45 @@ enum SessionType {
   makeup
 }
 
+// ── Tenant (top-level SaaS boundary — one row per institute) ──────────────────
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // Branding — nullable; null means "use the default Institute-OS brand" in clients.
+  brandPrimary   String?
+  brandSecondary String?
+  brandAccent    String?
+  logoUrl        String?
+
+  // Which identifier staff of this org log in with — admin-configurable.
+  loginMethod StaffLoginMethod @default(email_username)
+
+  centers        Center[]
+  staff          Staff[]
+  courses        Course[]
+  subjects       Subject[]
+  examCategories ExamCategory[]
+  documentTypes  DocumentType[]
+  students       Student[]
+  batches        Batch[]
+  faculty        Faculty[]
+  leads          Lead[]
+  payments       PaymentTransaction[]
+
+  @@map("tenants")
+}
+
 // ── Core models ───────────────────────────────────────────────────────────────
 
 model Center {
   id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
   name      String
   address   String?
   phone     String?
@@ -142,83 +181,123 @@ model CenterStaff {
 
 model Staff {
   id           String    @id @default(uuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
   fullName     String
   phone        String
   email        String    @unique
+  username     String?
   role         StaffRole
   passwordHash String
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  assignedLeads        Lead[]               @relation("LeadAssignedTo")
-  centerAssignments    CenterStaff[]
-  collectedPayments    PaymentTransaction[]
+  assignedLeads     Lead[]               @relation("LeadAssignedTo")
+  centerAssignments CenterStaff[]
+  collectedPayments PaymentTransaction[]
 
+  @@unique([tenantId, phone])
+  @@unique([tenantId, username])
   @@map("staff")
 }
 
 model Subject {
-  id           String        @id @default(uuid())
-  name           String        @unique
-  examCategoryId String?
-  examCategory   ExamCategory? @relation(fields: [examCategoryId], references: [id])
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  name     String
 
+  examCategories  SubjectExamCategory[]
   facultySubjects FacultySubject[]
   classSlots      ClassSlot[]
   classSessions   ClassSession[]
 
+  @@unique([tenantId, name])
   @@map("subjects")
 }
 
+// Many-to-many: a subject can be relevant to several exam categories, or none
+// (empty = "Shared/General", applies across all categories).
+model SubjectExamCategory {
+  subjectId      String
+  examCategoryId String
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  examCategory   ExamCategory @relation(fields: [examCategoryId], references: [id], onDelete: Cascade)
+
+  @@id([subjectId, examCategoryId])
+  @@map("subject_exam_categories")
+}
+
 model Faculty {
-  id              String    @id @default(uuid())
-  employeeCode    String    @unique
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  employeeCode    String
   fullName        String
-  phone           String    @unique
-  email           String    @unique
+  phone           String
+  email           String
   qualification   String
-  experienceYears Int       @default(0)
-  isActive        Boolean   @default(true)
-  joiningDate     DateTime  @db.Date
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  experienceYears Int      @default(0)
+  isActive        Boolean  @default(true)
+  joiningDate     DateTime @db.Date
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   centerId        String?
-  center          Center?   @relation(fields: [centerId], references: [id])
+  center          Center?  @relation(fields: [centerId], references: [id])
 
   teachingSubjects FacultySubject[]
   classSlots       ClassSlot[]
   classSessions    ClassSession[]
 
+  @@unique([tenantId, employeeCode])
+  @@unique([tenantId, phone])
+  @@unique([tenantId, email])
   @@map("faculty")
 }
 
 model FacultySubject {
   facultyId String
   subjectId String
-  faculty   Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  faculty   Faculty @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@id([facultyId, subjectId])
   @@map("faculty_subjects")
 }
 
 model Course {
-  id             String        @id @default(uuid())
+  id             String  @id @default(uuid())
+  tenantId       String
+  tenant         Tenant  @relation(fields: [tenantId], references: [id])
   name           String
-  examCategoryId String?
-  examCategory   ExamCategory? @relation(fields: [examCategoryId], references: [id])
   durationMonths Int
-  defaultFee     Decimal       @db.Decimal(10, 2)
+  defaultFee     Decimal @db.Decimal(10, 2)
 
-  batches     Batch[]
-  feeTemplate CourseFeeTemplate?
+  examCategories CourseExamCategory[]
+  batches        Batch[]
+  feeTemplate    CourseFeeTemplate?
 
+  @@unique([tenantId, name])
   @@map("courses")
+}
+
+// Many-to-many: a course can span several exam categories, or none
+// (empty = "General", applies across all categories).
+model CourseExamCategory {
+  courseId       String
+  examCategoryId String
+  course         Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  examCategory   ExamCategory @relation(fields: [examCategoryId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, examCategoryId])
+  @@map("course_exam_categories")
 }
 
 model Batch {
   id        String      @id @default(uuid())
+  tenantId  String
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
   courseId  String
   course    Course      @relation(fields: [courseId], references: [id])
   name      String
@@ -238,7 +317,9 @@ model Batch {
 
 model Student {
   id                 String    @id @default(uuid())
-  studentCode        String    @unique
+  tenantId           String
+  tenant             Tenant    @relation(fields: [tenantId], references: [id])
+  studentCode        String
   centerId           String?
   center             Center?   @relation(fields: [centerId], references: [id])
   fullName           String
@@ -268,36 +349,43 @@ model Student {
   updatedAt          DateTime  @updatedAt
 
   enrollments    Enrollment[]
-  leadsConverted Lead[]       @relation("LeadConvertedStudent")
+  leadsConverted Lead[]            @relation("LeadConvertedStudent")
   documents      StudentDocument[]
 
+  @@unique([tenantId, studentCode])
   @@map("students")
 }
 
 model DocumentType {
-  id        String   @id @default(uuid())
-  key       String   @unique
+  id        String  @id @default(uuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  key       String
   label     String
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
 
   documents StudentDocument[]
 
+  @@unique([tenantId, key])
   @@map("document_types")
 }
 
 model ExamCategory {
-  id        String   @id @default(uuid())
-  key       String   @unique
+  id        String  @id @default(uuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  key       String
   label     String
-  color     String   @default("#8B1E3F")
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
+  color     String  @default("#8B1E3F")
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
 
-  subjects Subject[]
-  courses  Course[]
-  leads    Lead[]
+  subjectLinks SubjectExamCategory[]
+  courseLinks  CourseExamCategory[]
+  leads        Lead[]
 
+  @@unique([tenantId, key])
   @@map("exam_categories")
 }
 
@@ -331,6 +419,8 @@ model Enrollment {
 
 model Lead {
   id                 String       @id @default(uuid())
+  tenantId           String
+  tenant             Tenant       @relation(fields: [tenantId], references: [id])
   name               String
   phone              String
   targetExamId       String
@@ -428,6 +518,8 @@ model ScheduleInstallment {
 
 model PaymentTransaction {
   id            String               @id @default(uuid())
+  tenantId      String
+  tenant        Tenant               @relation(fields: [tenantId], references: [id])
   scheduleId    String
   schedule      StudentFeeSchedule   @relation(fields: [scheduleId], references: [id])
   installmentId String?
@@ -435,7 +527,7 @@ model PaymentTransaction {
   amount        Decimal              @db.Decimal(10, 2)
   mode          TxnMode
   type          TxnType              @default(payment)
-  receiptNo     String?              @unique
+  receiptNo     String?
   paidAt        DateTime
   collectedById String?
   collectedBy   Staff?               @relation(fields: [collectedById], references: [id])
@@ -445,6 +537,7 @@ model PaymentTransaction {
   notes         String?
   createdAt     DateTime             @default(now())
 
+  @@unique([tenantId, receiptNo])
   @@map("payment_transactions")
 }
 
@@ -455,8 +548,8 @@ model ClassSlot {
   batchId   String
   batch     Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
   dayOfWeek DayOfWeek
-  startTime String    // "09:00" — 24-hour HH:MM
-  endTime   String    // "10:30"
+  startTime String // "09:00" — 24-hour HH:MM
+  endTime   String // "10:30"
   subjectId String?
   subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   facultyId String?

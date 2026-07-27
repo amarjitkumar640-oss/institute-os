@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
-import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 import { useAppLock } from "../../context/AppLockContext";
 import { useAuth } from "../../context/AuthContext";
 
@@ -15,6 +15,7 @@ const PIN_LENGTH = 4;
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
 function PinDots({ filled, shake }: { filled: number; shake: Animated.Value }) {
+  const s = useThemedStyles(makeSStyles);
   return (
     <Animated.View style={[s.dots, { transform: [{ translateX: shake }] }]}>
       {Array.from({ length: PIN_LENGTH }).map((_, i) => (
@@ -32,6 +33,7 @@ function Key({
   onPress: () => void;
   variant?: "digit" | "action" | "ghost";
 }) {
+  const s = useThemedStyles(makeSStyles);
   if (variant === "ghost") return <View style={s.keyGhost} />;
   return (
     <TouchableOpacity
@@ -55,6 +57,7 @@ const DIGIT_SUB: Record<string, string> = {
 };
 
 function Keypad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDelete: () => void }) {
+  const s = useThemedStyles(makeSStyles);
   const rows = [["1","2","3"],["4","5","6"],["7","8","9"]];
   return (
     <View style={s.keypad}>
@@ -87,6 +90,7 @@ function PinEntryStep({
   error:    string;
   clearError: () => void;
 }) {
+  const s = useThemedStyles(makeSStyles);
   const [pin, setPin] = useState("");
   const shake = useRef(new Animated.Value(0)).current;
 
@@ -139,6 +143,8 @@ function BiometricChoiceStep({
   onEnable: () => void;
   onSkip:   () => void;
 }) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const icon  = biometricType === "face" ? "scan-outline"       : "finger-print-outline";
   const label = biometricType === "face" ? "Face ID"            : "Fingerprint";
   const desc  = biometricType === "face"
@@ -154,7 +160,7 @@ function BiometricChoiceStep({
       <Text style={s.subtitle}>{desc}</Text>
 
       <TouchableOpacity style={s.bioEnableBtn} onPress={onEnable} activeOpacity={0.8}>
-        <Ionicons name={icon} size={ms(18)} color={C.primary} />
+        <Ionicons name={icon} size={ms(18)} color={colors.primary} />
         <Text style={s.bioEnableText}>Enable {label}</Text>
       </TouchableOpacity>
 
@@ -173,6 +179,7 @@ function BiometricUnlockStep({
   biometricType: "face" | "fingerprint";
   onFallback: () => void;
 }) {
+  const s = useThemedStyles(makeSStyles);
   const icon  = biometricType === "face" ? "scan-outline"       : "finger-print-outline";
   const label = biometricType === "face" ? "Face ID"            : "Fingerprint";
 
@@ -201,6 +208,8 @@ type Screen =
   | "unlock-pin";       // PIN keypad fallback
 
 export function AppLockScreen() {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const { hasPin, isLocked, biometricType, setupPin, verifyPin, biometricUnlock, removePin } =
     useAppLock();
   const { logout } = useAuth();
@@ -274,7 +283,7 @@ export function AppLockScreen() {
   // ── Render ──
 
   return (
-    <LinearGradient colors={["#5C0E23", "#8B1E3F", "#6B1530"]} style={s.fill}>
+    <LinearGradient colors={[colors.safeArea, colors.primary, darken(colors.primary, 0.05)]} style={s.fill}>
       <SafeAreaView style={s.fill} edges={["top", "bottom"]}>
 
         {/* Branding */}
@@ -365,7 +374,7 @@ export function AppLockScreen() {
 
 const KEY_SIZE = ms(72);
 
-const s = StyleSheet.create({
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   fill: { flex: 1 },
 
   brand: {
@@ -512,7 +521,7 @@ const s = StyleSheet.create({
   bioEnableText: {
     fontSize:   fs(15),
     fontWeight: "700",
-    color:      C.primary,
+    color:      colors.primary,
   },
   bioSkipBtn: {
     paddingVertical: ms(10),

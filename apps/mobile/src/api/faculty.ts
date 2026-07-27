@@ -5,7 +5,7 @@ import type { ExamCategoryItem } from "./examCategories";
 export interface FacultySubject {
   id: string;
   name: string;
-  examCategory: ExamCategoryItem | null;
+  examCategories: ExamCategoryItem[];
 }
 
 export interface FacultyItem {

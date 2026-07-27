@@ -14,6 +14,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useAlert } from "../../context/AlertContext";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 import {
   getScheduleDetail, recordPayment,
   installmentOutstanding, scheduleTotalPaid, scheduleTotalOutstanding,
@@ -104,6 +105,8 @@ function RecordPaymentModal({
   onDone:            () => void;
 }) {
   const { showAlert } = useAlert();
+  const colors = useThemeColors();
+  const pm = useThemedStyles(makePmStyles);
 
   const [mode,    setMode]    = useState<TxnMode>("cash");
   const [amount,  setAmount]  = useState("");
@@ -189,7 +192,7 @@ function RecordPaymentModal({
 
           <View style={pm.head}>
             <View style={pm.headIcon}>
-              <Ionicons name="cash-outline" size={ms(20)} color={C.primary} />
+              <Ionicons name="cash-outline" size={ms(20)} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={pm.headTitle}>Record Payment</Text>
@@ -270,7 +273,7 @@ function RecordPaymentModal({
                   onPress={() => setMode(m.key)}
                   activeOpacity={0.75}
                 >
-                  <Ionicons name={m.icon as any} size={ms(14)} color={active ? C.primary : "#8A7F82"} />
+                  <Ionicons name={m.icon as any} size={ms(14)} color={active ? colors.primary : "#8A7F82"} />
                   <Text style={[pm.modeChipT, active && pm.modeChipTOn]}>{m.label}</Text>
                 </TouchableOpacity>
               );
@@ -319,7 +322,7 @@ function RecordPaymentModal({
             activeOpacity={0.88}
           >
             <LinearGradient
-              colors={["#8B1E3F", "#C0422E", "#E87830"]}
+              colors={[colors.primary, lighten(colors.primary, 0.12), lighten(colors.primary, 0.3)]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={pm.submitGrad}
@@ -404,6 +407,8 @@ function InstallmentRow({
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export function FeeScheduleDetailScreen({ route, navigation }: Props) {
+  const colors = useThemeColors();
+  const sc = useThemedStyles(makeScStyles);
   const { enrollmentId, studentName } = route.params;
   const insets = useSafeAreaInsets();
   const { staff } = useAuth();
@@ -465,7 +470,7 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
 
       {/* ── Gradient header ── */}
       <LinearGradient
-        colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={sc.header}
@@ -566,7 +571,7 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
       <View style={sc.body}>
         {loading && (
           <View style={sc.centered}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         )}
 
@@ -587,8 +592,8 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={() => { setRefreshing(true); load(true); }}
-                colors={[C.primary]}
-                tintColor={C.primary}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
               />
             }
           >
@@ -747,8 +752,8 @@ const ir = StyleSheet.create({
   collectHintT: { fontSize: fs(10.5), fontWeight: "700" },
 });
 
-const sc = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: "#8B1E3F" },
+const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.primary },
   header: { overflow: "hidden" },
   body:   { flex: 1, backgroundColor: "#FFFBF0" },
 
@@ -928,13 +933,13 @@ const sc = StyleSheet.create({
     marginTop:         ms(16),
     paddingHorizontal: ms(20),
     paddingVertical:   ms(10),
-    backgroundColor:   C.primary,
+    backgroundColor:   colors.primary,
     borderRadius:      ms(10),
   },
   retryBtnT: { color: "#fff", fontWeight: "700", fontSize: fs(14) },
 });
 
-const pm = StyleSheet.create({
+const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay:  { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: {
@@ -957,7 +962,7 @@ const pm = StyleSheet.create({
     width:           ms(42),
     height:          ms(42),
     borderRadius:    ms(13),
-    backgroundColor: C.primary + "12",
+    backgroundColor: colors.primary + "12",
     justifyContent:  "center",
     alignItems:      "center",
     flexShrink:      0,
@@ -990,7 +995,7 @@ const pm = StyleSheet.create({
   amtPrefix: { fontSize: fs(18), fontWeight: "700", color: "#2B1B1F" },
   amtInput:  { flex: 1, fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", padding: ms(12), includeFontPadding: false },
   fullBtn: {
-    backgroundColor:   "#8B1E3F",
+    backgroundColor:   colors.primary,
     borderRadius:      ms(8),
     paddingHorizontal: ms(10),
     paddingVertical:   ms(5),
@@ -1009,9 +1014,9 @@ const pm = StyleSheet.create({
     borderWidth:       1.5,
     borderColor:       "transparent",
   },
-  modeChipOn:  { backgroundColor: C.primary + "0D", borderColor: C.primary + "50" },
+  modeChipOn:  { backgroundColor: colors.primary + "0D", borderColor: colors.primary + "50" },
   modeChipT:   { fontSize: fs(13), fontWeight: "600", color: "#8A7F82" },
-  modeChipTOn: { color: C.primary, fontWeight: "700" },
+  modeChipTOn: { color: colors.primary, fontWeight: "700" },
 
   textField: {
     backgroundColor:   "#FAF6F3",

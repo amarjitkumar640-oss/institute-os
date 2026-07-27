@@ -17,6 +17,7 @@ import { listSubjects, type SubjectItem } from "../../api/subjects";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditFaculty">;
 
@@ -107,20 +108,22 @@ function SubjectPicker({
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
 }) {
+  const colors = useThemeColors();
   const groups = useMemo(() => [
-    { key: "shared", label: "Shared (All Exams)", color: "#E8752C", items: subjects.filter((s) => s.examCategory === null) },
+    { key: "shared", label: "Shared (All Exams)", color: "#E8752C", items: subjects.filter((s) => s.examCategories.length === 0) },
     ...categories.map((c) => ({
       key:   c.id,
       label: c.label,
       color: c.color,
-      items: subjects.filter((s) => s.examCategory?.id === c.id),
+      // A subject relevant to several categories appears under each of them.
+      items: subjects.filter((s) => s.examCategories.some((ec) => ec.id === c.id)),
     })),
   ], [subjects, categories]);
 
   if (loading) {
     return (
       <View style={sp.center}>
-        <ActivityIndicator size="small" color="#8B1E3F" />
+        <ActivityIndicator size="small" color={colors.primary} />
         <Text style={sp.loadingT}>Loading subjects…</Text>
       </View>
     );
@@ -179,6 +182,8 @@ const sp = StyleSheet.create({
 
 export function EditFacultyScreen({ navigation, route }: Props) {
   const { showConfirm } = useAlert();
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const { faculty } = route.params;
 
   const initialForm: FormState = {
@@ -319,7 +324,7 @@ export function EditFacultyScreen({ navigation, route }: Props) {
 
           {/* ── Personal Info ── */}
           <View style={s.section}>
-            <SectionHead dot="#8B1E3F" title="Personal Information" />
+            <SectionHead dot={colors.primary} title="Personal Information" />
             <FormField label="FULL NAME" value={form.fullName} onChangeText={(v) => setField("fullName", v)}
               placeholder="e.g. Dr. Priya Sharma" error={errors.fullName} icon="person-outline"
               maxLength={120} clearable returnKeyType="next" onSubmitEditing={() => phoneRef.current?.focus()} blurOnSubmit={false} />
@@ -333,7 +338,7 @@ export function EditFacultyScreen({ navigation, route }: Props) {
 
           {/* ── Professional Info ── */}
           <View style={s.section}>
-            <SectionHead dot="#8B1E3F" title="Professional Details" />
+            <SectionHead dot={colors.primary} title="Professional Details" />
             <FormField label="QUALIFICATION" value={form.qualification} onChangeText={(v) => setField("qualification", v)}
               placeholder="e.g. M.Sc Mathematics, B.Ed" error={errors.qualification} icon="school-outline"
               maxLength={200} clearable returnKeyType="next" onSubmitEditing={() => expRef.current?.focus()} blurOnSubmit={false} />
@@ -365,7 +370,7 @@ export function EditFacultyScreen({ navigation, route }: Props) {
 
           {/* ── Subjects ── */}
           <View style={s.section}>
-            <SectionHead dot="#8B1E3F" title="Subjects to Teach" />
+            <SectionHead dot={colors.primary} title="Subjects to Teach" />
             <Text style={s.subjectHint}>Tap to add or remove subjects.</Text>
             <SubjectPicker
               subjects={subjects}
@@ -398,7 +403,7 @@ export function EditFacultyScreen({ navigation, route }: Props) {
       {loading && (
         <View style={s.loaderOverlay}>
           <View style={s.loaderCard}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderTitle}>Saving Changes…</Text>
             <Text style={s.loaderSub}>Please wait a moment</Text>
           </View>
@@ -419,16 +424,16 @@ export function EditFacultyScreen({ navigation, route }: Props) {
             <Text style={s.successSub}>Changes have been saved successfully</Text>
 
             <View style={s.detailBox}>
-              <DetailRow icon="person-outline"    label="Name"          value={updatedFaculty.fullName} color="#8B1E3F" />
+              <DetailRow icon="person-outline"    label="Name"          value={updatedFaculty.fullName} color={colors.primary} />
               <DetailRow icon="id-card-outline"   label="Employee Code" value={updatedFaculty.employeeCode} color="#2563A8" />
               <DetailRow icon="school-outline"    label="Qualification" value={updatedFaculty.qualification} color="#E8752C" />
-              <DetailRow icon="briefcase-outline" label="Experience"    value={`${updatedFaculty.experienceYears} year${updatedFaculty.experienceYears !== 1 ? "s" : ""}`} color="#2CA6A4" />
+              <DetailRow icon="briefcase-outline" label="Experience"    value={`${updatedFaculty.experienceYears} year${updatedFaculty.experienceYears !== 1 ? "s" : ""}`} color={colors.accent} />
               <DetailRow icon="book-outline"      label="Subjects"      value={`${updatedFaculty.subjectCount} subject${updatedFaculty.subjectCount !== 1 ? "s" : ""} assigned`} color="#1B9C63" />
               <DetailRow icon="ellipse-outline"   label="Status"        value={updatedFaculty.isActive ? "Active" : "Inactive"} color={updatedFaculty.isActive ? "#1B9C63" : "#8A7F82"} last />
             </View>
 
             <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-              <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+              <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
                 <Ionicons name="people-outline" size={ms(18)} color="#fff" />
                 <Text style={s.doneBtnT}>View All Faculty</Text>
               </LinearGradient>
@@ -443,6 +448,7 @@ export function EditFacultyScreen({ navigation, route }: Props) {
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
 function SectionHead({ dot, title }: { dot: string; title: string }) {
+  const s = useThemedStyles(makeSStyles);
   return (
     <View style={s.sectionHeader}>
       <View style={[s.sectionDot, { backgroundColor: dot }]} />
@@ -476,8 +482,8 @@ const dr = StyleSheet.create({
   value:     { fontSize: fs(13), color: "#2B1B1F", fontWeight: "700" },
 });
 
-const s = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:          { flex: 1, backgroundColor: colors.primary },
   flex:          { flex: 1 },
   scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
   scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(40) },

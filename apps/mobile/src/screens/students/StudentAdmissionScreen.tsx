@@ -30,6 +30,7 @@ import { listCourses, type CourseItem } from "../../api/courses";
 import { apiClient } from "../../api/client";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 import type {
   Gender, Qualification, CoursePreference, DurationPref, BatchTiming, PaymentMode,
 } from "../../api/students";
@@ -144,27 +145,28 @@ const STEPS = [
 ] as const;
 
 function StepBar({ current }: { current: number }) {
+  const colors = useThemeColors();
   return (
     <View style={sb.wrap}>
       {STEPS.map((step, i) => {
         const done   = i < current;
         const active = i === current;
-        const color  = done || active ? "#8B1E3F" : "#D5CCC8";
+        const color  = done || active ? colors.primary : "#D5CCC8";
         return (
           <React.Fragment key={i}>
             <View style={sb.stepCol}>
-              <View style={[sb.circle, { borderColor: color, backgroundColor: done ? "#8B1E3F" : active ? "#FEF4F4" : "#F7F4F2" }]}>
+              <View style={[sb.circle, { borderColor: color, backgroundColor: done ? colors.primary : active ? "#FEF4F4" : "#F7F4F2" }]}>
                 {done
                   ? <Ionicons name="checkmark" size={ms(12)} color="#fff" />
                   : <Text style={[sb.num, { color }]}>{i + 1}</Text>
                 }
               </View>
-              <Text style={[sb.lbl, { color: active ? "#8B1E3F" : done ? "#8B1E3F" : "#B0A9AC", fontWeight: active ? "800" : "600" }]} numberOfLines={1}>
+              <Text style={[sb.lbl, { color: active ? colors.primary : done ? colors.primary : "#B0A9AC", fontWeight: active ? "800" : "600" }]} numberOfLines={1}>
                 {step.label}
               </Text>
             </View>
             {i < STEPS.length - 1 && (
-              <View style={[sb.line, { backgroundColor: done ? "#8B1E3F" : "#E0D8D4" }]} />
+              <View style={[sb.line, { backgroundColor: done ? colors.primary : "#E0D8D4" }]} />
             )}
           </React.Fragment>
         );
@@ -184,12 +186,14 @@ const sb = StyleSheet.create({
 
 // ── Option row ────────────────────────────────────────────────────────────────
 
-function OptionRow<T extends string>({ options, value, onSelect, color = "#8B1E3F" }: {
+function OptionRow<T extends string>({ options, value, onSelect, color }: {
   options: { key: T; label: string }[];
   value: T | null | undefined;
   onSelect: (k: T) => void;
   color?: string;
 }) {
+  const colors = useThemeColors();
+  const resolvedColor = color ?? colors.primary;
   return (
     <View style={or.row}>
       {options.map((opt) => {
@@ -197,7 +201,7 @@ function OptionRow<T extends string>({ options, value, onSelect, color = "#8B1E3
         return (
           <TouchableOpacity
             key={opt.key}
-            style={[or.pill, active && { backgroundColor: color, borderColor: color }]}
+            style={[or.pill, active && { backgroundColor: resolvedColor, borderColor: resolvedColor }]}
             onPress={() => onSelect(opt.key)}
             activeOpacity={0.75}
           >
@@ -248,6 +252,7 @@ const sh = StyleSheet.create({
 // ── QR Scanner modal ──────────────────────────────────────────────────────────
 
 function QRScannerModal({ onClose, onScan }: { onClose: () => void; onScan: (data: string) => void }) {
+  const qr = useThemedStyles(makeQrStyles);
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const scanned = useRef(false);
@@ -325,11 +330,11 @@ function QRScannerModal({ onClose, onScan }: { onClose: () => void; onScan: (dat
 }
 
 const CUTOUT = ms(230);
-const qr = StyleSheet.create({
+const makeQrStyles = (colors: ThemeColors) => StyleSheet.create({
   container:  { flex: 1, backgroundColor: "#000" },
   center:     { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center", padding: ms(32) },
   permT:      { color: "#fff", fontSize: fs(15), textAlign: "center", lineHeight: fs(22), marginBottom: ms(24) },
-  permBtn:    { backgroundColor: "#8B1E3F", borderRadius: ms(12), paddingHorizontal: ms(28), paddingVertical: ms(12) },
+  permBtn:    { backgroundColor: colors.primary, borderRadius: ms(12), paddingHorizontal: ms(28), paddingVertical: ms(12) },
   permBtnT:   { color: "#fff", fontWeight: "700", fontSize: fs(14) },
 
   overlay:    { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
@@ -341,7 +346,7 @@ const qr = StyleSheet.create({
   darkSide:   { flex: 1, backgroundColor: "rgba(0,0,0,0.55)" },
   cutout:     { width: CUTOUT, height: CUTOUT },
 
-  corner:     { position: "absolute", width: ms(24), height: ms(24), borderColor: "#8B1E3F" },
+  corner:     { position: "absolute", width: ms(24), height: ms(24), borderColor: colors.primary },
   tl:         { top: 0, left: 0, borderTopWidth: ms(3), borderLeftWidth: ms(3), borderTopLeftRadius: ms(4) },
   tr:         { top: 0, right: 0, borderTopWidth: ms(3), borderRightWidth: ms(3), borderTopRightRadius: ms(4) },
   bl:         { bottom: 0, left: 0, borderBottomWidth: ms(3), borderLeftWidth: ms(3), borderBottomLeftRadius: ms(4) },
@@ -370,6 +375,8 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
   onSelect:   (id: string | null) => void;
   onClose:    () => void;
 }) {
+  const colors = useThemeColors();
+  const bpm = useThemedStyles(makeBpmStyles);
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
 
@@ -388,7 +395,7 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
 
         {/* Header */}
         <LinearGradient
-          colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+          colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={cp.header}
@@ -436,9 +443,9 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
             onPress={() => { onSelect(null); onClose(); }}
             activeOpacity={0.75}
           >
-            <Ionicons name="close-circle-outline" size={ms(18)} color={!selectedId ? C.primary : C.muted} />
-            <Text style={[bpm.laterCardT, !selectedId && { color: C.primary }]}>Assign batch later</Text>
-            {!selectedId && <Ionicons name="checkmark-circle" size={ms(16)} color={C.primary} />}
+            <Ionicons name="close-circle-outline" size={ms(18)} color={!selectedId ? colors.primary : C.muted} />
+            <Text style={[bpm.laterCardT, !selectedId && { color: colors.primary }]}>Assign batch later</Text>
+            {!selectedId && <Ionicons name="checkmark-circle" size={ms(16)} color={colors.primary} />}
           </TouchableOpacity>
 
           {filtered.length === 0 ? (
@@ -450,8 +457,8 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
           ) : (
             <View style={bpm.list}>
               {filtered.map((b) => {
-                const color = b.course.examCategory?.color ?? C.muted;
-                const label = b.course.examCategory?.label ?? "General";
+                const color = b.course.examCategories[0]?.color ?? C.muted;
+                const label = b.course.examCategories.length ? b.course.examCategories.map((ec) => ec.label).join(", ") : "General";
                 const sel   = selectedId === b.id;
                 return (
                   <TouchableOpacity
@@ -490,9 +497,9 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
   );
 }
 
-const bpm = StyleSheet.create({
+const makeBpmStyles = (colors: ThemeColors) => StyleSheet.create({
   laterCard:    { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, padding: ms(14), marginBottom: ms(14) },
-  laterCardSel: { borderColor: C.primary, backgroundColor: C.primary + "0C" },
+  laterCardSel: { borderColor: colors.primary, backgroundColor: colors.primary + "0C" },
   laterCardT:   { flex: 1, fontSize: fs(13.5), fontWeight: "700", color: C.text },
 
   list: { gap: ms(10) },
@@ -591,6 +598,8 @@ const PAYMENT_OPTIONS:  { key: PaymentMode;     label: string }[] = [{ key: "cas
 // ── Terms modal — full-screen readable view, front desk turns phone to student ─
 
 function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const colors = useThemeColors();
+  const tm = useThemedStyles(makeTmStyles);
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -599,7 +608,7 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
 
         <View style={[tm.header, { paddingTop: insets.top + ms(8) }]}>
           <View style={tm.headerIcon}>
-            <Ionicons name="document-text-outline" size={ms(20)} color="#8B1E3F" />
+            <Ionicons name="document-text-outline" size={ms(20)} color={colors.primary} />
           </View>
           <Text style={tm.headerTitle}>Terms &amp; Conditions</Text>
           <TouchableOpacity style={tm.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -698,6 +707,7 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
   onSelect:   (course: CourseItem) => void;
   onClose:    () => void;
 }) {
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
 
@@ -705,7 +715,7 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
 
   const filtered = courses.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.examCategory?.label ?? "General").toLowerCase().includes(search.toLowerCase())
+    (c.examCategories.length ? c.examCategories.map((ec) => ec.label).join(", ") : "General").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -715,7 +725,7 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
 
         {/* Header */}
         <LinearGradient
-          colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+          colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={cp.header}
@@ -767,8 +777,8 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
           ) : (
             <View style={cp.grid}>
               {filtered.map((course) => {
-                const color = course.examCategory?.color ?? C.muted;
-                const label = course.examCategory?.label ?? "General";
+                const color = course.examCategories[0]?.color ?? C.muted;
+                const label = course.examCategories.length ? course.examCategories.map((ec) => ec.label).join(", ") : "General";
                 const sel   = selectedId === course.id;
                 return (
                   <TouchableOpacity
@@ -894,7 +904,8 @@ function QualGrid({ value, onSelect, error }: {
   onSelect: (k: Qualification) => void;
   error?: string;
 }) {
-  const TEAL = "#2CA6A4";
+  const colors = useThemeColors();
+  const TEAL = colors.accent;
   const keys = Object.keys(QUAL_DISPLAY) as Qualification[];
   return (
     <View>
@@ -941,8 +952,9 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
   onSelect: (k: Qualification) => void;
   onClose:  () => void;
 }) {
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const TEAL   = C.accent;
+  const TEAL   = colors.accent;
   const items: { key: Qualification; icon: string; label: string; sub: string }[] = [
     { key: "class10",         icon: "book-outline",    label: "Class 10",        sub: "Secondary"        },
     { key: "class12",         icon: "library-outline", label: "Class 12",        sub: "Senior Secondary" },
@@ -956,7 +968,7 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
         <LinearGradient
-          colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+          colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={qpm.header}
@@ -1123,6 +1135,8 @@ const pmp = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function StudentAdmissionScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const insets = useSafeAreaInsets();
   const [step, setStep]  = useState(0);
   const slideAnim        = useRef(new Animated.Value(0)).current;
@@ -1397,11 +1411,11 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       // ─── Step 1: Personal ────────────────────────────────────────────────
       case 0: return (
         <View style={s.stepContent}>
-          <SectionHead icon="person-outline" label="Personal Details" color={C.primary} />
+          <SectionHead icon="person-outline" label="Personal Details" color={colors.primary} />
 
           {/* Aadhaar QR scan button */}
           <TouchableOpacity
-            style={[s.scanBtn, s.scanBtnGrad, aadhaarFilled && s.scanBtnDone, { backgroundColor: aadhaarFilled ? "#1B9C63" : "#8B1E3F" }]}
+            style={[s.scanBtn, s.scanBtnGrad, aadhaarFilled && s.scanBtnDone, { backgroundColor: aadhaarFilled ? "#1B9C63" : colors.primary }]}
             onPress={() => setScannerOpen(true)}
             activeOpacity={0.8}
           >
@@ -1424,7 +1438,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
 
           <View style={s.fieldBlock}>
             <Text style={s.fieldLabel}>GENDER</Text>
-            <OptionRow options={GENDER_OPTIONS} value={gender} onSelect={setGender} color="#8B1E3F" />
+            <OptionRow options={GENDER_OPTIONS} value={gender} onSelect={setGender} color={colors.primary} />
           </View>
 
           <FormField label="AADHAAR NUMBER" value={aadhaar} onChangeText={(v) => setAadhaar(v.replace(/\D/g, "").slice(0, 12))}
@@ -1439,7 +1453,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       // ─── Step 2: Family ──────────────────────────────────────────────────
       case 1: return (
         <View style={s.stepContent}>
-          <SectionHead icon="people-outline" label="Family Details" color={C.primary} sub="Optional — fill what's available" />
+          <SectionHead icon="people-outline" label="Family Details" color={colors.primary} sub="Optional — fill what's available" />
           <FormField label="FATHER'S NAME" value={fatherName} onChangeText={setFatherName}
             placeholder="e.g. Rajesh Kumar Sharma" icon="person-outline" returnKeyType="next" />
           <FormField label="MOTHER'S NAME" value={motherName} onChangeText={setMotherName}
@@ -1456,7 +1470,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         <View style={s.stepContent}>
 
           {/* ── Course Interest ─────────────────────────── */}
-          <SectionHead icon="book-outline" label="Course Interest" color={C.primary} />
+          <SectionHead icon="book-outline" label="Course Interest" color={colors.primary} />
 
           <View style={s.fieldBlock}>
             <View style={s.reqLabelRow}>
@@ -1475,7 +1489,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
                 </>
               ) : selectedCourseName ? (
                 <>
-                  <View style={[s.courseSelDot, { backgroundColor: courses.find(c => c.id === selectedCourseId)?.examCategory?.color ?? "#8B1E3F" }]} />
+                  <View style={[s.courseSelDot, { backgroundColor: courses.find(c => c.id === selectedCourseId)?.examCategories[0]?.color ?? colors.primary }]} />
                   <Text style={s.courseSelValue} numberOfLines={1}>{selectedCourseName}</Text>
                   <Ionicons name="chevron-forward" size={ms(16)} color="#8A7F82" />
                 </>
@@ -1509,7 +1523,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
 
           {/* ── Academic Background ─────────────────────── */}
           <View style={s.sectionDivider} />
-          <SectionHead icon="ribbon-outline" label="Academic Background" color={C.primary} />
+          <SectionHead icon="ribbon-outline" label="Academic Background" color={colors.primary} />
 
           <View style={s.fieldBlock}>
             <View style={s.reqLabelRow}>
@@ -1523,7 +1537,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
             >
               {qualification ? (
                 <>
-                  <Ionicons name={QUAL_DISPLAY[qualification]?.icon as any ?? "ribbon-outline"} size={ms(16)} color="#2CA6A4" />
+                  <Ionicons name={QUAL_DISPLAY[qualification]?.icon as any ?? "ribbon-outline"} size={ms(16)} color={colors.accent} />
                   <Text style={s.courseSelValue} numberOfLines={1}>{QUAL_DISPLAY[qualification]?.label}</Text>
                   <Ionicons name="chevron-forward" size={ms(16)} color="#8A7F82" />
                 </>
@@ -1559,7 +1573,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       // ─── Step 4: Contact ─────────────────────────────────────────────────
       case 3: return (
         <View style={s.stepContent}>
-          <SectionHead icon="chatbubble-outline" label="Contact Details" color={C.primary} />
+          <SectionHead icon="chatbubble-outline" label="Contact Details" color={colors.primary} />
           <FormField label="SELF WHATSAPP NUMBER" value={whatsapp} onChangeText={(v) => setWhatsapp(v.replace(/\D/g, ""))}
             placeholder="e.g. 9876543210" keyboardType="phone-pad" icon="logo-whatsapp" />
           <FormField label="PARENTS CONTACT NUMBER" value={guardianPhone} onChangeText={(v) => setGuardianPhone(v.replace(/\D/g, ""))}
@@ -1569,13 +1583,13 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           <View style={s.tcSection}>
             <TouchableOpacity style={s.showTcBtn} onPress={() => setTermsOpen(true)} activeOpacity={0.8}>
               <View style={s.showTcIcon}>
-                <Ionicons name="document-text-outline" size={ms(18)} color="#8B1E3F" />
+                <Ionicons name="document-text-outline" size={ms(18)} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.showTcTitle}>Terms &amp; Conditions</Text>
                 <Text style={s.showTcSub}>Tap to show to student / parent</Text>
               </View>
-              <Ionicons name="chevron-forward" size={ms(16)} color="#8B1E3F" />
+              <Ionicons name="chevron-forward" size={ms(16)} color={colors.primary} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1614,7 +1628,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           </View>
 
           {/* ── Batch Assignment ─────────────────────── */}
-          <SectionHead icon="layers-outline" label="Batch Assignment" color={C.primary} />
+          <SectionHead icon="layers-outline" label="Batch Assignment" color={colors.primary} />
           <TouchableOpacity
             style={s.courseSel}
             onPress={() => setBatchPickerOpen(true)}
@@ -1628,7 +1642,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
               </>
             ) : selectedBatch ? (
               <>
-                <View style={[s.courseSelDot, { backgroundColor: selectedBatch.course.examCategory?.color ?? C.primary }]} />
+                <View style={[s.courseSelDot, { backgroundColor: selectedBatch.course.examCategories[0]?.color ?? colors.primary }]} />
                 <Text style={s.courseSelValue} numberOfLines={1}>{selectedBatch.name}</Text>
                 <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
               </>
@@ -1649,7 +1663,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           <View style={s.sectionDivider} />
 
           {/* ── Payment Details ──────────────────────── */}
-          <SectionHead icon="cash-outline" label="Payment Details" color={C.primary} sub="Record initial fee collected at admission" />
+          <SectionHead icon="cash-outline" label="Payment Details" color={colors.primary} sub="Record initial fee collected at admission" />
 
           <View style={s.fieldBlock}>
             <Text style={[s.fieldLabel, !!errors.amountPaid && { color: "#C0392B" }]}>AMOUNT COLLECTED (₹)</Text>
@@ -1719,18 +1733,18 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           <View style={s.navRow}>
             {step > 0 && (
               <TouchableOpacity style={s.prevBtn} onPress={handlePrev} activeOpacity={0.75}>
-                <Ionicons name="chevron-back" size={ms(18)} color="#8B1E3F" />
+                <Ionicons name="chevron-back" size={ms(18)} color={colors.primary} />
                 <Text style={s.prevBtnT}>Back</Text>
               </TouchableOpacity>
             )}
             <View style={s.navSpacer} />
             {step < 4 ? (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: "#8B1E3F" }]} onPress={handleNext} activeOpacity={0.85}>
+              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleNext} activeOpacity={0.85}>
                 <Text style={s.nextBtnT}>Next</Text>
                 <Ionicons name="chevron-forward" size={ms(18)} color="#fff" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: "#8B1E3F" }]} onPress={() => handleSubmit()} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={() => handleSubmit()} disabled={loading} activeOpacity={0.85}>
                 {loading
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <>
@@ -1763,7 +1777,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         onSelect={(course) => {
           setSelectedCourseId(course.id);
           setSelectedCourseName(course.name);
-          setCoursePreference((course.examCategory?.key as CoursePreference) ?? null);
+          setCoursePreference((course.examCategories[0]?.key as CoursePreference) ?? null);
           setDurationPreference(monthsToDurationPref(course.durationMonths));
           setErrors((p) => ({ ...p, coursePreference: "", durationPreference: "" }));
           setCoursePickerOpen(false);
@@ -1799,13 +1813,13 @@ export function StudentAdmissionScreen({ navigation }: Props) {
           <View style={s.discardCard}>
             {/* Icon circle */}
             <View style={s.discardIconCircle}>
-              <Ionicons name="trash-outline" size={ms(30)} color="#8B1E3F" />
+              <Ionicons name="trash-outline" size={ms(30)} color={colors.primary} />
             </View>
 
             <Text style={s.discardTitle}>Discard Admission?</Text>
             <Text style={s.discardBody}>
               All the details you've entered across{"\n"}
-              <Text style={{ fontWeight: "700", color: "#8B1E3F" }}>
+              <Text style={{ fontWeight: "700", color: colors.primary }}>
                 {step + 1} step{step > 0 ? "s" : ""}
               </Text>{" "}
               will be lost permanently.{"\n"}This action cannot be undone.
@@ -1828,7 +1842,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
               onPress={() => setDiscardVisible(false)}
               activeOpacity={0.82}
             >
-              <Ionicons name="arrow-back-outline" size={ms(16)} color="#8B1E3F" />
+              <Ionicons name="arrow-back-outline" size={ms(16)} color={colors.primary} />
               <Text style={s.discardCancelTxt}>Continue Filling</Text>
             </TouchableOpacity>
           </View>
@@ -1868,7 +1882,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       {loading && (
         <View style={s.loaderOverlay}>
           <View style={s.loaderCard}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderTitle}>Processing Admission…</Text>
             <Text style={s.loaderSub}>Please wait a moment</Text>
           </View>
@@ -1916,24 +1930,24 @@ export function StudentAdmissionScreen({ navigation }: Props) {
                 </Animated.View>
 
                 <Animated.View style={[s.sparkleTL, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
-                  <Ionicons name="sparkles" size={ms(14)} color={C.secondary} />
+                  <Ionicons name="sparkles" size={ms(14)} color={colors.secondary} />
                 </Animated.View>
                 <Animated.View style={[s.sparkleBR, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
-                  <Ionicons name="sparkles" size={ms(10)} color={C.accent} />
+                  <Ionicons name="sparkles" size={ms(10)} color={colors.accent} />
                 </Animated.View>
               </View>
 
               <Animated.View style={[s.successContent, { opacity: contentOpacity, transform: [{ translateY: contentY }] }]}>
                 <Text style={s.successTitle}>Admission Complete!</Text>
                 <View style={s.regCodeRow}>
-                  <Ionicons name="id-card-outline" size={ms(14)} color={C.primary} />
+                  <Ionicons name="id-card-outline" size={ms(14)} color={colors.primary} />
                   <Text style={s.regCode}>{admitted.student.studentCode}</Text>
                 </View>
                 <Text style={s.successSub}>Student registered successfully</Text>
 
                 <View style={s.detailBox}>
-                  <DetailRow icon="person-outline"    label="Student Name"    value={admitted.student.fullName}                                                                   color="#8B1E3F" />
-                  <DetailRow icon="call-outline"      label="Phone"           value={admitted.student.phone}                                                                       color="#2CA6A4" />
+                  <DetailRow icon="person-outline"    label="Student Name"    value={admitted.student.fullName}                                                                   color={colors.primary} />
+                  <DetailRow icon="call-outline"      label="Phone"           value={admitted.student.phone}                                                                       color={colors.accent} />
                   {admitted.student.coursePreference && (
                     <DetailRow icon="book-outline"    label="Course Pref."    value={admitted.student.coursePreference.toUpperCase()}                                              color="#2563A8" />
                   )}
@@ -1944,13 +1958,13 @@ export function StudentAdmissionScreen({ navigation }: Props) {
                     <DetailRow icon="cash-outline"    label="Amount Paid"     value={`₹ ${Number(admitted.student.amountPaid).toLocaleString("en-IN")}`}                          color="#1B9C63" />
                   )}
                   {admitted.student.paymentMode && (
-                    <DetailRow icon="card-outline"    label="Payment Mode"    value={admitted.student.paymentMode === "cash" ? "Cash" : "Online Payment"}          color="#E8752C" last />
+                    <DetailRow icon="card-outline"    label="Payment Mode"    value={admitted.student.paymentMode === "cash" ? "Cash" : "Online Payment"}          color={C.orange} last />
                   )}
                 </View>
 
                 <View style={s.termsBox}>
                   <View style={s.termsTitleRow}>
-                    <Ionicons name="checkmark-circle-outline" size={ms(14)} color={C.primary} />
+                    <Ionicons name="checkmark-circle-outline" size={ms(14)} color={colors.primary} />
                     <Text style={s.termsT}>Terms &amp; Conditions Acknowledged</Text>
                   </View>
                   <Text style={s.termsSub}>
@@ -1978,7 +1992,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-                  <LinearGradient colors={[C.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+                  <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
                     <Ionicons name="school-outline" size={ms(18)} color="#fff" />
                     <Text style={s.doneBtnT}>View All Students</Text>
                   </LinearGradient>
@@ -1994,8 +2008,8 @@ export function StudentAdmissionScreen({ navigation }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  safe:        { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:        { flex: 1, backgroundColor: colors.primary },
   flex:        { flex: 1 },
   scroll:      { flex: 1, backgroundColor: "#FFFBF0" },
   body:        { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(40) },
@@ -2022,12 +2036,12 @@ const s = StyleSheet.create({
   tcSection:    { gap: ms(12) },
   showTcBtn:    { flexDirection: "row", alignItems: "center", gap: ms(12), backgroundColor: "#FEF4F4", borderRadius: ms(14), padding: ms(14), borderWidth: 1, borderColor: "#F5C6C0" },
   showTcIcon:   { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  showTcTitle:  { fontSize: fs(14), fontWeight: "700", color: "#8B1E3F" },
+  showTcTitle:  { fontSize: fs(14), fontWeight: "700", color: colors.primary },
   showTcSub:    { fontSize: fs(11), color: "#C0606B", marginTop: ms(2) },
   tcCheckRow:   { flexDirection: "row", alignItems: "flex-start", gap: ms(10), padding: ms(12), backgroundColor: "#FAFAF8", borderRadius: ms(12), borderWidth: 1.5, borderColor: "#E8E0DC" },
-  tcCheckRowOn: { borderColor: "#8B1E3F", backgroundColor: "#FFF4F6" },
+  tcCheckRowOn: { borderColor: colors.primary, backgroundColor: "#FFF4F6" },
   checkbox:     { width: ms(20), height: ms(20), borderRadius: ms(5), borderWidth: 2, borderColor: "#C0B8B4", backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center", flexShrink: 0, marginTop: ms(1) },
-  checkboxOn:   { backgroundColor: "#8B1E3F", borderColor: "#8B1E3F" },
+  checkboxOn:   { backgroundColor: colors.primary, borderColor: colors.primary },
   tcCheckText:  { flex: 1, fontSize: fs(12.5), color: "#3D2B30", lineHeight: fs(19), fontWeight: "500" },
   tcErrorRow:   { flexDirection: "row", alignItems: "center", gap: ms(5) },
   tcError:      { fontSize: fs(11.5), color: "#C0392B", flex: 1 },
@@ -2061,7 +2075,7 @@ const s = StyleSheet.create({
   navRow:       { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
   navSpacer:    { flex: 1 },
   prevBtn:      { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(16), paddingVertical: ms(12), borderRadius: ms(14), backgroundColor: "#FFFFFF", borderWidth: 1.5, borderColor: "#E0D8D4" },
-  prevBtnT:     { fontSize: fs(14), fontWeight: "700", color: "#8B1E3F" },
+  prevBtnT:     { fontSize: fs(14), fontWeight: "700", color: colors.primary },
   nextBtn:      { borderRadius: ms(14) },
   nextBtnGrad:  { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(22), paddingVertical: ms(13), borderRadius: ms(14) },
   nextBtnT:     { fontSize: fs(14), fontWeight: "800", color: "#fff" },
@@ -2075,8 +2089,8 @@ const s = StyleSheet.create({
 
   // Success
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
-  successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: C.primary },
-  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(22), alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
+  successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.primary },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(22), alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
 
   checkStage:   { width: ms(104), height: ms(104), justifyContent: "center", alignItems: "center", marginBottom: ms(8) },
   checkGlow:    { position: "absolute", width: ms(90), height: ms(90), borderRadius: ms(45), backgroundColor: C.greenBg },
@@ -2088,12 +2102,12 @@ const s = StyleSheet.create({
   successContent: { width: "100%", alignItems: "center" },
   successTitle:   { fontSize: fs(21), fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
   regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF4F4", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(5), marginBottom: ms(6) },
-  regCode:        { fontSize: fs(14), fontWeight: "800", color: C.primary, letterSpacing: 1 },
+  regCode:        { fontSize: fs(14), fontWeight: "800", color: colors.primary, letterSpacing: 1 },
   successSub:     { fontSize: fs(12.5), color: C.muted, marginBottom: ms(12), textAlign: "center" },
   detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(12), borderWidth: 1, borderColor: C.border },
   termsBox:       { width: "100%", backgroundColor: C.bg, borderRadius: ms(12), padding: ms(10), marginBottom: ms(10), borderWidth: 1, borderColor: "#F5E6CE" },
   termsTitleRow:  { flexDirection: "row", alignItems: "center", gap: ms(5), marginBottom: ms(4) },
-  termsT:         { fontSize: fs(12), fontWeight: "700", color: C.primary },
+  termsT:         { fontSize: fs(12), fontWeight: "700", color: colors.primary },
   termsSub:       { fontSize: fs(11), color: C.muted, lineHeight: fs(15) },
   doneBtnWrap:    { width: "100%", marginBottom: ms(8) },
   whatsappBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(12) },
@@ -2107,10 +2121,10 @@ const s = StyleSheet.create({
   discardTitle:         { fontSize: fs(18), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(10), letterSpacing: 0.2 },
   discardBody:          { fontSize: fs(13), color: "#6B5B5F", textAlign: "center", lineHeight: fs(20), marginBottom: ms(20) },
   discardDivider:       { width: "100%", height: 1, backgroundColor: "#F2EAE8", marginBottom: ms(16) },
-  discardDestructiveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: "#8B1E3F", borderRadius: ms(14), paddingVertical: ms(14), marginBottom: ms(10) },
+  discardDestructiveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14), marginBottom: ms(10) },
   discardDestructiveTxt: { fontSize: fs(14), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
   discardCancelBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: "#FFF0F3", borderRadius: ms(14), paddingVertical: ms(13), borderWidth: 1.5, borderColor: "#F5C2CE" },
-  discardCancelTxt:     { fontSize: fs(14), fontWeight: "700", color: "#8B1E3F" },
+  discardCancelTxt:     { fontSize: fs(14), fontWeight: "700", color: colors.primary },
 
   // ── Info modal ──
   infoOverlay:   { flex: 1, backgroundColor: "rgba(16,4,8,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(28) },
@@ -2124,7 +2138,7 @@ const s = StyleSheet.create({
 
 // ── TermsModal styles ─────────────────────────────────────────────────────────
 
-const tm = StyleSheet.create({
+const makeTmStyles = (colors: ThemeColors) => StyleSheet.create({
   safe:       { flex: 1, backgroundColor: "#FFFBF0" },
   header:     { flexDirection: "row", alignItems: "center", paddingHorizontal: ms(16), paddingBottom: ms(12), gap: ms(10), backgroundColor: "#FFFFFF" },
   headerIcon: { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "#FEF4F4", justifyContent: "center", alignItems: "center", flexShrink: 0 },
@@ -2148,7 +2162,7 @@ const tm = StyleSheet.create({
   alertBody:  { fontSize: fs(13), color: "#C0392B", lineHeight: fs(19), fontWeight: "600", flex: 1 },
 
   termRow:    { flexDirection: "row", gap: ms(10), alignItems: "flex-start" },
-  termNum:    { width: ms(22), height: ms(22), borderRadius: ms(11), backgroundColor: "#8B1E3F", justifyContent: "center", alignItems: "center", flexShrink: 0, marginTop: ms(2) },
+  termNum:    { width: ms(22), height: ms(22), borderRadius: ms(11), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", flexShrink: 0, marginTop: ms(2) },
   termNumT:   { fontSize: fs(10), fontWeight: "800", color: "#fff" },
   termText:   { flex: 1, fontSize: fs(13.5), color: "#3D2B30", lineHeight: fs(21) },
 
@@ -2156,7 +2170,7 @@ const tm = StyleSheet.create({
   footerT:    { flex: 1, fontSize: fs(11.5), color: "#8A7F82", lineHeight: fs(17) },
 
   btnWrap:    { padding: ms(16), backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#F0EDE8" },
-  btn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: "#8B1E3F", borderRadius: ms(14), paddingVertical: ms(15) },
+  btn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(15) },
   btnT:       { fontSize: fs(15), fontWeight: "800", color: "#fff" },
 });
 
@@ -2170,6 +2184,8 @@ type UploadKey = "photo" | string; // "photo" or a documentTypeId
 function UploadRow({ label, uri, loading, error, onPress, onView }: {
   label: string; uri: string | null; loading: boolean; error?: string; onPress: () => void; onView: () => void;
 }) {
+  const colors = useThemeColors();
+  const ds = useThemedStyles(makeDsStyles);
   return (
     <View style={ds.row}>
       <TouchableOpacity
@@ -2179,7 +2195,7 @@ function UploadRow({ label, uri, loading, error, onPress, onView }: {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator size="small" color="#8B1E3F" />
+          <ActivityIndicator size="small" color={colors.primary} />
         ) : uri ? (
           <Image source={{ uri }} style={ds.rowThumb} />
         ) : (
@@ -2199,6 +2215,8 @@ function UploadRow({ label, uri, loading, error, onPress, onView }: {
 }
 
 function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () => void }) {
+  const colors = useThemeColors();
+  const ds = useThemedStyles(makeDsStyles);
   const insets = useSafeAreaInsets();
   const [docTypes, setDocTypes]         = useState<DocumentType[]>([]);
   const [docTypesLoading, setDocTypesLoading] = useState(true);
@@ -2270,7 +2288,7 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
     <View style={ds.overlay}>
       {/* Header */}
       <LinearGradient
-        colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={ds.header}
@@ -2303,7 +2321,7 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
         />
 
         {docTypesLoading ? (
-          <ActivityIndicator color="#8B1E3F" style={{ marginVertical: ms(16) }} />
+          <ActivityIndicator color={colors.primary} style={{ marginVertical: ms(16) }} />
         ) : (
           docTypes.map((dt) => (
             <UploadRow
@@ -2333,8 +2351,8 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
         <View style={ds.sheetInner}>
           <Text style={ds.sheetTitle}>Update {activeLabel}</Text>
           <TouchableOpacity style={ds.sheetOption} onPress={() => activeSheet && pickAndUpload(activeSheet, true)} activeOpacity={0.8}>
-            <View style={[ds.sheetOptionIcon, { backgroundColor: "#8B1E3F18" }]}>
-              <Ionicons name="camera-outline" size={ms(22)} color="#8B1E3F" />
+            <View style={[ds.sheetOptionIcon, { backgroundColor: colors.primary + "18" }]}>
+              <Ionicons name="camera-outline" size={ms(22)} color={colors.primary} />
             </View>
             <Text style={ds.sheetOptionLabel}>Take Photo</Text>
           </TouchableOpacity>
@@ -2375,7 +2393,7 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
   );
 }
 
-const ds = StyleSheet.create({
+const makeDsStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg },
   scroll:  { padding: ms(20), paddingBottom: ms(30) },
 
@@ -2402,7 +2420,7 @@ const ds = StyleSheet.create({
   rowErr:      { fontSize: fs(11), color: "#C0392B", marginTop: ms(3) },
 
   footer: { padding: ms(16), backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#F0EDE8", gap: ms(10) },
-  continueBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: "#8B1E3F", borderRadius: ms(14), paddingVertical: ms(15) },
+  continueBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(15) },
   continueBtnT: { fontSize: fs(15), fontWeight: "800", color: "#fff" },
   skipBtn:  { alignItems: "center", paddingVertical: ms(4) },
   skipT:    { fontSize: fs(13), fontWeight: "700", color: "#8A7F82" },

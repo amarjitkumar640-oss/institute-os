@@ -16,6 +16,7 @@ import { listFaculty, type FacultyItem } from "../../api/faculty";
 import { listSubjects, type SubjectItem } from "../../api/subjects";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { useAlert } from "../../context/AlertContext";
 
 interface Props {
@@ -40,8 +41,8 @@ function getInitials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-function facultyAvatarColor(name: string) {
-  const palette = [C.primary, C.blue, C.green, C.accent, C.purple, C.orange];
+function facultyAvatarColor(name: string, colors: ThemeColors) {
+  const palette = [colors.primary, C.blue, C.green, colors.accent, C.purple, C.orange];
   return palette[name.charCodeAt(0) % palette.length];
 }
 
@@ -55,6 +56,7 @@ function SubjectGrid({
   onSelect:   (s: SubjectItem | null) => void;
   onBack:     () => void;
 }) {
+  const sg = useThemedStyles(makeSgStyles);
   const [search, setSearch] = useState("");
 
   const filtered = search.trim()
@@ -64,10 +66,12 @@ function SubjectGrid({
   const groups: Record<string, { label: string; color: string; items: SubjectItem[] }> = {};
   const general: SubjectItem[] = [];
   for (const s of filtered) {
-    if (s.examCategory) {
-      const key = s.examCategory.id;
-      if (!groups[key]) groups[key] = { label: s.examCategory.label, color: s.examCategory.color, items: [] };
-      groups[key].items.push(s);
+    if (s.examCategories.length > 0) {
+      // A subject relevant to several categories appears under each of them.
+      for (const ec of s.examCategories) {
+        if (!groups[ec.id]) groups[ec.id] = { label: ec.label, color: ec.color, items: [] };
+        groups[ec.id].items.push(s);
+      }
     } else {
       general.push(s);
     }
@@ -204,6 +208,8 @@ function FacultyGrid({
   onSelect:   (f: FacultyItem | null) => void;
   onBack:     () => void;
 }) {
+  const colors = useThemeColors();
+  const fg = useThemedStyles(makeFgStyles);
   const [search, setSearch] = useState("");
 
   const filtered = search.trim()
@@ -266,7 +272,7 @@ function FacultyGrid({
         ) : (
           filtered.map((f) => {
             const sel   = f.id === selectedId;
-            const color = facultyAvatarColor(f.fullName);
+            const color = facultyAvatarColor(f.fullName, colors);
             const subs  = (f.subjects ?? []).map((s) => s.name).join(" · ");
             return (
               <TouchableOpacity
@@ -299,6 +305,8 @@ function FacultyGrid({
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Props) {
+  const colors = useThemeColors();
+  const m = useThemedStyles(makeMStyles);
   const isEdit = !!slot;
   const { showConfirm, showAlert } = useAlert();
 
@@ -481,7 +489,7 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
                 >
                   {loadingData && (
                     <View style={m.loadingRow}>
-                      <ActivityIndicator size="small" color={C.primary} />
+                      <ActivityIndicator size="small" color={colors.primary} />
                       <Text style={m.loadingT}>Loading subjects &amp; faculty…</Text>
                     </View>
                   )}
@@ -577,7 +585,7 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
                       activeOpacity={0.75}
                     >
                       {facultyId ? (
-                        <View style={[m.pickerAvatar, { backgroundColor: facultyAvatarColor(facultyName) }]}>
+                        <View style={[m.pickerAvatar, { backgroundColor: facultyAvatarColor(facultyName, colors) }]}>
                           <Text style={m.pickerAvatarT}>{getInitials(facultyName)}</Text>
                         </View>
                       ) : (
@@ -682,7 +690,7 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
 
 // ── Modal styles ──────────────────────────────────────────────────────────────
 
-const m = StyleSheet.create({
+const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   handle: {
     width: ms(36), height: ms(4), borderRadius: ms(2),
     backgroundColor: C.border, alignSelf: "center",
@@ -716,7 +724,7 @@ const m = StyleSheet.create({
   // ── Day chips ──
   dayGrid:      { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   dayChip:      { paddingHorizontal: ms(12), paddingVertical: ms(7), borderRadius: ms(8), borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg },
-  dayChipActive:{ backgroundColor: C.primary, borderColor: C.primary },
+  dayChipActive:{ backgroundColor: colors.primary, borderColor: colors.primary },
   dayChipT:     { fontSize: fs(12), color: C.muted, fontWeight: "600" },
   dayChipTActive:{ color: "#FFFFFF" },
 
@@ -762,9 +770,9 @@ const m = StyleSheet.create({
   deleteBtnT: { fontSize: fs(13), fontWeight: "700", color: C.red },
   saveBtn: {
     flex: 1, height: ms(46), borderRadius: ms(10),
-    backgroundColor: C.primary,
+    backgroundColor: colors.primary,
     alignItems: "center", justifyContent: "center",
-    shadowColor: C.primary, shadowOffset: { width: 0, height: ms(4) },
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(4) },
     shadowOpacity: 0.35, shadowRadius: ms(8), elevation: 6,
   },
   saveBtnT: { fontSize: fs(14), fontWeight: "700", color: "#FFFFFF" },
@@ -772,7 +780,7 @@ const m = StyleSheet.create({
 
 // ── Subject grid styles ───────────────────────────────────────────────────────
 
-const sg = StyleSheet.create({
+const makeSgStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { flex: 1 },
   header: {
     flexDirection: "row", alignItems: "center", gap: ms(10),
@@ -785,8 +793,8 @@ const sg = StyleSheet.create({
   },
   headerTitle: { fontSize: fs(15), fontWeight: "800", color: C.text },
   headerSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(1) },
-  clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: C.primary + "14" },
-  clearT:      { fontSize: fs(12), color: C.primary, fontWeight: "700" },
+  clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: colors.primary + "14" },
+  clearT:      { fontSize: fs(12), color: colors.primary, fontWeight: "700" },
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
@@ -815,7 +823,7 @@ const sg = StyleSheet.create({
 
 // ── Faculty grid styles ───────────────────────────────────────────────────────
 
-const fg = StyleSheet.create({
+const makeFgStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { flex: 1 },
   header: {
     flexDirection: "row", alignItems: "center", gap: ms(10),
@@ -828,8 +836,8 @@ const fg = StyleSheet.create({
   },
   headerTitle: { fontSize: fs(15), fontWeight: "800", color: C.text },
   headerSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(1) },
-  clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: C.primary + "14" },
-  clearT:      { fontSize: fs(12), color: C.primary, fontWeight: "700" },
+  clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: colors.primary + "14" },
+  clearT:      { fontSize: fs(12), color: colors.primary, fontWeight: "700" },
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),

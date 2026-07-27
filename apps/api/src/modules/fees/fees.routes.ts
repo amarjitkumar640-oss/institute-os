@@ -31,7 +31,7 @@ feesRouter.get(
   "/templates/:courseId",
   requireAuth,
   async (req, res) => {
-    const template = await getFeeTemplate(prisma, req.params.courseId);
+    const template = await getFeeTemplate(prisma, req.params.courseId, req.auth!.tenantId);
     if (!template) return res.status(404).json({ error: "No template for this course" });
     res.json(template);
   },
@@ -43,8 +43,15 @@ feesRouter.post(
   requireRole("admin"),
   validateBody(upsertFeeTemplateSchema),
   async (req, res) => {
-    const template = await upsertFeeTemplate(prisma, req.params.courseId, req.body);
-    res.json(template);
+    try {
+      const template = await upsertFeeTemplate(prisma, req.params.courseId, req.auth!.tenantId, req.body);
+      res.json(template);
+    } catch (err: any) {
+      if (err.message === "COURSE_NOT_FOUND") {
+        return res.status(404).json({ error: "Course not found" });
+      }
+      throw err;
+    }
   },
 );
 
@@ -64,7 +71,7 @@ feesRouter.get(
     const { search, status, batchId } = req.query as {
       search?: string; status?: string; batchId?: string;
     };
-    const data = await listSchedules(prisma, req.auth?.centerId, { search, status, batchId });
+    const data = await listSchedules(prisma, req.auth!.tenantId, req.auth?.centerId, { search, status, batchId });
     res.json(data);
   },
 );
@@ -73,7 +80,7 @@ feesRouter.get(
   "/schedules/:enrollmentId",
   requireAuth,
   async (req, res) => {
-    const schedule = await getScheduleDetail(prisma, req.params.enrollmentId);
+    const schedule = await getScheduleDetail(prisma, req.params.enrollmentId, req.auth!.tenantId);
     if (!schedule) return res.status(404).json({ error: "No fee schedule for this enrollment" });
     res.json(schedule);
   },
@@ -86,7 +93,7 @@ feesRouter.post(
   validateBody(generateScheduleSchema),
   async (req, res) => {
     try {
-      const schedule = await generateSchedule(prisma, req.params.enrollmentId, req.body);
+      const schedule = await generateSchedule(prisma, req.params.enrollmentId, req.body, req.auth!.tenantId);
       res.status(201).json(schedule);
     } catch (err: any) {
       if (err.message === "SCHEDULE_ALREADY_EXISTS") {
@@ -110,7 +117,7 @@ feesRouter.patch(
   validateBody(applyDiscountSchema),
   async (req, res) => {
     try {
-      const schedule = await applyDiscount(prisma, req.params.scheduleId, req.body);
+      const schedule = await applyDiscount(prisma, req.params.scheduleId, req.auth!.tenantId, req.body);
       res.json(schedule);
     } catch (err: any) {
       if (err.message === "SCHEDULE_NOT_FOUND") {
@@ -133,7 +140,7 @@ feesRouter.patch(
   validateBody(editInstallmentSchema),
   async (req, res) => {
     try {
-      const inst = await editInstallment(prisma, req.params.id, req.body);
+      const inst = await editInstallment(prisma, req.params.id, req.auth!.tenantId, req.body);
       res.json(inst);
     } catch (err: any) {
       if (err.message === "INSTALLMENT_NOT_FOUND") {
@@ -154,7 +161,7 @@ feesRouter.post(
   async (req, res) => {
     try {
       const staffId = req.auth?.staffId ?? null;
-      const txn = await recordPayment(prisma, staffId, req.body);
+      const txn = await recordPayment(prisma, staffId, req.auth!.tenantId, req.body);
       res.status(201).json(txn);
     } catch (err: any) {
       if (err.message === "SCHEDULE_NOT_FOUND") {
@@ -179,10 +186,13 @@ feesRouter.get(
   async (req, res) => {
     const { scheduleId } = req.query as { scheduleId?: string };
     const where = scheduleId
-      ? { scheduleId }
-      : req.auth?.centerId
-        ? { schedule: { enrollment: { batch: { centerId: req.auth.centerId } } } }
-        : {};
+      ? { scheduleId, tenantId: req.auth!.tenantId }
+      : {
+          tenantId: req.auth!.tenantId,
+          ...(req.auth?.centerId
+            ? { schedule: { enrollment: { batch: { centerId: req.auth.centerId } } } }
+            : {}),
+        };
 
     const payments = await prisma.paymentTransaction.findMany({
       where,
@@ -203,7 +213,7 @@ feesRouter.get(
   "/summary",
   requireAuth,
   async (req, res) => {
-    const summary = await getFeeSummary(prisma, req.auth?.centerId);
+    const summary = await getFeeSummary(prisma, req.auth!.tenantId, req.auth?.centerId);
     res.json(summary);
   },
 );

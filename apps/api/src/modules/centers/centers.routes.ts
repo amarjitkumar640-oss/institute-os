@@ -9,7 +9,7 @@ export const centersRouter = Router();
 // ── GET /api/centers — centers assigned to the current staff member ───────────
 centersRouter.get("/", requireAuth, async (req, res) => {
   const assignments = await prisma.centerStaff.findMany({
-    where:   { staffId: req.auth!.staffId, center: { isActive: true } },
+    where:   { staffId: req.auth!.staffId, center: { isActive: true, tenantId: req.auth!.tenantId } },
     include: { center: { select: { id: true, name: true, address: true, phone: true } } },
     orderBy: { center: { name: "asc" } },
   });
@@ -24,24 +24,26 @@ centersRouter.get("/", requireAuth, async (req, res) => {
   );
 });
 
-// ── GET /api/centers/assignable — every active center, id/name only ───────────
+// ── GET /api/centers/assignable — every active center in this tenant, id/name only ──
 // Used by the "pick a center for this record" fallback shown when a create
 // action fails because the session has no center pinned (all-centers mode).
 // Deliberately NOT scoped to the caller's own CenterStaff assignments like
 // GET / above — an all-centers-mode admin/frontdesk may have zero assignments
-// yet still needs to be able to attach a new record to any center that exists.
-centersRouter.get("/assignable", requireAuth, async (_req, res) => {
+// yet still needs to be able to attach a new record to any center that exists
+// in their own tenant (but never another tenant's centers).
+centersRouter.get("/assignable", requireAuth, async (req, res) => {
   const centers = await prisma.center.findMany({
-    where:   { isActive: true },
+    where:   { tenantId: req.auth!.tenantId, isActive: true },
     orderBy: { name: "asc" },
     select:  { id: true, name: true },
   });
   res.json(centers);
 });
 
-// ── GET /api/centers/all — all centers (admin only, for management UI) ────────
-centersRouter.get("/all", requireAuth, requireRole("admin"), async (_req, res) => {
+// ── GET /api/centers/all — all centers in this tenant (admin only, for management UI) ──
+centersRouter.get("/all", requireAuth, requireRole("admin"), async (req, res) => {
   const centers = await prisma.center.findMany({
+    where:   { tenantId: req.auth!.tenantId },
     orderBy: { name: "asc" },
     include: {
       _count: { select: { students: true, batches: true, staff: true } },
@@ -71,7 +73,7 @@ centersRouter.post("/", requireAuth, requireRole("admin"), async (req, res) => {
   const parsed = createCenterSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const center = await prisma.center.create({ data: parsed.data });
+  const center = await prisma.center.create({ data: { ...parsed.data, tenantId: req.auth!.tenantId } });
 
   // Auto-assign the creating admin to this center
   await prisma.centerStaff.create({
@@ -83,7 +85,7 @@ centersRouter.post("/", requireAuth, requireRole("admin"), async (req, res) => {
 
 // ── PATCH /api/centers/:id — update center details ────────────────────────────
 centersRouter.patch("/:id", requireAuth, requireRole("admin"), async (req, res) => {
-  const center = await prisma.center.findUnique({ where: { id: req.params.id } });
+  const center = await prisma.center.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
   if (!center) return res.status(404).json({ error: "Center not found" });
 
   const schema = z.object({
@@ -101,7 +103,7 @@ centersRouter.patch("/:id", requireAuth, requireRole("admin"), async (req, res) 
 
 // ── GET /api/centers/:id/staff — list staff assigned to a center ──────────────
 centersRouter.get("/:id/staff", requireAuth, requireRole("admin"), async (req, res) => {
-  const center = await prisma.center.findUnique({ where: { id: req.params.id } });
+  const center = await prisma.center.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
   if (!center) return res.status(404).json({ error: "Center not found" });
 
   const assignments = await prisma.centerStaff.findMany({
@@ -122,7 +124,7 @@ centersRouter.get("/:id/staff", requireAuth, requireRole("admin"), async (req, r
 
 // ── POST /api/centers/:id/staff — assign a staff member to a center ───────────
 centersRouter.post("/:id/staff", requireAuth, requireRole("admin"), async (req, res) => {
-  const center = await prisma.center.findUnique({ where: { id: req.params.id } });
+  const center = await prisma.center.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
   if (!center) return res.status(404).json({ error: "Center not found" });
 
   const schema = z.object({
@@ -132,7 +134,7 @@ centersRouter.post("/:id/staff", requireAuth, requireRole("admin"), async (req, 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const staff = await prisma.staff.findUnique({ where: { id: parsed.data.staffId } });
+  const staff = await prisma.staff.findFirst({ where: { id: parsed.data.staffId, tenantId: req.auth!.tenantId } });
   if (!staff) return res.status(404).json({ error: "Staff not found" });
 
   const assignment = await prisma.centerStaff.upsert({
@@ -145,6 +147,9 @@ centersRouter.post("/:id/staff", requireAuth, requireRole("admin"), async (req, 
 
 // ── DELETE /api/centers/:id/staff/:staffId — remove a staff from a center ─────
 centersRouter.delete("/:id/staff/:staffId", requireAuth, requireRole("admin"), async (req, res) => {
+  const center = await prisma.center.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+  if (!center) return res.status(404).json({ error: "Center not found" });
+
   const assignment = await prisma.centerStaff.findUnique({
     where: { centerId_staffId: { centerId: req.params.id, staffId: req.params.staffId } },
   });

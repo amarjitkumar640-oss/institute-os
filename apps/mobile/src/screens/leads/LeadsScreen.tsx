@@ -11,6 +11,7 @@ import { ListErrorState } from "../../components/ui/ListErrorState";
 import { listLeads, type LeadItem, type LeadStatus } from "../../api/leads";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Leads">;
 
@@ -29,11 +30,13 @@ function initials(name: string) {
 }
 
 function LeadCard({ lead }: { lead: LeadItem }) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const exam = { label: lead.targetExam.label, color: lead.targetExam.color };
   const status = STATUS_META[lead.status] ?? { label: lead.status, color: C.muted };
 
   return (
-    <View style={[s.card, { borderLeftColor: C.primary }]}>
+    <View style={[s.card, { borderLeftColor: colors.primary }]}>
       <View style={s.cardTop}>
         <View style={s.avatar}>
           <Text style={s.avatarT}>{initials(lead.name)}</Text>
@@ -61,6 +64,8 @@ function LeadCard({ lead }: { lead: LeadItem }) {
 }
 
 export function LeadsScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const [leads, setLeads]           = useState<LeadItem[]>([]);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -95,7 +100,7 @@ export function LeadsScreen({ navigation }: Props) {
       <View style={s.content}>
         {loading ? (
           <View style={s.loader}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderT}>Loading leads…</Text>
           </View>
         ) : error ? (
@@ -107,7 +112,7 @@ export function LeadsScreen({ navigation }: Props) {
             renderItem={({ item }) => <LeadCard lead={item} />}
             contentContainerStyle={s.listContent}
             showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[C.primary]} tintColor={C.primary} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[colors.primary]} tintColor={colors.primary} />}
             ListEmptyComponent={
               <EmptyState
                 scene="students"
@@ -128,18 +133,18 @@ export function LeadsScreen({ navigation }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: C.primary },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.primary },
   content: { flex: 1, backgroundColor: C.bg, position: "relative" },
-  fab:     { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: C.primary, justifyContent: "center", alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
+  fab:     { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
   loader:  { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(14) },
   loaderT: { fontSize: fs(14), color: C.muted },
   listContent: { paddingHorizontal: ms(16), paddingTop: ms(14), paddingBottom: ms(40) },
 
   card:     { backgroundColor: C.card, borderRadius: ms(16), borderLeftWidth: 3, padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
   cardTop:  { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(10) },
-  avatar:   { width: ms(44), height: ms(44), borderRadius: ms(22), borderWidth: 1.5, borderColor: C.primary + "40", backgroundColor: C.primary + "1C", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  avatarT:  { fontSize: fs(14), fontWeight: "800", color: C.primary, includeFontPadding: false },
+  avatar:   { width: ms(44), height: ms(44), borderRadius: ms(22), borderWidth: 1.5, borderColor: colors.primary + "40", backgroundColor: colors.primary + "1C", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  avatarT:  { fontSize: fs(14), fontWeight: "800", color: colors.primary, includeFontPadding: false },
   cardInfo: { flex: 1, minWidth: 0 },
   name:     { fontSize: fs(14), fontWeight: "700", color: C.text, marginBottom: ms(3) },
   phone:    { fontSize: fs(11), color: C.muted },

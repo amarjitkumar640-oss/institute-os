@@ -8,10 +8,11 @@ type FacultyQuery = z.infer<typeof facultyQuerySchema>;
 
 // ─── Shape helpers ────────────────────────────────────────────────────────────
 
-type SubjectExamCategory = { id: string; key: string; label: string; color: string } | null;
+type ExamCategoryRef = { id: string; key: string; label: string; color: string };
+type SubjectWithCategories = { id: string; name: string; examCategories: { examCategory: ExamCategoryRef }[] };
 
-function serializeSubject(s: { id: string; name: string; examCategory: SubjectExamCategory }) {
-  return { id: s.id, name: s.name, examCategory: s.examCategory };
+function serializeSubject(s: SubjectWithCategories) {
+  return { id: s.id, name: s.name, examCategories: s.examCategories.map((ec) => ec.examCategory) };
 }
 
 function serializeFaculty<
@@ -19,7 +20,7 @@ function serializeFaculty<
     createdAt: Date;
     updatedAt: Date;
     joiningDate: Date;
-    teachingSubjects: Array<{ subject: { id: string; name: string; examCategory: SubjectExamCategory } }>;
+    teachingSubjects: Array<{ subject: SubjectWithCategories }>;
   }
 >(f: T) {
   const { teachingSubjects, ...rest } = f;
@@ -32,17 +33,17 @@ function serializeFaculty<
 
 // ─── Auto employee-code ───────────────────────────────────────────────────────
 
-async function nextEmployeeCode(): Promise<string> {
-  const count = await prisma.faculty.count();
+async function nextEmployeeCode(tenantId: string): Promise<string> {
+  const count = await prisma.faculty.count({ where: { tenantId } });
   return `FAC${String(count + 1).padStart(4, "0")}`;
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
-export async function listFaculty(query: FacultyQuery, centerId?: string | null) {
+export async function listFaculty(query: FacultyQuery, tenantId: string, centerId?: string | null) {
   const { search, examCategoryId, isActive, page, limit } = query;
 
-  const where: Prisma.FacultyWhereInput = {};
+  const where: Prisma.FacultyWhereInput = { tenantId };
   if (centerId) where.centerId = centerId;
 
   if (isActive !== undefined) where.isActive = isActive;
@@ -57,14 +58,14 @@ export async function listFaculty(query: FacultyQuery, centerId?: string | null)
     ];
   }
 
-  // Filter by exam category — include faculty who teach subjects of that category OR shared (null) subjects
+  // Filter by exam category — include faculty who teach subjects of that category OR shared (no-category) subjects
   if (examCategoryId) {
     where.teachingSubjects = {
       some: {
         subject: {
           OR: [
-            { examCategoryId: examCategoryId },
-            { examCategoryId: null },
+            { examCategories: { some: { examCategoryId } } },
+            { examCategories: { none: {} } },
           ],
         },
       },
@@ -73,7 +74,7 @@ export async function listFaculty(query: FacultyQuery, centerId?: string | null)
 
   const subjectInclude = {
     teachingSubjects: {
-      include: { subject: { select: { id: true, name: true, examCategory: true } } },
+      include: { subject: { select: { id: true, name: true, examCategories: { include: { examCategory: true } } } } },
       orderBy: { subject: { name: "asc" as const } },
     },
   };
@@ -100,12 +101,12 @@ export async function listFaculty(query: FacultyQuery, centerId?: string | null)
 
 // ─── Get one ─────────────────────────────────────────────────────────────────
 
-export async function getFaculty(id: string) {
-  const f = await prisma.faculty.findUnique({
-    where: { id },
+export async function getFaculty(id: string, tenantId: string) {
+  const f = await prisma.faculty.findFirst({
+    where: { id, tenantId },
     include: {
       teachingSubjects: {
-        include: { subject: { select: { id: true, name: true, examCategory: true } } },
+        include: { subject: { select: { id: true, name: true, examCategories: { include: { examCategory: true } } } } },
         orderBy: { subject: { name: "asc" } },
       },
     },
@@ -120,20 +121,21 @@ export type CreateFacultyResult =
   | { ok: false; emailConflict: true }
   | { ok: false; phoneConflict: true };
 
-export async function createFaculty(data: CreateFacultyInput, centerId?: string | null): Promise<CreateFacultyResult> {
+export async function createFaculty(data: CreateFacultyInput, tenantId: string, centerId?: string | null): Promise<CreateFacultyResult> {
   const [emailClash, phoneClash] = await prisma.$transaction([
-    prisma.faculty.findUnique({ where: { email: data.email } }),
-    prisma.faculty.findUnique({ where: { phone: data.phone } }),
+    prisma.faculty.findUnique({ where: { tenantId_email: { tenantId, email: data.email } } }),
+    prisma.faculty.findUnique({ where: { tenantId_phone: { tenantId, phone: data.phone } } }),
   ]);
   if (emailClash) return { ok: false, emailConflict: true };
   if (phoneClash) return { ok: false, phoneConflict: true };
 
-  const employeeCode = await nextEmployeeCode();
+  const employeeCode = await nextEmployeeCode(tenantId);
   const { subjectIds, joiningDate, ...rest } = data;
 
   const faculty = await prisma.faculty.create({
     data: {
       ...rest,
+      tenantId,
       employeeCode,
       joiningDate: new Date(joiningDate),
       centerId:    centerId ?? undefined,
@@ -143,7 +145,7 @@ export async function createFaculty(data: CreateFacultyInput, centerId?: string 
     },
     include: {
       teachingSubjects: {
-        include: { subject: { select: { id: true, name: true, examCategory: true } } },
+        include: { subject: { select: { id: true, name: true, examCategories: { include: { examCategory: true } } } } },
         orderBy: { subject: { name: "asc" } },
       },
     },
@@ -162,17 +164,18 @@ export type UpdateFacultyResult =
 
 export async function updateFaculty(
   id: string,
+  tenantId: string,
   data: UpdateFacultyInput
 ): Promise<UpdateFacultyResult> {
-  const existing = await prisma.faculty.findUnique({ where: { id } });
+  const existing = await prisma.faculty.findFirst({ where: { id, tenantId } });
   if (!existing) return { ok: false, notFound: true };
 
   if (data.email && data.email !== existing.email) {
-    const clash = await prisma.faculty.findUnique({ where: { email: data.email } });
+    const clash = await prisma.faculty.findUnique({ where: { tenantId_email: { tenantId, email: data.email } } });
     if (clash) return { ok: false, emailConflict: true };
   }
   if (data.phone && data.phone !== existing.phone) {
-    const clash = await prisma.faculty.findUnique({ where: { phone: data.phone } });
+    const clash = await prisma.faculty.findUnique({ where: { tenantId_phone: { tenantId, phone: data.phone } } });
     if (clash) return { ok: false, phoneConflict: true };
   }
 
@@ -198,7 +201,7 @@ export async function updateFaculty(
       },
       include: {
         teachingSubjects: {
-          include: { subject: { select: { id: true, name: true, examCategory: true } } },
+          include: { subject: { select: { id: true, name: true, examCategories: { include: { examCategory: true } } } } },
           orderBy: { subject: { name: "asc" } },
         },
       },
@@ -214,8 +217,8 @@ export type DeleteFacultyResult =
   | { ok: true }
   | { ok: false; notFound: true };
 
-export async function deleteFaculty(id: string): Promise<DeleteFacultyResult> {
-  const existing = await prisma.faculty.findUnique({ where: { id } });
+export async function deleteFaculty(id: string, tenantId: string): Promise<DeleteFacultyResult> {
+  const existing = await prisma.faculty.findFirst({ where: { id, tenantId } });
   if (!existing) return { ok: false, notFound: true };
 
   // FacultySubject rows cascade-delete via schema (onDelete: Cascade)

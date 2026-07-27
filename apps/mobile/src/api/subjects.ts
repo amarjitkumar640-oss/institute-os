@@ -2,10 +2,10 @@ import { apiClient } from "./client";
 import type { ExamCategoryItem } from "./examCategories";
 
 export interface SubjectItem {
-  id:           string;
-  name:         string;
-  examCategory: ExamCategoryItem | null;
-  facultyCount: number;
+  id:             string;
+  name:           string;
+  examCategories: ExamCategoryItem[];
+  facultyCount:   number;
 }
 
 // ── List ──────────────────────────────────────────────────────────────────────
@@ -23,8 +23,8 @@ export async function listSubjects(params?: ListSubjectsParams): Promise<Subject
 // ── Create ────────────────────────────────────────────────────────────────────
 
 export interface CreateSubjectPayload {
-  name:           string;
-  examCategoryId: string | null;
+  name:            string;
+  examCategoryIds: string[];
 }
 
 export type CreateSubjectResponse =
@@ -47,8 +47,8 @@ export async function createSubject(payload: CreateSubjectPayload): Promise<Crea
 // ── Update ────────────────────────────────────────────────────────────────────
 
 export interface UpdateSubjectPayload {
-  name?:           string;
-  examCategoryId?: string | null;
+  name?:            string;
+  examCategoryIds?: string[];
 }
 
 export type UpdateSubjectResponse =

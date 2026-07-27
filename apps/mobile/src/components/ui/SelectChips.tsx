@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
+import { useThemeColors } from "../../context/ThemeContext";
 
 export interface SelectOption {
   label: string;
@@ -10,9 +11,10 @@ export interface SelectOption {
   color?: string;
 }
 
-interface Props {
+interface SingleProps {
   label: string;
   options: SelectOption[];
+  multiple?: false;
   value: string | undefined;
   onChange: (v: string) => void;
   error?: string;
@@ -20,14 +22,41 @@ interface Props {
   scrollable?: boolean;
 }
 
-const PRIMARY = "#8B1E3F";
+interface MultiProps {
+  label: string;
+  options: SelectOption[];
+  multiple: true;
+  value: string[];
+  onChange: (v: string[]) => void;
+  error?: string;
+  scrollable?: boolean;
+}
 
-export function SelectChips({ label, options, value, onChange, error, scrollable = false }: Props) {
+type Props = SingleProps | MultiProps;
+
+export function SelectChips(props: Props) {
+  const colors = useThemeColors();
+  const { label, options, error, scrollable = false } = props;
   const hasError = !!error;
 
+  function isSelected(value: string): boolean {
+    return props.multiple ? props.value.includes(value) : props.value === value;
+  }
+
+  function handlePress(value: string) {
+    if (props.multiple) {
+      const next = props.value.includes(value)
+        ? props.value.filter((v) => v !== value)
+        : [...props.value, value];
+      props.onChange(next);
+    } else {
+      props.onChange(value);
+    }
+  }
+
   const chips = options.map((opt) => {
-    const selected = value === opt.value;
-    const accentColor = opt.color ?? PRIMARY;
+    const selected = isSelected(opt.value);
+    const accentColor = opt.color ?? colors.primary;
     return (
       <TouchableOpacity
         key={opt.value}
@@ -36,7 +65,7 @@ export function SelectChips({ label, options, value, onChange, error, scrollable
           selected && { backgroundColor: accentColor, borderColor: accentColor },
           hasError && !selected && s.chipError,
         ]}
-        onPress={() => onChange(opt.value)}
+        onPress={() => handlePress(opt.value)}
         activeOpacity={0.75}
       >
         {selected && (

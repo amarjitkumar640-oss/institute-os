@@ -11,6 +11,7 @@ import type { RootStackParamList } from "../../navigation/types";
 import { getFeeTemplate, upsertFeeTemplate } from "../../api/fees";
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FeeStructure">;
 
@@ -59,6 +60,8 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
   onMoveUp:   () => void;
   onMoveDown: () => void;
 }) {
+  const colors = useThemeColors();
+  const lc = useThemedStyles(makeLcStyles);
   return (
     <View style={lc.card}>
       {/* Card header */}
@@ -136,7 +139,7 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
                 onPress={() => onChange({ ...line, trigger: key })}
                 activeOpacity={0.75}
               >
-                <Ionicons name={icon} size={ms(12)} color={on ? "#8B1E3F" : "#8A7F82"} />
+                <Ionicons name={icon} size={ms(12)} color={on ? colors.primary : "#8A7F82"} />
                 <Text style={[lc.chipT, on && lc.chipTOn]}>{label}</Text>
               </TouchableOpacity>
             );
@@ -188,10 +191,10 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
   );
 }
 
-const lc = StyleSheet.create({
+const makeLcStyles = (colors: ThemeColors) => StyleSheet.create({
   card:       { backgroundColor: "#FFFFFF", borderRadius: ms(16), borderWidth: 1.5, borderColor: "#EAE4DE", padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: ms(6), elevation: 1 },
   header:     { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(14) },
-  badge:      { width: ms(26), height: ms(26), borderRadius: ms(13), backgroundColor: "#8B1E3F", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  badge:      { width: ms(26), height: ms(26), borderRadius: ms(13), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   badgeNum:   { fontSize: fs(11.5), fontWeight: "800", color: "#fff" },
   moveRow:    { flexDirection: "row", gap: ms(10), flex: 1 },
   removeBtn:  { padding: ms(2) },
@@ -203,9 +206,9 @@ const lc = StyleSheet.create({
   amountInput:{ flex: 1, fontSize: fs(17), fontWeight: "800", color: "#2B1B1F", includeFontPadding: false, padding: 0 },
   chipRow:    { flexDirection: "row", gap: ms(6), flexWrap: "wrap" },
   chip:       { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(10), paddingVertical: ms(7), borderRadius: ms(8), backgroundColor: "#FAFAF8", borderWidth: 1.5, borderColor: "#E8E3DC" },
-  chipOn:     { backgroundColor: "#FFF0F4", borderColor: "#8B1E3F" },
+  chipOn:     { backgroundColor: "#FFF0F4", borderColor: colors.primary },
   chipT:      { fontSize: fs(11.5), fontWeight: "600", color: "#8A7F82" },
-  chipTOn:    { color: "#8B1E3F", fontWeight: "700" },
+  chipTOn:    { color: colors.primary, fontWeight: "700" },
   amountTotal:{ fontSize: fs(12), fontWeight: "700", color: "#8A7F82" },
   twoCol:     { flexDirection: "row", gap: ms(10) },
 });
@@ -215,6 +218,8 @@ const lc = StyleSheet.create({
 export function FeeStructureScreen({ route, navigation }: Props) {
   const { courseId, courseName, defaultFee } = route.params;
   const { showAlert } = useAlert();
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
 
   const [lines,       setLines]       = useState<DraftLine[]>([]);
   const [notes,       setNotes]       = useState("");
@@ -345,7 +350,7 @@ export function FeeStructureScreen({ route, navigation }: Props) {
 
       {loading ? (
         <View style={s.loader}>
-          <ActivityIndicator size="large" color="#8B1E3F" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={s.loaderT}>Loading template…</Text>
         </View>
       ) : (
@@ -360,7 +365,7 @@ export function FeeStructureScreen({ route, navigation }: Props) {
             <View style={s.courseCard}>
               <View style={s.courseLeft}>
                 <View style={s.courseIcon}>
-                  <Ionicons name="book-outline" size={ms(16)} color="#8B1E3F" />
+                  <Ionicons name="book-outline" size={ms(16)} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.courseName} numberOfLines={2}>{courseName}</Text>
@@ -379,7 +384,7 @@ export function FeeStructureScreen({ route, navigation }: Props) {
             <View style={s.sectionRow}>
               <View style={s.sectionHead}>
                 <View style={s.sectionIconWrap}>
-                  <Ionicons name="list-outline" size={ms(14)} color="#8B1E3F" />
+                  <Ionicons name="list-outline" size={ms(14)} color={colors.primary} />
                 </View>
                 <Text style={s.sectionTitle}>INSTALLMENT PLAN</Text>
               </View>
@@ -417,7 +422,7 @@ export function FeeStructureScreen({ route, navigation }: Props) {
               onPress={() => setLines((p) => [...p, newLine()])}
               activeOpacity={0.75}
             >
-              <Ionicons name="add-circle-outline" size={ms(18)} color="#8B1E3F" />
+              <Ionicons name="add-circle-outline" size={ms(18)} color={colors.primary} />
               <Text style={s.addBtnT}>Add Installment</Text>
             </TouchableOpacity>
 
@@ -465,8 +470,8 @@ export function FeeStructureScreen({ route, navigation }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.primary },
   flex:    { flex: 1 },
   loader:  { flex: 1, backgroundColor: "#FFFBF0", justifyContent: "center", alignItems: "center", gap: ms(14) },
   loaderT: { fontSize: fs(13), color: "#8A7F82" },
@@ -486,7 +491,7 @@ const s = StyleSheet.create({
   sectionRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: ms(14) },
   sectionHead:   { flexDirection: "row", alignItems: "center", gap: ms(8) },
   sectionIconWrap:{ width: ms(28), height: ms(28), borderRadius: ms(8), backgroundColor: "#FEF4F4", justifyContent: "center", alignItems: "center" },
-  sectionTitle:  { fontSize: fs(11), fontWeight: "800", color: "#8B1E3F", letterSpacing: 0.8 },
+  sectionTitle:  { fontSize: fs(11), fontWeight: "800", color: colors.primary, letterSpacing: 0.8 },
   totalPill:     { flexDirection: "row", alignItems: "center", backgroundColor: "#E7F7EF", borderRadius: ms(20), paddingHorizontal: ms(12), paddingVertical: ms(5) },
   totalLabel:    { fontSize: fs(11.5), color: "#8A7F82", fontWeight: "600" },
   totalAmt:      { fontSize: fs(13), fontWeight: "800", color: "#1B9C63" },
@@ -497,7 +502,7 @@ const s = StyleSheet.create({
 
   // Add button
   addBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(14), borderWidth: 1.5, borderColor: "#E0D4CE", borderStyle: "dashed", paddingVertical: ms(14), marginBottom: ms(20), backgroundColor: "#FFFBF8" },
-  addBtnT: { fontSize: fs(13.5), fontWeight: "700", color: "#8B1E3F" },
+  addBtnT: { fontSize: fs(13.5), fontWeight: "700", color: colors.primary },
 
   // Notes
   notesBlock: { marginBottom: ms(24) },
@@ -505,6 +510,6 @@ const s = StyleSheet.create({
   notesInput: { backgroundColor: "#FFFFFF", borderRadius: ms(12), borderWidth: 1.5, borderColor: "#E8E3DC", paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(13), color: "#2B1B1F", minHeight: ms(80) },
 
   // Save button
-  saveBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: "#8B1E3F", borderRadius: ms(16), paddingVertical: ms(16) },
+  saveBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(16), paddingVertical: ms(16) },
   saveBtnT: { fontSize: fs(15), fontWeight: "800", color: "#fff" },
 });

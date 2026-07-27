@@ -18,6 +18,7 @@ import { listStudentEnrollments, enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { useAuth } from "../../context/AuthContext";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { COURSE_META } from "../../constants/courseMeta";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -59,6 +60,8 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const colors = useThemeColors();
+  const bm = useThemedStyles(makeBmStyles);
   const [batches, setBatches]                 = useState<BatchItem[]>([]);
   const [enrolledBatchIds, setEnrolledBatchIds] = useState<Set<string>>(new Set());
   const [loading, setLoading]                 = useState(true);
@@ -125,7 +128,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
 
           {loading ? (
             <View style={bm.loaderWrap}>
-              <ActivityIndicator size="large" color="#8B1E3F" />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={bm.loaderT}>Loading batches…</Text>
             </View>
           ) : (
@@ -141,7 +144,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
                 </View>
               }
               renderItem={({ item: b }) => {
-                const color     = b.course.examCategory?.color ?? "#8A7F82";
+                const color     = b.course.examCategories[0]?.color ?? "#8A7F82";
                 const sm        = STATUS_META[b.status] ?? { label: b.status, color: "#8A7F82" };
                 const enrolled  = enrolledBatchIds.has(b.id);
                 const full      = isFull(b);
@@ -172,7 +175,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
                     </View>
 
                     {loading ? (
-                      <ActivityIndicator size="small" color="#8B1E3F" />
+                      <ActivityIndicator size="small" color={colors.primary} />
                     ) : enrolled ? (
                       <View style={bm.enrolledBadge}>
                         <Ionicons name="checkmark-circle" size={ms(14)} color="#1B9C63" />
@@ -184,7 +187,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
                       </View>
                     ) : (
                       <View style={bm.addBtn}>
-                        <Ionicons name="add" size={ms(16)} color="#8B1E3F" />
+                        <Ionicons name="add" size={ms(16)} color={colors.primary} />
                       </View>
                     )}
                   </TouchableOpacity>
@@ -202,7 +205,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
   );
 }
 
-const bm = StyleSheet.create({
+const makeBmStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay:      { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "flex-end" },
   sheet:        { backgroundColor: "#FFFFFF", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(16), maxHeight: "80%" },
   handle:       { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
@@ -229,7 +232,7 @@ const bm = StyleSheet.create({
   fullT:        { fontSize: fs(11), fontWeight: "700", color: "#DC2626" },
   addBtn:       { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: "#FEF4F4", justifyContent: "center", alignItems: "center" },
   doneBtn:      { marginTop: ms(12), marginBottom: ms(24), borderRadius: ms(14) },
-  doneGrad:     { alignItems: "center", paddingVertical: ms(14), backgroundColor: "#8B1E3F" },
+  doneGrad:     { alignItems: "center", paddingVertical: ms(14), backgroundColor: colors.primary },
   doneT:        { fontSize: fs(14), fontWeight: "800", color: "#fff" },
 });
 
@@ -242,11 +245,13 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
   onEnroll: () => void;
   isAllCenters?: boolean;
 }) {
+  const colors = useThemeColors();
+  const cs = useThemedStyles(makeCsStyles);
   const meta = (student.coursePreference ? COURSE_META[student.coursePreference] : null) ?? { label: "—", color: C.muted };
   const ini  = initials(student.fullName);
 
   return (
-    <View style={[cs.card, { borderLeftColor: C.primary }]}>
+    <View style={[cs.card, { borderLeftColor: colors.primary }]}>
       {isAllCenters && student.center && (
         <View style={cs.centerChip}>
           <Ionicons name="business-outline" size={ms(10)} color="#5B2D8E" />
@@ -295,7 +300,7 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
       <View style={cs.cardBottom}>
         {student.coursePreference ? (
           <View style={cs.courseBadge}>
-            <Ionicons name="book-outline" size={ms(11)} color={C.primary} />
+            <Ionicons name="book-outline" size={ms(11)} color={colors.primary} />
             <Text style={cs.courseT}>{meta.label}</Text>
           </View>
         ) : null}
@@ -323,6 +328,7 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
 // ── Banner ────────────────────────────────────────────────────────────────────
 
 function Banner({ students }: { students: StudentItem[] }) {
+  const cs = useThemedStyles(makeCsStyles);
   const counts = useMemo(() => {
     const acc: Record<string, number> = { ssc: 0, banking: 0, railway: 0, foundation: 0 };
     students.forEach((s) => { if (s.coursePreference && acc[s.coursePreference] !== undefined) acc[s.coursePreference]++; });
@@ -358,6 +364,8 @@ function StudentEmpty({ search }: { search: string }) {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function StudentListScreen({ navigation, route }: Props) {
+  const colors = useThemeColors();
+  const cs = useThemedStyles(makeCsStyles);
   const nav = useNavigation<Nav>();
   const { isAllCenters } = useAuth();
   const batchId   = route?.params?.batchId;
@@ -413,7 +421,7 @@ export function StudentListScreen({ navigation, route }: Props) {
       <View style={cs.content}>
         {loading ? (
           <View style={cs.loader}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={cs.loaderT}>Loading students…</Text>
           </View>
         ) : error ? (
@@ -469,7 +477,7 @@ export function StudentListScreen({ navigation, route }: Props) {
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={<StudentEmpty search={search} />}
               refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={["#8B1E3F"]} tintColor="#8B1E3F" />
+                <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[colors.primary]} tintColor={colors.primary} />
               }
             />
           </>
@@ -494,10 +502,10 @@ export function StudentListScreen({ navigation, route }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const cs = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: "#8B1E3F" },
+const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.primary },
   content: { flex: 1, backgroundColor: "#FFFBF0", position: "relative" },
-  fab:     { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: "#8B1E3F", justifyContent: "center", alignItems: "center", shadowColor: "#8B1E3F", shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
+  fab:     { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
 
   loader:  { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(14) },
   loaderT: { fontSize: fs(14), color: C.muted },
@@ -515,7 +523,7 @@ const cs = StyleSheet.create({
   filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
   filterRow:    { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
   chip:         { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  chipOn:       { backgroundColor: "#8B1E3F", borderColor: "#8B1E3F" },
+  chipOn:       { backgroundColor: colors.primary, borderColor: colors.primary },
   chipT:        { fontSize: fs(12), fontWeight: "600", color: "#8A7F82", includeFontPadding: false, lineHeight: fs(16) },
   chipTOn:      { color: "#FFFFFF" },
   resultT:      { paddingHorizontal: ms(16), paddingTop: ms(4), paddingBottom: ms(4), fontSize: fs(11.5), color: "#8A7F82" },
@@ -525,16 +533,16 @@ const cs = StyleSheet.create({
   centerChip:  { flexDirection: "row", alignItems: "center", gap: ms(4), alignSelf: "flex-start", backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3), marginBottom: ms(6) },
   centerChipT: { fontSize: fs(11), color: "#5B2D8E", fontWeight: "600" },
   cardTop:     { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(10) },
-  avatar:      { width: ms(48), height: ms(48), borderRadius: ms(24), borderWidth: 1.5, borderColor: C.primary + "40", backgroundColor: C.primary + "1C", justifyContent: "center", alignItems: "center", flexShrink: 0, overflow: "hidden" },
+  avatar:      { width: ms(48), height: ms(48), borderRadius: ms(24), borderWidth: 1.5, borderColor: colors.primary + "40", backgroundColor: colors.primary + "1C", justifyContent: "center", alignItems: "center", flexShrink: 0, overflow: "hidden" },
   avatarImg:   { width: ms(48), height: ms(48), borderRadius: ms(24) },
-  avatarT:     { fontSize: fs(15), fontWeight: "800", includeFontPadding: false, color: C.primary },
+  avatarT:     { fontSize: fs(15), fontWeight: "800", includeFontPadding: false, color: colors.primary },
   cardInfo:    { flex: 1, minWidth: 0 },
   studentName: { fontSize: fs(14), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(3) },
   rollT:       { fontSize: fs(11), color: "#8A7F82" },
-  courseBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.primary + "18", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  courseBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: colors.primary + "18", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
   enrollBtn:   { width: ms(30), height: ms(30), borderRadius: ms(15), backgroundColor: C.greenBg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   editBtn:     { width: ms(30), height: ms(30), borderRadius: ms(15), backgroundColor: "#EFF6FF", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  courseT:     { fontSize: fs(10.5), fontWeight: "800", color: C.primary },
+  courseT:     { fontSize: fs(10.5), fontWeight: "800", color: colors.primary },
   divider:     { height: 1, backgroundColor: "#F0EDE8", marginBottom: ms(10) },
   enrollStatusOn:  { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.greenBg, borderRadius: ms(10), paddingHorizontal: ms(10), paddingVertical: ms(6), marginBottom: ms(10) },
   enrollStatusOff: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF0EE", borderRadius: ms(10), paddingHorizontal: ms(10), paddingVertical: ms(6), marginBottom: ms(10) },

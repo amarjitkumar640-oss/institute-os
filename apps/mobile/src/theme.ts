@@ -1,7 +1,7 @@
+// Fixed, structural colors only — these never vary by tenant. Brand-configurable
+// colors (primary/secondary/accent) and the derived safeArea shade live in
+// ThemeContext and must be read via useThemeColors(), not from here.
 export const C = {
-  primary:     "#8B1E3F",
-  secondary:   "#F5B301",
-  accent:      "#2CA6A4",
   orange:      "#E8752C",
   blue:        "#2563A8",
   purple:      "#5B2D8E",
@@ -16,7 +16,4 @@ export const C = {
   placeholder: "#B8ACAF",
   border:      "#EDE8E3",
   inputBg:     "#FAF6F4",
-  safeArea:    "#5C0E23",
 } as const;
-
-export type ColorToken = keyof typeof C;

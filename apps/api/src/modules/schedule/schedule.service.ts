@@ -29,15 +29,18 @@ const SESSION_INCLUDE = {
 
 // ── Slots ─────────────────────────────────────────────────────────────────────
 
-export async function listSlots(prisma: PrismaClient, batchId: string) {
+export async function listSlots(prisma: PrismaClient, batchId: string, tenantId: string) {
   return prisma.classSlot.findMany({
-    where:   { batchId, isActive: true },
+    where:   { batchId, isActive: true, batch: { tenantId } },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
     include: SLOT_INCLUDE,
   });
 }
 
-export async function createSlot(prisma: PrismaClient, batchId: string, data: CreateSlotInput) {
+export async function createSlot(prisma: PrismaClient, batchId: string, tenantId: string, data: CreateSlotInput) {
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, tenantId } });
+  if (!batch) return null;
+
   return prisma.classSlot.create({
     data: {
       batchId,
@@ -54,7 +57,10 @@ export async function createSlot(prisma: PrismaClient, batchId: string, data: Cr
   });
 }
 
-export async function updateSlot(prisma: PrismaClient, slotId: string, data: UpdateSlotInput) {
+export async function updateSlot(prisma: PrismaClient, slotId: string, tenantId: string, data: UpdateSlotInput) {
+  const existing = await prisma.classSlot.findFirst({ where: { id: slotId, batch: { tenantId } } });
+  if (!existing) return null;
+
   const slot = await prisma.classSlot.update({
     where: { id: slotId },
     data: {
@@ -83,7 +89,10 @@ export async function updateSlot(prisma: PrismaClient, slotId: string, data: Upd
   return slot;
 }
 
-export async function deleteSlot(prisma: PrismaClient, slotId: string) {
+export async function deleteSlot(prisma: PrismaClient, slotId: string, tenantId: string) {
+  const existing = await prisma.classSlot.findFirst({ where: { id: slotId, batch: { tenantId } } });
+  if (!existing) return null;
+
   return prisma.classSlot.update({
     where: { id: slotId },
     data:  { isActive: false },
@@ -95,11 +104,13 @@ export async function deleteSlot(prisma: PrismaClient, slotId: string) {
 export async function listSessions(
   prisma: PrismaClient,
   batchId: string,
+  tenantId: string,
   params: { from: string; to: string; status?: string },
 ) {
   return prisma.classSession.findMany({
     where: {
       batchId,
+      batch: { tenantId },
       scheduledDate: {
         gte: new Date(params.from + "T00:00:00.000Z"),
         lte: new Date(params.to   + "T23:59:59.999Z"),
@@ -114,8 +125,12 @@ export async function listSessions(
 export async function createAdHocSession(
   prisma: PrismaClient,
   batchId: string,
+  tenantId: string,
   data: CreateAdHocSessionInput,
 ) {
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, tenantId } });
+  if (!batch) return null;
+
   return prisma.classSession.create({
     data: {
       batchId,
@@ -136,8 +151,12 @@ export async function createAdHocSession(
 export async function patchSession(
   prisma: PrismaClient,
   sessionId: string,
+  tenantId: string,
   data: PatchSessionInput,
 ) {
+  const existing = await prisma.classSession.findFirst({ where: { id: sessionId, batch: { tenantId } } });
+  if (!existing) return null;
+
   return prisma.classSession.update({
     where: { id: sessionId },
     data: {
@@ -160,8 +179,12 @@ export async function patchSession(
 export async function generateSessions(
   prisma: PrismaClient,
   batchId: string,
+  tenantId: string,
   params: GenerateSessionsInput,
-): Promise<{ created: number }> {
+): Promise<{ created: number } | null> {
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, tenantId } });
+  if (!batch) return null;
+
   const slots = await prisma.classSlot.findMany({
     where: { batchId, isActive: true },
   });
@@ -229,11 +252,13 @@ export async function generateSessions(
 export async function listFacultySessions(
   prisma: PrismaClient,
   facultyId: string,
+  tenantId: string,
   params: { from: string; to: string },
 ) {
   return prisma.classSession.findMany({
     where: {
       facultyId,
+      batch: { tenantId },
       scheduledDate: {
         gte: new Date(params.from + "T00:00:00.000Z"),
         lte: new Date(params.to   + "T23:59:59.999Z"),
@@ -248,6 +273,7 @@ export async function listFacultySessions(
 
 export async function listTodaySessions(
   prisma: PrismaClient,
+  tenantId: string,
   centerId?: string,
 ) {
   const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
@@ -259,7 +285,7 @@ export async function listTodaySessions(
         lte: new Date(todayStr + "T23:59:59.999Z"),
       },
       status: "scheduled",
-      ...(centerId ? { batch: { centerId } } : {}),
+      batch: { tenantId, ...(centerId ? { centerId } : {}) },
     },
     orderBy: { startTime: "asc" },
     include: SESSION_INCLUDE,

@@ -88,8 +88,12 @@ export function computeInstallmentStatus(
 export async function upsertFeeTemplate(
   db:       PrismaClient,
   courseId: string,
+  tenantId: string,
   input:    UpsertFeeTemplateInput,
 ) {
+  const course = await db.course.findFirst({ where: { id: courseId, tenantId } });
+  if (!course) throw new Error("COURSE_NOT_FOUND");
+
   const existing = await db.courseFeeTemplate.findUnique({ where: { courseId } });
 
   const lineData = input.lines.map((l) => ({
@@ -119,7 +123,10 @@ export async function upsertFeeTemplate(
   });
 }
 
-export async function getFeeTemplate(db: PrismaClient, courseId: string) {
+export async function getFeeTemplate(db: PrismaClient, courseId: string, tenantId: string) {
+  const course = await db.course.findFirst({ where: { id: courseId, tenantId } });
+  if (!course) return null;
+
   return db.courseFeeTemplate.findUnique({
     where:   { courseId },
     include: { lines: { orderBy: { sortOrder: "asc" } } },
@@ -132,12 +139,13 @@ export async function generateSchedule(
   db:           PrismaClient,
   enrollmentId: string,
   input:        GenerateScheduleInput,
+  tenantId?:    string,
 ) {
   const existing = await db.studentFeeSchedule.findUnique({ where: { enrollmentId } });
   if (existing) throw new Error("SCHEDULE_ALREADY_EXISTS");
 
-  const enrollment = await db.enrollment.findUnique({
-    where:   { id: enrollmentId },
+  const enrollment = await db.enrollment.findFirst({
+    where:   { id: enrollmentId, ...(tenantId ? { batch: { tenantId } } : {}) },
     include: {
       batch: {
         include: {
@@ -226,10 +234,11 @@ export async function generateSchedule(
 export async function applyDiscount(
   db:         PrismaClient,
   scheduleId: string,
+  tenantId:   string,
   input:      { discountAmount: number; discountReason?: string },
 ) {
-  const schedule = await db.studentFeeSchedule.findUnique({
-    where: { id: scheduleId },
+  const schedule = await db.studentFeeSchedule.findFirst({
+    where: { id: scheduleId, enrollment: { batch: { tenantId } } },
     include: { installments: { orderBy: { sortOrder: "asc" } } },
   });
   if (!schedule) throw new Error("SCHEDULE_NOT_FOUND");
@@ -253,9 +262,12 @@ export async function applyDiscount(
 export async function editInstallment(
   db:            PrismaClient,
   installmentId: string,
+  tenantId:      string,
   input:         EditInstallmentInput,
 ) {
-  const inst = await db.scheduleInstallment.findUnique({ where: { id: installmentId } });
+  const inst = await db.scheduleInstallment.findFirst({
+    where: { id: installmentId, schedule: { enrollment: { batch: { tenantId } } } },
+  });
   if (!inst) throw new Error("INSTALLMENT_NOT_FOUND");
 
   const plannedAmount = input.plannedAmount ?? Number(inst.plannedAmount);
@@ -285,13 +297,14 @@ export async function editInstallment(
 // ── Record a payment ──────────────────────────────────────────────────────────
 
 export async function recordPayment(
-  db:      PrismaClient,
-  staffId: string | null,
-  input:   RecordPaymentInput,
+  db:       PrismaClient,
+  staffId:  string | null,
+  tenantId: string,
+  input:    RecordPaymentInput,
 ) {
   return db.$transaction(async (tx) => {
-    const schedule = await tx.studentFeeSchedule.findUnique({
-      where:   { id: input.scheduleId },
+    const schedule = await tx.studentFeeSchedule.findFirst({
+      where:   { id: input.scheduleId, enrollment: { batch: { tenantId } } },
       include: { installments: { orderBy: { sortOrder: "asc" } } },
     });
     if (!schedule) throw new Error("SCHEDULE_NOT_FOUND");
@@ -353,6 +366,7 @@ export async function recordPayment(
 
     const txn = await tx.paymentTransaction.create({
       data: {
+        tenantId,
         scheduleId:    input.scheduleId,
         installmentId: input.installmentId ?? null,
         amount:        input.amount,
@@ -384,9 +398,9 @@ export async function recordPayment(
 
 // ── Fetch full schedule detail ────────────────────────────────────────────────
 
-export async function getScheduleDetail(db: PrismaClient, enrollmentId: string) {
-  return db.studentFeeSchedule.findUnique({
-    where:   { enrollmentId },
+export async function getScheduleDetail(db: PrismaClient, enrollmentId: string, tenantId: string) {
+  return db.studentFeeSchedule.findFirst({
+    where:   { enrollmentId, enrollment: { batch: { tenantId } } },
     include: {
       installments: {
         orderBy: { sortOrder: "asc" },
@@ -413,12 +427,13 @@ export async function getScheduleDetail(db: PrismaClient, enrollmentId: string) 
 
 export async function listSchedules(
   db:       PrismaClient,
+  tenantId: string,
   centerId: string | null | undefined,
   params:   { search?: string; status?: string; batchId?: string },
 ) {
   const where: Prisma.StudentFeeScheduleWhereInput = {
     enrollment: {
-      batch: centerId ? { centerId } : undefined,
+      batch: { tenantId, ...(centerId ? { centerId } : {}) },
       batchId: params.batchId ?? undefined,
       student: params.search
         ? {
@@ -466,7 +481,7 @@ export async function backfillAdmissionPayments(db: PrismaClient): Promise<numbe
       student: { amountPaid: { gt: 0 } },
     },
     include: {
-      student: { select: { amountPaid: true, paymentMode: true, createdAt: true } },
+      student: { select: { tenantId: true, amountPaid: true, paymentMode: true, createdAt: true } },
     },
   });
 
@@ -501,6 +516,7 @@ export async function backfillAdmissionPayments(db: PrismaClient): Promise<numbe
 
     await db.paymentTransaction.create({
       data: {
+        tenantId:      enrollment.student.tenantId,
         scheduleId:    schedule.id,
         installmentId: schedule.installments[0].id,
         amount:        paid,
@@ -518,25 +534,23 @@ export async function backfillAdmissionPayments(db: PrismaClient): Promise<numbe
 
 // ── Dashboard summary ─────────────────────────────────────────────────────────
 
-export async function getFeeSummary(db: PrismaClient, centerId?: string | null) {
+export async function getFeeSummary(db: PrismaClient, tenantId: string, centerId?: string | null) {
   const now = new Date();
   const som = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const centerFilter = centerId
-    ? { enrollment: { batch: { centerId } } }
-    : {};
+  const scopeFilter = { enrollment: { batch: { tenantId, ...(centerId ? { centerId } : {}) } } };
 
   const [collectedThisMonth, outstandingAgg, overdueCount, activeSchedules] = await Promise.all([
     db.paymentTransaction.aggregate({
-      where: { schedule: centerFilter, type: "payment", paidAt: { gte: som } },
+      where: { schedule: scopeFilter, type: "payment", paidAt: { gte: som } },
       _sum:  { amount: true },
     }),
     db.scheduleInstallment.aggregate({
-      where: { schedule: centerFilter, status: { in: ["pending", "partial", "overdue"] } },
+      where: { schedule: scopeFilter, status: { in: ["pending", "partial", "overdue"] } },
       _sum:  { plannedAmount: true, paidAmount: true, waivedAmount: true },
     }),
-    db.scheduleInstallment.count({ where: { schedule: centerFilter, status: "overdue" } }),
-    db.studentFeeSchedule.count({ where: { ...centerFilter, status: "active" } }),
+    db.scheduleInstallment.count({ where: { schedule: scopeFilter, status: "overdue" } }),
+    db.studentFeeSchedule.count({ where: { ...scopeFilter, status: "active" } }),
   ]);
 
   const pending =

@@ -26,19 +26,23 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
     prisma.student.count({ where: cFilter }),
     prisma.batch.count({ where: cFilter }),
     prisma.batch.count({ where: { ...cFilter, status: "running" } }),
-    prisma.course.count(),   // global
+    prisma.course.count({ where: { tenantId: cFilter.tenantId } }),
     prisma.faculty.count({ where: { ...cFilter, isActive: true } }),
-    prisma.subject.count(),  // global
+    prisma.subject.count({ where: { tenantId: cFilter.tenantId } }),
     prisma.enrollment.count({
       where: {
         status: "active",
-        ...(cFilter.centerId ? { batch: { centerId: cFilter.centerId } } : {}),
+        batch: { tenantId: cFilter.tenantId, ...(cFilter.centerId ? { centerId: cFilter.centerId } : {}) },
       },
     }),
     prisma.paymentTransaction.aggregate({
       where: {
         type: "payment",
-        ...(cFilter.centerId ? { schedule: { enrollment: { batch: { centerId: cFilter.centerId } } } } : {}),
+        schedule: {
+          enrollment: {
+            batch: { tenantId: cFilter.tenantId, ...(cFilter.centerId ? { centerId: cFilter.centerId } : {}) },
+          },
+        },
       },
       _sum: { amount: true },
     }),
@@ -46,7 +50,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
     prisma.enrollment.findMany({
       where: {
         status: "active",
-        ...(cFilter.centerId ? { batch: { centerId: cFilter.centerId } } : {}),
+        batch: { tenantId: cFilter.tenantId, ...(cFilter.centerId ? { centerId: cFilter.centerId } : {}) },
       },
       orderBy: { enrolledOn: "desc" },
       take: 5,
@@ -73,7 +77,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
     prisma.enrollment.findMany({
       where: {
         enrolledOn: { gte: eightMonthsAgo },
-        ...(cFilter.centerId ? { batch: { centerId: cFilter.centerId } } : {}),
+        batch: { tenantId: cFilter.tenantId, ...(cFilter.centerId ? { centerId: cFilter.centerId } : {}) },
       },
       select: { enrolledOn: true },
     }),
@@ -116,7 +120,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
   // ── Per-center breakdown (only in all-centers mode) ───────────────────────
   let perCenter: Array<{ id: string; name: string; students: number; batches: number; enrollments: number }> | undefined;
   if (!cFilter.centerId) {
-    const centers = await prisma.center.findMany({ where: { isActive: true }, orderBy: { name: "asc" } });
+    const centers = await prisma.center.findMany({ where: { tenantId: cFilter.tenantId, isActive: true }, orderBy: { name: "asc" } });
     perCenter = await Promise.all(
       centers.map(async (c) => {
         const [students, batches, enrollments] = await Promise.all([

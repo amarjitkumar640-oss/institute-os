@@ -16,7 +16,7 @@ import {
   updateFaculty,
   deleteFaculty,
 } from "./faculty.service";
-import { centerFilter, centerIdForCreate } from "../../lib/centerFilter";
+import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
 
 export const facultyRouter = Router();
 
@@ -30,7 +30,7 @@ facultyRouter.get(
   validateQuery(facultyQuerySchema),
   async (req, res) => {
     const query = (req as ReqWithQuery).parsedQuery;
-    const result = await listFaculty(query, req.auth?.centerId);
+    const result = await listFaculty(query, req.auth!.tenantId, req.auth?.centerId);
     res.json(result);
   }
 );
@@ -41,7 +41,7 @@ facultyRouter.get(
   requireAuth,
   validateUuidParam("id"),
   async (req, res) => {
-    const faculty = await getFaculty(req.params.id);
+    const faculty = await getFaculty(req.params.id, req.auth!.tenantId);
     if (!faculty) return res.status(404).json({ error: "Faculty not found" });
     res.json(faculty);
   }
@@ -56,7 +56,7 @@ facultyRouter.post(
   async (req, res) => {
     const centerId = centerIdForCreate(req, req.body.centerId);
     if (!centerId) return res.status(400).json({ error: "centerId required when using all-centers mode" });
-    const result = await createFaculty(req.body, centerId);
+    const result = await createFaculty(req.body, tenantIdForCreate(req), centerId);
     if (!result.ok) {
       if ("emailConflict" in result)
         return res.status(409).json({ error: "A faculty member with this email already exists.", field: "email" });
@@ -76,7 +76,7 @@ facultyRouter.patch(
   validateUuidParam("id"),
   validateBody(updateFacultySchema),
   async (req, res) => {
-    const result = await updateFaculty(req.params.id, req.body);
+    const result = await updateFaculty(req.params.id, req.auth!.tenantId, req.body);
     if (!result.ok) {
       if ("notFound" in result)      return res.status(404).json({ error: "Faculty not found" });
       if ("emailConflict" in result) return res.status(409).json({ error: "Another faculty member with this email already exists.", field: "email" });
@@ -94,7 +94,7 @@ facultyRouter.delete(
   requireRole("admin"),
   validateUuidParam("id"),
   async (req, res) => {
-    const result = await deleteFaculty(req.params.id);
+    const result = await deleteFaculty(req.params.id, req.auth!.tenantId);
     if (!result.ok) {
       if ("notFound" in result) return res.status(404).json({ error: "Faculty not found" });
     }

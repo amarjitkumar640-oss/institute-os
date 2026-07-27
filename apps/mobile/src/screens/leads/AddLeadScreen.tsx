@@ -16,6 +16,7 @@ import { createLead, type LeadItem } from "../../api/leads";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddLead">;
 
@@ -29,6 +30,8 @@ const CATEGORY_ICON: Record<string, string> = {
 const SOURCE_CHIPS = ["Walk-in", "Referral", "Phone Call", "Social Media"];
 
 export function AddLeadScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const [name, setName]           = useState("");
   const [phone, setPhone]         = useState("");
   const [targetExam, setTargetExam] = useState<string | null>(null);
@@ -108,13 +111,13 @@ export function AddLeadScreen({ navigation }: Props) {
               onPress={() => { setCreated(null); setName(""); setPhone(""); setTargetExam(null); setSource(""); setNotes(""); }}
             >
               <View style={s.outlineBtn}>
-                <Ionicons name="add" size={ms(18)} color={C.primary} />
+                <Ionicons name="add" size={ms(18)} color={colors.primary} />
                 <Text style={s.outlineBtnT}>Add Another Lead</Text>
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => navigation.replace("Leads")} activeOpacity={0.85} style={s.doneBtnWrap}>
-              <LinearGradient colors={[C.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+              <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
                 <Ionicons name="list-outline" size={ms(18)} color="#fff" />
                 <Text style={s.doneBtnT}>View All Leads</Text>
               </LinearGradient>
@@ -172,7 +175,7 @@ export function AddLeadScreen({ navigation }: Props) {
                   return (
                     <TouchableOpacity
                       key={chip}
-                      style={[s.chip, active && { backgroundColor: C.primary, borderColor: C.primary }]}
+                      style={[s.chip, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
                       onPress={() => { setSource(chip); setErrors((p) => ({ ...p, source: "" })); }}
                       activeOpacity={0.7}
                     >
@@ -225,8 +228,8 @@ export function AddLeadScreen({ navigation }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: C.primary },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.primary },
   flex:   { flex: 1 },
   scroll: { flex: 1, backgroundColor: C.bg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
@@ -253,13 +256,13 @@ const s = StyleSheet.create({
   submitErrorT: { fontSize: fs(13), color: C.red, lineHeight: fs(18), flex: 1 },
 
   successOverlay: { flex: 1, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
-  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(28), padding: ms(26), alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(28), padding: ms(26), alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
   checkCircle:    { width: ms(76), height: ms(76), borderRadius: ms(38), justifyContent: "center", alignItems: "center", marginBottom: ms(16) },
   successTitle:   { fontSize: fs(21), fontWeight: "800", color: C.text, marginBottom: ms(6) },
   successSub:     { fontSize: fs(13), color: C.muted, textAlign: "center", marginBottom: ms(22) },
   doneBtnWrap:    { width: "100%", marginBottom: ms(10) },
-  outlineBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(14), borderWidth: 1.5, borderColor: C.primary },
-  outlineBtnT:    { fontSize: fs(14), fontWeight: "700", color: C.primary },
+  outlineBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(14), borderWidth: 1.5, borderColor: colors.primary },
+  outlineBtnT:    { fontSize: fs(14), fontWeight: "700", color: colors.primary },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(15) },
   doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 });

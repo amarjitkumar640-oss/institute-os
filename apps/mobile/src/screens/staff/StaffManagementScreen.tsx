@@ -21,6 +21,7 @@ import {
   type CenterItem,
 } from "../../api/centers";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, lighten, type ThemeColors } from "../../context/ThemeContext";
 import { ROLES, ROLE_META, type Role } from "../../constants/roleMeta";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
@@ -55,6 +56,7 @@ interface CreateModalProps {
 }
 
 function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
+  const md = useThemedStyles(makeMdStyles);
   const [fullName, setFullName] = useState("");
   const [email,    setEmail]    = useState("");
   const [phone,    setPhone]    = useState("");
@@ -179,6 +181,7 @@ interface EditModalProps {
 }
 
 function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalProps) {
+  const md = useThemedStyles(makeMdStyles);
   const [fullName, setFullName] = useState("");
   const [phone,    setPhone]    = useState("");
   const [role,     setRole]     = useState<Role>("frontdesk");
@@ -288,6 +291,7 @@ interface ResetPwModalProps {
 }
 
 function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalProps) {
+  const md = useThemedStyles(makeMdStyles);
   const [password, setPassword] = useState("");
   const [confirm,  setConfirm]  = useState("");
   const [showPw,   setShowPw]   = useState(false);
@@ -388,6 +392,8 @@ interface ManageCentersModalProps {
 }
 
 function ManageCentersModal({ visible, member, onDone, onClose }: ManageCentersModalProps) {
+  const colors = useThemeColors();
+  const mc = useThemedStyles(makeMcStyles);
   const { showAlert } = useAlert();
   const [centers,     setCenters]     = useState<CenterItem[]>([]);
   const [loading,     setLoading]     = useState(true);
@@ -473,7 +479,7 @@ function ManageCentersModal({ visible, member, onDone, onClose }: ManageCentersM
 
           {loading ? (
             <View style={mc.loadWrap}>
-              <ActivityIndicator color={C.primary} />
+              <ActivityIndicator color={colors.primary} />
             </View>
           ) : centers.length === 0 ? (
             <View style={mc.loadWrap}>
@@ -569,7 +575,7 @@ function ManageCentersModal({ visible, member, onDone, onClose }: ManageCentersM
   );
 }
 
-const mc = StyleSheet.create({
+const makeMcStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay:  { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.45)" },
   sheet:    { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingHorizontal: ms(20), paddingTop: ms(8) },
@@ -597,7 +603,7 @@ const mc = StyleSheet.create({
   roleTabT:      { fontSize: fs(11), fontWeight: "700" },
 
   centerActions: { alignItems: "flex-end" },
-  assignBtn:     { flexDirection: "row", alignItems: "center", gap: ms(5), backgroundColor: C.primary, borderRadius: ms(8), paddingHorizontal: ms(14), paddingVertical: ms(7) },
+  assignBtn:     { flexDirection: "row", alignItems: "center", gap: ms(5), backgroundColor: colors.primary, borderRadius: ms(8), paddingHorizontal: ms(14), paddingVertical: ms(7) },
   assignBtnT:    { fontSize: fs(12), fontWeight: "700", color: "#fff" },
   removeBtn:     { flexDirection: "row", alignItems: "center", gap: ms(5), backgroundColor: "#FEF0EF", borderRadius: ms(8), paddingHorizontal: ms(14), paddingVertical: ms(7), borderWidth: 1, borderColor: "#F5BFBB" },
   removeBtnT:    { fontSize: fs(12), fontWeight: "700", color: "#C0392B" },
@@ -617,6 +623,7 @@ interface StaffCardProps {
 }
 
 function StaffCard({ member, isSelf, onEdit, onReset, onManageCenters }: StaffCardProps) {
+  const colors = useThemeColors();
   const [open, setOpen] = useState(false);
   const rm = ROLE_META[member.role];
   const initials = member.fullName
@@ -715,8 +722,8 @@ function StaffCard({ member, isSelf, onEdit, onReset, onManageCenters }: StaffCa
             {/* Actions — row 1 */}
             <View style={sc.actions}>
               <TouchableOpacity style={sc.actionEdit} onPress={onEdit} activeOpacity={0.8}>
-                <Ionicons name="create-outline" size={ms(15)} color={C.primary} />
-                <Text style={[sc.actionT, { color: C.primary }]}>Edit</Text>
+                <Ionicons name="create-outline" size={ms(15)} color={colors.primary} />
+                <Text style={[sc.actionT, { color: colors.primary }]}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity style={sc.actionCenters} onPress={onManageCenters} activeOpacity={0.8}>
                 <Ionicons name="business-outline" size={ms(15)} color="#5B2D8E" />
@@ -805,6 +812,8 @@ const sc = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function StaffManagementScreen() {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const navigation  = useNavigation();
   const { staff: authStaff } = useAuth();
   const { showAlert } = useAlert();
@@ -931,7 +940,7 @@ export function StaffManagementScreen() {
       {/* List */}
       {loading ? (
         <View style={s.loader}>
-          <ActivityIndicator size="large" color={C.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={s.loaderT}>Loading staff…</Text>
         </View>
       ) : (
@@ -943,15 +952,15 @@ export function StaffManagementScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => load(true)}
-              colors={[C.primary]}
-              tintColor={C.primary}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
         >
           {filtered.length === 0 ? (
             <EmptyState
               scene="staff"
-              color={C.primary}
+              color={colors.primary}
               title={
                 search
                   ? "No results found"
@@ -991,7 +1000,7 @@ export function StaffManagementScreen() {
       {/* FAB */}
       <TouchableOpacity style={s.fab} onPress={() => setShowCreate(true)} activeOpacity={0.85}>
         <LinearGradient
-          colors={["#8B1E3F", "#C64A3E", "#E8752C"]}
+          colors={[colors.primary, lighten(colors.primary, 0.15), lighten(colors.primary, 0.32)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={s.fabGrad}
@@ -1053,8 +1062,8 @@ export function StaffManagementScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.primary },
   loader:  { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: ms(10) },
   loaderT: { fontSize: fs(13), color: C.muted, fontWeight: "500" },
 
@@ -1076,20 +1085,20 @@ const s = StyleSheet.create({
   emptyIconWrap:{ width: ms(72), height: ms(72), borderRadius: ms(36), backgroundColor: "#FDF0F3", justifyContent: "center", alignItems: "center", marginBottom: ms(4) },
   emptyTitle:   { fontSize: fs(16), fontWeight: "800", color: C.text },
   emptySub:     { fontSize: fs(13), color: C.muted, textAlign: "center", paddingHorizontal: ms(24) },
-  emptyBtn:     { flexDirection: "row", alignItems: "center", gap: ms(6), marginTop: ms(16), backgroundColor: C.primary, borderRadius: ms(12), paddingHorizontal: ms(22), paddingVertical: ms(11) },
+  emptyBtn:     { flexDirection: "row", alignItems: "center", gap: ms(6), marginTop: ms(16), backgroundColor: colors.primary, borderRadius: ms(12), paddingHorizontal: ms(22), paddingVertical: ms(11) },
   emptyBtnT:    { fontSize: fs(13), fontWeight: "700", color: "#fff" },
 
   fab:     { position: "absolute", bottom: ms(28), right: ms(20) },
   fabGrad: {
     flexDirection: "row", alignItems: "center", gap: ms(7),
     paddingHorizontal: ms(20), paddingVertical: ms(14), borderRadius: ms(28),
-    shadowColor: "#8B1E3F", shadowOffset: { width: 0, height: ms(4) },
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(4) },
     shadowOpacity: 0.35, shadowRadius: ms(10), elevation: 6,
   },
   fabT: { fontSize: fs(14), fontWeight: "800", color: "#fff" },
 });
 
-const md = StyleSheet.create({
+const makeMdStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay:  { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.45)" },
   sheet:    { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingHorizontal: ms(20), paddingTop: ms(8), maxHeight: "90%" },
@@ -1102,7 +1111,7 @@ const md = StyleSheet.create({
   eyeBtn:       { padding: ms(4) },
   pwHint:       { fontSize: fs(11), color: C.muted, marginBottom: ms(4) },
   errorT:       { fontSize: fs(12), color: "#C0392B", marginTop: ms(6), marginBottom: ms(4) },
-  btn:          { backgroundColor: C.primary, borderRadius: ms(14), paddingVertical: ms(14), alignItems: "center", marginTop: ms(16) },
+  btn:          { backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14), alignItems: "center", marginTop: ms(16) },
   btnDim:       { opacity: 0.6 },
   btnT:         { fontSize: fs(15), fontWeight: "800", color: "#fff" },
   cancelBtn:    { alignItems: "center", marginTop: ms(12) },

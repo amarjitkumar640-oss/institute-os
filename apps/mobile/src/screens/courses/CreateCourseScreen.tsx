@@ -25,6 +25,7 @@ import { createCourse } from "../../api/courses";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateCourse">;
 
@@ -32,7 +33,7 @@ const GENERAL_VALUE = "general";
 
 interface FormState {
   name: string;
-  examCategory: string;
+  examCategoryIds: string[];
   durationMonths: string;
   defaultFee: string;
 }
@@ -47,14 +48,25 @@ interface FormErrors {
 
 interface CreatedCourse {
   name: string;
-  examCategory: ExamCategoryItem | null;
+  examCategories: ExamCategoryItem[];
   durationMonths: number;
   defaultFee: number;
 }
 
 const INITIAL_FORM: FormState = {
-  name: "", examCategory: GENERAL_VALUE, durationMonths: "", defaultFee: "",
+  name: "", examCategoryIds: [], durationMonths: "", defaultFee: "",
 };
+
+// "General" and specific categories are mutually exclusive. `displayValue` is
+// what was shown to SelectChips before the tap; `next` is what it computed
+// after toggling — comparing General's presence across the two tells us
+// whether the user tapped General itself vs. a specific category.
+function resolveCategorySelection(displayValue: string[], next: string[]): string[] {
+  const wasGeneral = displayValue.includes(GENERAL_VALUE);
+  const nowGeneral = next.includes(GENERAL_VALUE);
+  if (!wasGeneral && nowGeneral) return [];
+  return next.filter((v) => v !== GENERAL_VALUE);
+}
 
 function validate(form: FormState): FormErrors {
   const errors: FormErrors = {};
@@ -77,6 +89,8 @@ function validate(form: FormState): FormErrors {
 
 export function CreateCourseScreen({ navigation }: Props) {
   const { showConfirm } = useAlert();
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const [form, setForm]               = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors]           = useState<FormErrors>({});
   const [loading, setLoading]         = useState(false);
@@ -140,10 +154,10 @@ export function CreateCourseScreen({ navigation }: Props) {
 
     try {
       const result = await createCourse({
-        name:           form.name.trim(),
-        examCategoryId: form.examCategory === GENERAL_VALUE ? null : form.examCategory,
-        durationMonths: Number(form.durationMonths),
-        defaultFee:     Number(form.defaultFee),
+        name:            form.name.trim(),
+        examCategoryIds: form.examCategoryIds,
+        durationMonths:  Number(form.durationMonths),
+        defaultFee:      Number(form.defaultFee),
       });
 
       if (!result.ok) {
@@ -153,7 +167,7 @@ export function CreateCourseScreen({ navigation }: Props) {
 
       showSuccessCard({
         name:           result.course.name,
-        examCategory:   result.course.examCategory,
+        examCategories: result.course.examCategories,
         durationMonths: result.course.durationMonths,
         defaultFee:     result.course.defaultFee,
       });
@@ -170,7 +184,7 @@ export function CreateCourseScreen({ navigation }: Props) {
   }
 
   const isDirty =
-    form.name !== "" || form.examCategory !== "" ||
+    form.name !== "" || form.examCategoryIds.length > 0 ||
     form.durationMonths !== "" || form.defaultFee !== "";
 
   function handleBack() {
@@ -222,8 +236,12 @@ export function CreateCourseScreen({ navigation }: Props) {
             <SelectChips
               label="EXAM CATEGORY"
               options={examOptions}
-              value={form.examCategory || undefined}
-              onChange={(v) => setField("examCategory", v)}
+              multiple
+              value={form.examCategoryIds.length ? form.examCategoryIds : [GENERAL_VALUE]}
+              onChange={(next) => setField("examCategoryIds", resolveCategorySelection(
+                form.examCategoryIds.length ? form.examCategoryIds : [GENERAL_VALUE],
+                next,
+              ))}
               error={errors.examCategory}
             />
           </View>
@@ -293,7 +311,7 @@ export function CreateCourseScreen({ navigation }: Props) {
       {loading && (
         <View style={s.loaderOverlay}>
           <View style={s.loaderCard}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderTitle}>Creating Course…</Text>
             <Text style={s.loaderSub}>Please wait a moment</Text>
           </View>
@@ -321,8 +339,8 @@ export function CreateCourseScreen({ navigation }: Props) {
 
             {/* Details */}
             <View style={s.detailBox}>
-              <DetailRow icon="book-outline"   label="Course Name" value={createdCourse.name} color="#8B1E3F" />
-              <DetailRow icon="layers-outline" label="Category"    value={createdCourse.examCategory?.label ?? "General (All Categories)"} color="#2563A8" />
+              <DetailRow icon="book-outline"   label="Course Name" value={createdCourse.name} color={colors.primary} />
+              <DetailRow icon="layers-outline" label="Category"    value={createdCourse.examCategories.length ? createdCourse.examCategories.map((c) => c.label).join(", ") : "General (All Categories)"} color="#2563A8" />
               <DetailRow icon="time-outline"   label="Duration"    value={`${createdCourse.durationMonths} months`} color="#E8752C" />
               <DetailRow icon="wallet-outline" label="Default Fee" value={`₹${createdCourse.defaultFee.toLocaleString("en-IN")}`} color="#1B9C63" last />
             </View>
@@ -330,7 +348,7 @@ export function CreateCourseScreen({ navigation }: Props) {
             {/* CTA button */}
             <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
               <LinearGradient
-                colors={["#8B1E3F", "#A52341"]}
+                colors={[colors.primary, "#A52341"]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={s.doneBtn}
               >
@@ -373,15 +391,15 @@ const dr = StyleSheet.create({
   value:     { fontSize: fs(13), color: "#2B1B1F", fontWeight: "700" },
 });
 
-const s = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:          { flex: 1, backgroundColor: colors.primary },
   flex:          { flex: 1 },
   scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
   scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(20) },
 
   section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(12) },
-  sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2), backgroundColor: "#8B1E3F" },
+  sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2), backgroundColor: colors.primary },
   sectionTitle:  { fontSize: fs(12), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textTransform: "uppercase" },
 
   submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },

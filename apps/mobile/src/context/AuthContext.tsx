@@ -8,6 +8,8 @@ import {
   registerUnauthorizedHandler,
 } from "../api/client";
 
+const TENANT_ID = process.env.EXPO_PUBLIC_TENANT_ID ?? "";
+
 export interface CenterInfo {
   id:   string;
   name: string;
@@ -26,7 +28,7 @@ interface AuthContextValue {
   isAllCenters:   boolean;
   pendingCenters: CenterInfo[] | null; // non-null only between login and center pick
   isLoading:      boolean;
-  login:         (email: string, password: string) => Promise<{ needsCenterSelect: boolean }>;
+  login:         (identifier: string, password: string) => Promise<{ needsCenterSelect: boolean }>;
   selectCenter:  (centerId: string | null) => Promise<void>;
   switchCenter:  () => Promise<void>; // re-surface the center picker from within the app
   logout:        () => Promise<void>;
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           SecureStore.getItemAsync(STAFF_KEY),
           SecureStore.getItemAsync(CENTER_KEY),
         ]);
+
         if (token && staffJson) {
           setStaff(JSON.parse(staffJson));
           // centerJson being the string "null" means all-centers mode was active
@@ -76,8 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  async function login(email: string, password: string): Promise<{ needsCenterSelect: boolean }> {
-    const { data } = await apiClient.post("/auth/login", { email, password });
+  async function login(identifier: string, password: string): Promise<{ needsCenterSelect: boolean }> {
+    const { data } = await apiClient.post("/auth/login", { tenantId: TENANT_ID, identifier, password });
     const centers: CenterInfo[] = data.centers ?? [];
 
     await storeAccessToken(data.accessToken);

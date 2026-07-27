@@ -16,6 +16,7 @@ import type { RootStackParamList } from "../../navigation/types";
 import { fetchDashboardStats, type DashboardStats } from "../../api/dashboard";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 import { ROLE_META } from "../../constants/roleMeta";
@@ -92,6 +93,8 @@ function Wave() {
 // ── Bar Chart ─────────────────────────────────────────────────────────────────
 
 function BarChart({ data }: { data: { label: string; count: number }[] }) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const cH    = 90;
   const n     = data.length;
   const gap   = 8;
@@ -106,7 +109,7 @@ function BarChart({ data }: { data: { label: string; count: number }[] }) {
         <Defs>
           <SvgGrad id="barHi" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0%" stopColor={C.orange} />
-            <Stop offset="100%" stopColor={C.primary} />
+            <Stop offset="100%" stopColor={colors.primary} />
           </SvgGrad>
         </Defs>
         {data.map((d, i) => {
@@ -136,6 +139,7 @@ function BarChart({ data }: { data: { label: string; count: number }[] }) {
 // ── Skeleton loader ───────────────────────────────────────────────────────────
 
 function SkeletonCard() {
+  const s = useThemedStyles(makeSStyles);
   return (
     <View style={[s.statCard, { backgroundColor: "#F5F0EC", borderColor: "#EAE4DF" }]}>
       <View style={{ width: ms(32), height: ms(32), borderRadius: ms(10), backgroundColor: "#E8E0DC", marginBottom: ms(10) }} />
@@ -160,6 +164,7 @@ function arcOffset(angleDeg: number) {
 function DialAction({ anim, icon, color, angle, onPress }: {
   anim: Animated.Value; icon: keyof typeof Ionicons.glyphMap; color: string; angle: number; onPress: () => void;
 }) {
+  const s = useThemedStyles(makeSStyles);
   const { dx, dy } = arcOffset(angle);
   return (
     <Animated.View
@@ -188,6 +193,8 @@ function DialAction({ anim, icon, color, angle, onPress }: {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function DashboardScreen() {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const insets = useSafeAreaInsets();
   const { staff, currentCenter, isAllCenters, switchCenter } = useAuth();
   const navigation = useNavigation<Nav>();
@@ -265,7 +272,7 @@ export function DashboardScreen() {
       label: "Total Batches",
       value: String(stats.totalBatches),
       icon:  "layers-outline",
-      color: C.primary,
+      color: colors.primary,
       delta: `${stats.activeBatches} running now`,
       up:    stats.activeBatches > 0,
       nav:   { screen: "BatchList", params: { initialFilter: "all" } },
@@ -274,7 +281,7 @@ export function DashboardScreen() {
       label: "Total Courses",
       value: String(stats.totalCourses),
       icon:  "book-outline",
-      color: C.accent,
+      color: colors.accent,
       delta: "Active courses",
       up:    false,
       nav:   { screen: "CourseList" },
@@ -335,7 +342,7 @@ export function DashboardScreen() {
   }
 
   const activityIcon: Record<string, { icon: string; color: string }> = {
-    enrollment: { icon: "person-add-outline",   color: C.accent  },
+    enrollment: { icon: "person-add-outline",   color: colors.accent  },
     faculty:    { icon: "people-outline",        color: C.orange },
   };
 
@@ -355,12 +362,12 @@ export function DashboardScreen() {
           contentContainerStyle={s.scrollBody}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={["#8B1E3F"]} tintColor="#8B1E3F" />
+            <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[colors.primary]} tintColor={colors.primary} />
           }
         >
           {/* ── Header ── */}
           <LinearGradient
-            colors={["#5C0E23", "#8B1E3F", "#C0422E", "#E87830"]}
+            colors={[colors.safeArea, colors.primary, lighten(colors.primary, 0.15), lighten(colors.primary, 0.32)]}
             start={{ x: 0.15, y: 0 }} end={{ x: 0.85, y: 1 }}
             style={s.header}
           >
@@ -462,9 +469,9 @@ export function DashboardScreen() {
             >
               {([
                 { label: "Students", icon: "school-outline",  nav: "StudentList" as const, color: "#946200"  },
-                { label: "Batches",  icon: "layers-outline",  nav: "BatchList"   as const, color: C.primary  },
+                { label: "Batches",  icon: "layers-outline",  nav: "BatchList"   as const, color: colors.primary  },
                 { label: "Faculty",  icon: "people-outline",  nav: "FacultyList" as const, color: C.orange   },
-                { label: "Courses",  icon: "book-outline",    nav: "CourseList"  as const, color: C.accent   },
+                { label: "Courses",  icon: "book-outline",    nav: "CourseList"  as const, color: colors.accent   },
                 { label: "Subjects", icon: "library-outline", nav: "SubjectList" as const, color: C.blue     },
               ] as const).map((q) => (
                 <TouchableOpacity
@@ -608,7 +615,7 @@ export function DashboardScreen() {
                 <Text style={s.secT}>Admin</Text>
                 <TouchableOpacity style={s.adminRow} onPress={() => navigation.navigate("StaffManagement")} activeOpacity={0.7}>
                   <View style={[s.adminIco, { backgroundColor: "#FDF0F3" }]}>
-                    <Ionicons name="shield-checkmark-outline" size={ms(18)} color={C.primary} />
+                    <Ionicons name="shield-checkmark-outline" size={ms(18)} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.adminT}>Staff & Roles</Text>
@@ -646,8 +653,8 @@ export function DashboardScreen() {
         {/* ── Bottom nav (stays fixed) ── */}
         <View style={s.nav}>
           <TouchableOpacity style={s.navI}>
-            <Ionicons name="grid" size={22} color={C.primary} />
-            <Text style={[s.navL, { color: C.primary, fontWeight: "700" }]}>Dashboard</Text>
+            <Ionicons name="grid" size={22} color={colors.primary} />
+            <Text style={[s.navL, { color: colors.primary, fontWeight: "700" }]}>Dashboard</Text>
             <View style={s.navDot} />
           </TouchableOpacity>
           <TouchableOpacity style={s.navI} onPress={() => navigation.navigate("StudentList")}>
@@ -656,12 +663,12 @@ export function DashboardScreen() {
           </TouchableOpacity>
           <View style={s.fabW}>
             <View pointerEvents={fabMenuOpen ? "auto" : "none"} style={s.dialLayer}>
-              <DialAction anim={dialAdmission} icon="school-outline"     color={C.primary} angle={150} onPress={() => handleDialPress("NewAdmission")} />
+              <DialAction anim={dialAdmission} icon="school-outline"     color={colors.primary} angle={150} onPress={() => handleDialPress("NewAdmission")} />
               <DialAction anim={dialLead}      icon="person-add-outline" color={C.blue}    angle={90}  onPress={() => handleDialPress("AddLead")} />
               <DialAction anim={dialLeadsList} icon="list-outline"       color={C.purple}  angle={30}  onPress={() => handleDialPress("Leads")} />
             </View>
             <TouchableOpacity onPress={toggleFabMenu} activeOpacity={0.85}>
-              <LinearGradient colors={[C.primary, "#A52341"]} style={s.fab}>
+              <LinearGradient colors={[colors.primary, "#A52341"]} style={s.fab}>
                 <Animated.View style={{ transform: [{ rotate: fabRotate.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "45deg"] }) }] }}>
                   <Ionicons name="add" size={28} color="#fff" />
                 </Animated.View>
@@ -684,8 +691,8 @@ export function DashboardScreen() {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  safe:      { flex: 1, backgroundColor: "#5C0E23" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:      { flex: 1, backgroundColor: colors.safeArea },
   root:      { flex: 1, backgroundColor: C.bg },
   header:    { paddingTop: ms(14), overflow: "hidden" },
   hPad:      { paddingHorizontal: ms(18), paddingBottom: ms(18), gap: ms(14) },
@@ -700,7 +707,7 @@ const s = StyleSheet.create({
   dateText:     { fontSize: fs(11), fontWeight: "600", color: "rgba(255,255,255,0.88)", letterSpacing: 0.2 },
   headerActions:{ flexDirection: "row", alignItems: "center", gap: ms(8) },
   hBtn:         { width: ms(36), height: ms(36), borderRadius: ms(12), backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
-  bellDot:      { position: "absolute", top: ms(7), right: ms(7), width: ms(7), height: ms(7), borderRadius: ms(3.5), backgroundColor: C.secondary, borderWidth: 1.5, borderColor: "rgba(80,10,30,0.7)" },
+  bellDot:      { position: "absolute", top: ms(7), right: ms(7), width: ms(7), height: ms(7), borderRadius: ms(3.5), backgroundColor: colors.secondary, borderWidth: 1.5, borderColor: "rgba(80,10,30,0.7)" },
 
   // Profile row
   profileRow:   { flexDirection: "row", alignItems: "center", gap: ms(13) },
@@ -764,7 +771,7 @@ const s = StyleSheet.create({
   gTagT:   { fontSize: fs(11), fontWeight: "700", color: "#1B9C63" },
   months:  { flexDirection: "row", justifyContent: "space-between", marginTop: ms(8), width: CHART_W },
   month:   { fontSize: fs(9), color: C.muted, textAlign: "center" },
-  monthHi: { color: C.primary, fontWeight: "700" },
+  monthHi: { color: colors.primary, fontWeight: "700" },
 
   actRow:  { flexDirection: "row", alignItems: "center", paddingVertical: ms(10), gap: ms(12) },
   actDiv:  { borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
@@ -792,8 +799,8 @@ const s = StyleSheet.create({
   nav:    { flexDirection: "row", backgroundColor: "#fff", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(10), paddingBottom: ms(20), paddingHorizontal: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: -ms(4) }, shadowOpacity: 0.15, shadowRadius: ms(12), elevation: 10, zIndex: 25 },
   navI:   { flex: 1, alignItems: "center", gap: ms(3) },
   navL:   { fontSize: fs(9.5), color: C.muted, fontWeight: "600" },
-  navDot: { width: ms(4), height: ms(4), borderRadius: ms(2), backgroundColor: C.primary, marginTop: ms(1) },
+  navDot: { width: ms(4), height: ms(4), borderRadius: ms(2), backgroundColor: colors.primary, marginTop: ms(1) },
   fabW:      { flex: 1, alignItems: "center", marginTop: -ms(26), position: "relative" },
   dialLayer: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
-  fab:    { width: ms(52), height: ms(52), borderRadius: ms(26), justifyContent: "center", alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.5, shadowRadius: ms(16), elevation: 8 },
+  fab:    { width: ms(52), height: ms(52), borderRadius: ms(26), justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.5, shadowRadius: ms(16), elevation: 8 },
 });

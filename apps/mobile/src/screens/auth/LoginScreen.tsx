@@ -19,9 +19,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Rect } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
+import { useOrg } from "../../context/OrgContext";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, useBrandLogoUrl, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 
-// ── Hero illustration (unchanged) ────────────────────────────────────────────
+// ── Hero illustration (unchanged — decorative art, not brand-derived) ────────
 
 function HeroIllustration() {
   return (
@@ -74,6 +76,7 @@ function HeroIllustration() {
 // ── Per-field inline error ────────────────────────────────────────────────────
 
 function FieldError({ message }: { message: string }) {
+  const s = useThemedStyles(makeStyles);
   const opacity = useRef(new Animated.Value(0)).current;
   const slideY  = useRef(new Animated.Value(-6)).current;
 
@@ -91,9 +94,9 @@ function FieldError({ message }: { message: string }) {
 
   if (!message) return null;
   return (
-    <Animated.View style={[styles.fieldErrRow, { opacity, transform: [{ translateY: slideY }] }]}>
+    <Animated.View style={[s.fieldErrRow, { opacity, transform: [{ translateY: slideY }] }]}>
       <Ionicons name="alert-circle-outline" size={13} color="#D9534F" />
-      <Text style={styles.fieldErrText}>{message}</Text>
+      <Text style={s.fieldErrText}>{message}</Text>
     </Animated.View>
   );
 }
@@ -114,16 +117,21 @@ function doShake(anim: Animated.Value) {
 
 export function LoginScreen() {
   const { login } = useAuth();
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeStyles);
+  const logoUrl = useBrandLogoUrl();
+  const { name: orgName, loginMethod, isLoading: orgLoading, configError } = useOrg();
+  const isPhone = loginMethod === "phone";
 
-  const [email,        setEmail]        = useState("");
-  const [password,     setPassword]     = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [focusedField, setFocusedField] = useState<"email" | "password" | null>(null);
-  const [emailError,   setEmailError]   = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [serverError,  setServerError]  = useState("");
-  const [submitting,   setSubmitting]   = useState(false);
-  const [rememberMe,   setRememberMe]   = useState(false);
+  const [identifier,      setIdentifier]      = useState("");
+  const [password,        setPassword]        = useState("");
+  const [showPassword,    setShowPassword]    = useState(false);
+  const [focusedField,    setFocusedField]    = useState<"identifier" | "password" | null>(null);
+  const [identifierError, setIdentifierError] = useState("");
+  const [passwordError,   setPasswordError]   = useState("");
+  const [serverError,     setServerError]     = useState("");
+  const [submitting,      setSubmitting]      = useState(false);
+  const [rememberMe,      setRememberMe]      = useState(false);
 
   // ── Animated values ─────────────────────────────────────────────────────────
   const floatY        = useRef(new Animated.Value(0)).current;
@@ -138,8 +146,8 @@ export function LoginScreen() {
   const btnScale      = useRef(new Animated.Value(0.88)).current;
   const btnOpacity    = useRef(new Animated.Value(0)).current;
   const pressScale    = useRef(new Animated.Value(1)).current;
-  const emailShakeX   = useRef(new Animated.Value(0)).current;
-  const passwordShakeX = useRef(new Animated.Value(0)).current;
+  const identifierShakeX = useRef(new Animated.Value(0)).current;
+  const passwordShakeX   = useRef(new Animated.Value(0)).current;
   const keyboardLift  = useRef(new Animated.Value(0)).current;
 
   // ── Keyboard-aware sheet lift — slides the whole card upward over the hero,
@@ -213,44 +221,46 @@ export function LoginScreen() {
   }, []);
 
   // ── Validation ───────────────────────────────────────────────────────────────
-  function validate(): boolean {
-    let ok = true;
-
-    if (!email.trim()) {
-      setEmailError("Email address is required");
-      doShake(emailShakeX);
-      ok = false;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setEmailError("Enter a valid email address");
-      doShake(emailShakeX);
-      ok = false;
-    } else {
-      setEmailError("");
+  function validateIdentifier(): boolean {
+    const trimmed = identifier.trim();
+    if (!trimmed) {
+      setIdentifierError(isPhone ? "Phone number is required" : "Email or username is required");
+      doShake(identifierShakeX);
+      return false;
     }
+    if (isPhone && trimmed.replace(/\D/g, "").length < 7) {
+      setIdentifierError("Enter a valid phone number");
+      doShake(identifierShakeX);
+      return false;
+    }
+    setIdentifierError("");
+    return true;
+  }
 
+  function validatePassword(): boolean {
     if (!password) {
       setPasswordError("Password is required");
       doShake(passwordShakeX);
-      ok = false;
-    } else {
-      setPasswordError("");
+      return false;
     }
-
-    return ok;
+    setPasswordError("");
+    return true;
   }
 
   async function handleSubmit() {
     setServerError("");
-    if (!validate()) return;
+    const identOk = validateIdentifier();
+    const passOk  = validatePassword();
+    if (!identOk || !passOk) return;
 
     setSubmitting(true);
     try {
-      await login(email.trim(), password);
+      await login(identifier.trim(), password);
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 401) {
-        setServerError("Invalid email or password.");
-        doShake(emailShakeX);
+        setServerError(isPhone ? "Invalid phone number or password." : "Invalid credentials.");
+        doShake(identifierShakeX);
         doShake(passwordShakeX);
       } else if (err?.code === "ERR_NETWORK" || err?.code === "ECONNREFUSED") {
         setServerError("Cannot reach server. Check your network or API URL.");
@@ -266,18 +276,42 @@ export function LoginScreen() {
   function onPressOut() { Animated.spring(pressScale, { toValue: 1,    useNativeDriver: true, tension: 200, friction: 10 }).start(); }
 
   const topInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) + 10 : 54;
+  const heroGradient: [string, string, string] = [darken(colors.primary, 0.35), colors.primary, lighten(colors.primary, 0.15)];
+
+  // While the app's own org info is still loading (or failed to load), don't
+  // show the form yet — we don't know the right field type (phone vs
+  // email/username) or the right branding until this resolves.
+  if (orgLoading) {
+    return (
+      <View style={s.centerScreen}>
+        <StatusBar barStyle="dark-content" />
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (configError) {
+    return (
+      <View style={s.centerScreen}>
+        <StatusBar barStyle="dark-content" />
+        <Ionicons name="alert-circle-outline" size={40} color="#D9534F" />
+        <Text style={s.errorTitle}>Can't load app configuration</Text>
+        <Text style={s.errorSub}>This app isn't set up correctly. Please contact support.</Text>
+      </View>
+    );
+  }
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-    <View style={styles.root}>
+    <View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* ── Hero ── */}
-      <Animated.View style={[styles.heroWrap, { opacity: heroOpacity, transform: [{ translateY: heroY }] }]}>
+      <Animated.View style={[s.heroWrap, { opacity: heroOpacity, transform: [{ translateY: heroY }] }]}>
         <LinearGradient
-          colors={["#5C0E23", "#8B1E3F", "#C0422E", "#E87830"]}
+          colors={heroGradient}
           start={{ x: 0.18, y: 0 }} end={{ x: 0.82, y: 1 }}
-          style={styles.hero}
+          style={s.hero}
         >
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
             {Array.from({ length: 30 }).flatMap((_, r) =>
@@ -291,85 +325,88 @@ export function LoginScreen() {
               ))
             )}
           </Svg>
-          <View style={[styles.heroBody, { paddingTop: topInset }]}>
-            <View style={styles.heroTop}>
-              <Animated.View style={[styles.logoRing, { transform: [{ translateY: floatY }] }]}>
-                <View style={styles.logoInner}>
-                  <Image source={require("../../../assets/institute-logo.png")} style={styles.logoImg} />
+          <View style={[s.heroBody, { paddingTop: topInset }]}>
+            <View style={s.heroTop}>
+              <Animated.View style={[s.logoRing, { transform: [{ translateY: floatY }] }]}>
+                <View style={s.logoInner}>
+                  <Image
+                    source={logoUrl ? { uri: logoUrl } : require("../../../assets/institute-logo.png")}
+                    style={s.logoImg}
+                  />
                 </View>
               </Animated.View>
-              <Text style={styles.instName}>The Success Tutorial Classes</Text>
-              <Text style={styles.instTag}>Quality Education Platform · Ghatsila</Text>
+              <Text style={s.instName}>{orgName ?? "Institute OS"}</Text>
+              <Text style={s.instTag}>Quality Education Platform</Text>
             </View>
-            <View style={styles.heroMid}><HeroIllustration /></View>
+            <View style={s.heroMid}><HeroIllustration /></View>
           </View>
         </LinearGradient>
       </Animated.View>
 
       {/* ── Form sheet ── */}
-      <Animated.View style={[styles.sheet, { opacity: sheetOpacity, transform: [{ translateY: sheetY }, { translateY: keyboardLift }] }]}>
+      <Animated.View style={[s.sheet, { opacity: sheetOpacity, transform: [{ translateY: sheetY }, { translateY: keyboardLift }] }]}>
        <ScrollView
-        style={styles.sheetScroll}
-        contentContainerStyle={styles.sheetScrollContent}
+        style={s.sheetScroll}
+        contentContainerStyle={s.sheetScrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
        >
-        <View style={styles.formTop}>
+        <View style={s.formTop}>
           {/* Header */}
-          <Animated.View style={[styles.sheetHeader, { opacity: headerOpacity, transform: [{ translateY: headerY }] }]}>
-            <Text style={styles.welcomeText}>Let's get you signed in</Text>
-            <Text style={styles.welcomeSub}>Access classes, results &amp; schedules in one place.</Text>
+          <Animated.View style={[s.sheetHeader, { opacity: headerOpacity, transform: [{ translateY: headerY }] }]}>
+            <Text style={s.welcomeText}>Let's get you signed in</Text>
+            <Text style={s.welcomeSub}>Access classes, results &amp; schedules in one place.</Text>
           </Animated.View>
 
           {/* Fields */}
-          <Animated.View style={[styles.fields, { opacity: fieldsOpacity, transform: [{ translateY: fieldsY }] }]}>
+          <Animated.View style={[s.fields, { opacity: fieldsOpacity, transform: [{ translateY: fieldsY }] }]}>
 
-            {/* Email */}
+            {/* Identifier — phone or email/username, depending on this org's configured login method */}
             <View>
               <Animated.View style={[
-                styles.field,
-                focusedField === "email" && styles.fieldFocused,
-                !!emailError && styles.fieldError,
-                { transform: [{ translateX: emailShakeX }] },
+                s.field,
+                focusedField === "identifier" && s.fieldFocused,
+                !!identifierError && s.fieldError,
+                { transform: [{ translateX: identifierShakeX }] },
               ]}>
                 <Ionicons
-                  name="mail-outline"
+                  name={isPhone ? "call-outline" : "person-outline"}
                   size={17}
-                  color={emailError ? "#D9534F" : focusedField === "email" ? C.primary : C.placeholder}
-                  style={styles.iconL}
+                  color={identifierError ? "#D9534F" : focusedField === "identifier" ? colors.primary : C.placeholder}
+                  style={s.iconL}
                 />
                 <TextInput
-                  style={styles.textInput}
-                  placeholder="Email address"
+                  style={s.textInput}
+                  placeholder={isPhone ? "Phone number" : "Email or username"}
                   placeholderTextColor={C.placeholder}
-                  value={email}
-                  onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(""); setServerError(""); }}
-                  onFocus={() => setFocusedField("email")}
+                  value={identifier}
+                  onChangeText={(v) => { setIdentifier(v); if (identifierError) setIdentifierError(""); setServerError(""); }}
+                  onFocus={() => setFocusedField("identifier")}
                   onBlur={() => setFocusedField(null)}
                   autoCapitalize="none"
-                  keyboardType="email-address"
+                  keyboardType={isPhone ? "phone-pad" : "default"}
                   returnKeyType="next"
                 />
               </Animated.View>
-              <FieldError message={emailError} />
+              <FieldError message={identifierError} />
             </View>
 
             {/* Password */}
             <View>
               <Animated.View style={[
-                styles.field,
-                focusedField === "password" && styles.fieldFocused,
-                !!passwordError && styles.fieldError,
+                s.field,
+                focusedField === "password" && s.fieldFocused,
+                !!passwordError && s.fieldError,
                 { transform: [{ translateX: passwordShakeX }] },
               ]}>
                 <Ionicons
                   name="lock-closed-outline"
                   size={17}
-                  color={passwordError ? "#D9534F" : focusedField === "password" ? C.primary : C.placeholder}
-                  style={styles.iconL}
+                  color={passwordError ? "#D9534F" : focusedField === "password" ? colors.primary : C.placeholder}
+                  style={s.iconL}
                 />
                 <TextInput
-                  style={styles.textInput}
+                  style={s.textInput}
                   placeholder="Password"
                   placeholderTextColor={C.placeholder}
                   value={password}
@@ -381,7 +418,7 @@ export function LoginScreen() {
                   onSubmitEditing={handleSubmit}
                 />
                 <TouchableOpacity
-                  style={styles.iconR}
+                  style={s.iconR}
                   onPress={() => setShowPassword(v => !v)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
@@ -392,30 +429,30 @@ export function LoginScreen() {
             </View>
 
             {/* Remember me + forgot */}
-            <View style={styles.row}>
-              <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe(v => !v)} activeOpacity={0.7}>
-                <View style={[styles.checkbox, rememberMe && styles.checkboxOn]}>
+            <View style={s.row}>
+              <TouchableOpacity style={s.rememberRow} onPress={() => setRememberMe(v => !v)} activeOpacity={0.7}>
+                <View style={[s.checkbox, rememberMe && s.checkboxOn]}>
                   {rememberMe && <Ionicons name="checkmark" size={11} color="#fff" />}
                 </View>
-                <Text style={styles.rememberLabel}>Remember me</Text>
+                <Text style={s.rememberLabel}>Remember me</Text>
               </TouchableOpacity>
               <TouchableOpacity activeOpacity={0.7}>
-                <Text style={styles.forgot}>Forgot password?</Text>
+                <Text style={s.forgot}>Forgot password?</Text>
               </TouchableOpacity>
             </View>
 
             {/* Server / network error */}
             {serverError ? (
-              <View style={styles.serverErrBox}>
+              <View style={s.serverErrBox}>
                 <Ionicons name="information-circle-outline" size={15} color="#D9534F" />
-                <Text style={styles.serverErrText}>{serverError}</Text>
+                <Text style={s.serverErrText}>{serverError}</Text>
               </View>
             ) : null}
           </Animated.View>
         </View>
 
         {/* Bottom: button + legal */}
-        <Animated.View style={[styles.formBottom, { opacity: btnOpacity, transform: [{ scale: btnScale }] }]}>
+        <Animated.View style={[s.formBottom, { opacity: btnOpacity, transform: [{ scale: btnScale }] }]}>
           <TouchableOpacity
             onPress={handleSubmit}
             onPressIn={onPressIn}
@@ -425,29 +462,29 @@ export function LoginScreen() {
           >
             <Animated.View style={{ transform: [{ scale: pressScale }] }}>
               <LinearGradient
-                colors={["#F5B301", "#E8752C"]}
+                colors={[colors.secondary, "#E8752C"]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={styles.btn}
+                style={s.btn}
               >
                 {submitting ? (
                   <>
-                    <ActivityIndicator size="small" color={C.text} style={styles.btnIcon} />
-                    <Text style={styles.btnLabel}>Signing in…</Text>
+                    <ActivityIndicator size="small" color={C.text} style={s.btnIcon} />
+                    <Text style={s.btnLabel}>Signing in…</Text>
                   </>
                 ) : (
                   <>
-                    <Ionicons name="arrow-forward" size={18} color={C.text} style={styles.btnIcon} />
-                    <Text style={styles.btnLabel}>Continue</Text>
+                    <Ionicons name="arrow-forward" size={18} color={C.text} style={s.btnIcon} />
+                    <Text style={s.btnLabel}>Continue</Text>
                   </>
                 )}
               </LinearGradient>
             </Animated.View>
           </TouchableOpacity>
 
-          <View style={styles.legal}>
-            <Text style={styles.legalLink}>Privacy policy</Text>
-            <Text style={styles.legalDot}> · </Text>
-            <Text style={styles.legalLink}>Terms &amp; conditions</Text>
+          <View style={s.legal}>
+            <Text style={s.legalLink}>Privacy policy</Text>
+            <Text style={s.legalDot}> · </Text>
+            <Text style={s.legalLink}>Terms &amp; conditions</Text>
           </View>
         </Animated.View>
        </ScrollView>
@@ -459,8 +496,11 @@ export function LoginScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   root:    { flex: 1, backgroundColor: "#FFFFFF" },
+  centerScreen: { flex: 1, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 10 },
+  errorTitle: { fontSize: 15, fontWeight: "700", color: "#1E1014", textAlign: "center", marginTop: 4 },
+  errorSub:   { fontSize: 12.5, color: "#7A6E70", textAlign: "center" },
 
   // Hero
   heroWrap: { flex: 1.15 },
@@ -515,7 +555,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   fieldFocused: {
-    borderColor: "#8B1E3F",
+    borderColor: colors.primary,
     backgroundColor: "#FFF8FB",
   },
   fieldError: {
@@ -556,9 +596,9 @@ const styles = StyleSheet.create({
   row:          { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6, marginBottom: 2 },
   rememberRow:  { flexDirection: "row", alignItems: "center" },
   checkbox:     { width: 17, height: 17, borderRadius: 4, borderWidth: 1.5, borderColor: "#7A6E70", alignItems: "center", justifyContent: "center" },
-  checkboxOn:   { backgroundColor: "#8B1E3F", borderColor: "#8B1E3F" },
+  checkboxOn:   { backgroundColor: colors.primary, borderColor: colors.primary },
   rememberLabel: { fontSize: 12.5, color: "#7A6E70", marginLeft: 8 },
-  forgot:       { fontSize: 12.5, fontWeight: "600", color: "#2CA6A4" },
+  forgot:       { fontSize: 12.5, fontWeight: "600", color: colors.accent },
 
   // Button
   btn: {

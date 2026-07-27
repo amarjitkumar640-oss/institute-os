@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, StatusBar, Animated, TouchableOpacity,
+  Platform, StatusBar, Animated, Easing, TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
@@ -16,6 +16,8 @@ import { updateSubject, type SubjectItem } from "../../api/subjects";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs, sw } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
+import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditSubject">;
 
@@ -43,17 +45,20 @@ const CATEGORY_SUB: Record<string, string> = {
 
 interface UpdatedSubject {
   name: string;
-  examCategory: ExamCategoryItem | null;
+  examCategories: ExamCategoryItem[];
   facultyCount: number;
 }
 
 export function EditSubjectScreen({ navigation, route }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const { showConfirm } = useAlert();
+  const insets = useSafeAreaInsets();
   const { subject } = route.params;
 
   const [name, setName]           = useState(subject.name);
   const [nameError, setNameError] = useState<string | undefined>();
-  const [category, setCategory]   = useState<string | null>(subject.examCategory?.id ?? null);
+  const [categoryIds, setCategoryIds] = useState<string[]>(subject.examCategories.map((c) => c.id));
   const [submitError, setSubmitError] = useState<string | undefined>();
   const [loading, setLoading]     = useState(false);
   const [updated, setUpdated]     = useState<UpdatedSubject | null>(null);
@@ -76,12 +81,32 @@ export function EditSubjectScreen({ navigation, route }: Props) {
     })),
   ];
 
-  const checkScale  = useRef(new Animated.Value(0)).current;
-  const cardSlide   = useRef(new Animated.Value(ms(60))).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const checkScale     = useRef(new Animated.Value(0)).current;
+  const cardSlide      = useRef(new Animated.Value(ms(60))).current;
+  const cardOpacity    = useRef(new Animated.Value(0)).current;
+  const ringScale      = useRef(new Animated.Value(0)).current;
+  const ringOpacity    = useRef(new Animated.Value(0)).current;
+  const sparkle        = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentY       = useRef(new Animated.Value(ms(10))).current;
 
-  const initialCategoryId = subject.examCategory?.id ?? null;
-  const isDirty = name.trim() !== subject.name || category !== initialCategoryId;
+  const initialCategoryIds = useMemo(
+    () => subject.examCategories.map((c) => c.id).sort(),
+    [subject.examCategories]
+  );
+  const sortedCategoryIds = useMemo(() => [...categoryIds].sort(), [categoryIds]);
+  const isDirty =
+    name.trim() !== subject.name ||
+    sortedCategoryIds.length !== initialCategoryIds.length ||
+    sortedCategoryIds.some((id, i) => id !== initialCategoryIds[i]);
+
+  function toggleCategory(key: string | null) {
+    if (key === null) {
+      setCategoryIds([]);
+    } else {
+      setCategoryIds((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    }
+  }
 
   function validate(): boolean {
     if (!name.trim()) { setNameError("Subject name is required."); return false; }
@@ -91,11 +116,19 @@ export function EditSubjectScreen({ navigation, route }: Props) {
   }
 
   function showSuccess(s: SubjectItem) {
-    setUpdated({ name: s.name, examCategory: s.examCategory, facultyCount: s.facultyCount });
+    setUpdated({ name: s.name, examCategories: s.examCategories, facultyCount: s.facultyCount });
     Animated.parallel([
-      Animated.spring(checkScale,  { toValue: 1, useNativeDriver: true, tension: 70, friction: 7, delay: 100 }),
-      Animated.timing(cardOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
-      Animated.spring(cardSlide,   { toValue: 0, useNativeDriver: true, tension: 80, friction: 10, delay: 60 }),
+      Animated.timing(cardOpacity, { toValue: 1, duration: 260, useNativeDriver: true }),
+      Animated.spring(cardSlide,   { toValue: 0, useNativeDriver: true, tension: 80, friction: 10, delay: 40 }),
+      Animated.spring(checkScale,  { toValue: 1, useNativeDriver: true, tension: 62, friction: 6, delay: 160 }),
+      Animated.sequence([
+        Animated.timing(ringOpacity, { toValue: 0.4, duration: 1,   useNativeDriver: true, delay: 170 }),
+        Animated.timing(ringOpacity, { toValue: 0,   duration: 550, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+      ]),
+      Animated.timing(ringScale, { toValue: 1, duration: 650, easing: Easing.out(Easing.ease), useNativeDriver: true, delay: 170 }),
+      Animated.spring(sparkle,   { toValue: 1, useNativeDriver: true, tension: 90, friction: 8, delay: 320 }),
+      Animated.timing(contentOpacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true, delay: 260 }),
+      Animated.spring(contentY,       { toValue: 0, useNativeDriver: true, tension: 80, friction: 11, delay: 260 }),
     ]).start();
   }
 
@@ -105,8 +138,8 @@ export function EditSubjectScreen({ navigation, route }: Props) {
     setSubmitError(undefined);
     try {
       const result = await updateSubject(subject.id, {
-        name:           name.trim(),
-        examCategoryId: category,
+        name:            name.trim(),
+        examCategoryIds: categoryIds,
       });
       if (result.ok) {
         showSuccess(result.subject);
@@ -130,8 +163,10 @@ export function EditSubjectScreen({ navigation, route }: Props) {
     }
   }
 
-  const catLabel = updated?.examCategory?.label ?? "Shared";
-  const catColor = updated?.examCategory?.color ?? "#E8752C";
+  const catLabel = updated && updated.examCategories.length
+    ? updated.examCategories.map((c) => c.label).join(", ")
+    : "Shared";
+  const catColor = updated?.examCategories[0]?.color ?? "#E8752C";
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
@@ -143,7 +178,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
 
           {/* ── Name ── */}
           <View style={s.section}>
-            <SectionHead dot="#8B1E3F" title="Subject Name" />
+            <SectionHead dot={colors.primary} title="Subject Name" />
             <FormField
               label="NAME"
               value={name}
@@ -159,16 +194,18 @@ export function EditSubjectScreen({ navigation, route }: Props) {
 
           {/* ── Category ── */}
           <View style={s.section}>
-            <SectionHead dot="#8B1E3F" title="Exam Category" />
-            <Text style={s.catHint}>Choose which exam this subject belongs to.</Text>
+            <SectionHead dot={colors.primary} title="Exam Category" />
+            <Text style={s.catHint}>Choose one or more exams this subject belongs to (or leave as Shared).</Text>
             <View style={s.catGrid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
               {CATEGORIES.map((opt) => {
-                const active = category === opt.key;
+                const active = opt.key === null
+                  ? categoryIds.length === 0
+                  : categoryIds.includes(opt.key);
                 return (
                   <TouchableOpacity
                     key={String(opt.key)}
                     style={[s.catCard, { width: catCardW }, active && { borderColor: opt.color, borderWidth: 2, backgroundColor: opt.color + "0C" }]}
-                    onPress={() => setCategory(opt.key)}
+                    onPress={() => toggleCategory(opt.key)}
                     activeOpacity={0.75}
                   >
                     <View style={[s.catIcon, { backgroundColor: active ? opt.color : opt.color + "22" }]}>
@@ -214,7 +251,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
             {isDirty && !loading && (
               <PrimaryButton
                 label="Reset Changes"
-                onPress={() => { setName(subject.name); setCategory(initialCategoryId); setNameError(undefined); setSubmitError(undefined); }}
+                onPress={() => { setName(subject.name); setCategoryIds(subject.examCategories.map((c) => c.id)); setNameError(undefined); setSubmitError(undefined); }}
                 variant="outline"
                 icon="refresh-outline"
               />
@@ -227,7 +264,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
       {loading && (
         <View style={s.loaderOverlay}>
           <View style={s.loaderCard}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderTitle}>Saving Changes…</Text>
             <Text style={s.loaderSub}>Please wait</Text>
           </View>
@@ -237,28 +274,55 @@ export function EditSubjectScreen({ navigation, route }: Props) {
       {/* Full-screen success card */}
       {updated !== null && (
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
+          <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+          <View style={[s.successStatusBarBg, { height: insets.top }]} />
           <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
-            <Animated.View style={{ transform: [{ scale: checkScale }], marginBottom: ms(20) }}>
-              <LinearGradient colors={["#2563A8", "#1A4F8A"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
-                <Ionicons name="pencil" size={ms(38)} color="#fff" />
-              </LinearGradient>
-            </Animated.View>
 
-            <Text style={s.successTitle}>Subject Updated!</Text>
-            <Text style={s.successSub}>Changes saved successfully</Text>
+            <View style={s.checkStage}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  s.pingRing,
+                  {
+                    opacity: ringOpacity,
+                    transform: [{ scale: ringScale.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.55] }) }],
+                  },
+                ]}
+              />
+              <View style={s.checkGlow} />
 
-            <View style={s.detailBox}>
-              <DetailRow icon="book-outline"   label="Subject Name"    value={updated.name}                                        color="#8B1E3F" />
-              <DetailRow icon="layers-outline" label="Category"        value={catLabel}                                            color={catColor} />
-              <DetailRow icon="people-outline" label="Faculty Teaching" value={`${updated.facultyCount} faculty member${updated.facultyCount !== 1 ? "s" : ""}`} color="#1B9C63" last />
+              <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+                <LinearGradient colors={[C.green, "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
+                  <Ionicons name="checkmark" size={ms(42)} color="#fff" />
+                </LinearGradient>
+              </Animated.View>
+
+              <Animated.View style={[s.sparkleTL, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
+                <Ionicons name="sparkles" size={ms(14)} color={colors.secondary} />
+              </Animated.View>
+              <Animated.View style={[s.sparkleBR, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
+                <Ionicons name="sparkles" size={ms(10)} color={colors.accent} />
+              </Animated.View>
             </View>
 
-            <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-              <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
-                <Ionicons name="list-outline" size={ms(18)} color="#fff" />
-                <Text style={s.doneBtnT}>View All Subjects</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+            <Animated.View style={[s.successContent, { opacity: contentOpacity, transform: [{ translateY: contentY }] }]}>
+              <Text style={s.successTitle}>Subject Updated!</Text>
+              <Text style={s.successSub}>Changes saved successfully</Text>
+
+              <View style={s.detailBox}>
+                <DetailRow icon="book-outline"    label="Subject Name"     value={updated.name} color={colors.primary} />
+                <DetailRow icon="layers-outline"  label="Category"        value={catLabel}      color={catColor} />
+                <DetailRow icon="people-outline"  label="Faculty Teaching" value={`${updated.facultyCount} faculty member${updated.facultyCount !== 1 ? "s" : ""}`} color={C.green} last />
+              </View>
+
+              <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
+                <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+                  <Ionicons name="list-outline" size={ms(18)} color="#fff" />
+                  <Text style={s.doneBtnT}>View All Subjects</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
+
           </Animated.View>
         </Animated.View>
       )}
@@ -269,6 +333,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function SectionHead({ dot, title }: { dot: string; title: string }) {
+  const s = useThemedStyles(makeSStyles);
   return (
     <View style={s.sectionHeader}>
       <View style={[s.sectionDot, { backgroundColor: dot }]} />
@@ -295,15 +360,15 @@ function DetailRow({ icon, label, value, color, last = false }: {
 
 const dr = StyleSheet.create({
   row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(12), gap: ms(12) },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(32), height: ms(32), borderRadius: ms(8), justifyContent: "center", alignItems: "center" },
   textWrap:  { flex: 1 },
-  label:     { fontSize: fs(10), color: "#8A7F82", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
-  value:     { fontSize: fs(13), color: "#2B1B1F", fontWeight: "700" },
+  label:     { fontSize: fs(10), color: C.muted, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
+  value:     { fontSize: fs(13), color: C.text, fontWeight: "700" },
 });
 
-const s = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:          { flex: 1, backgroundColor: colors.primary },
   flex:          { flex: 1 },
   content:       { flex: 1, backgroundColor: "#FFFBF0", paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(8), paddingBottom: ms(16) },
 
@@ -332,12 +397,21 @@ const s = StyleSheet.create({
   loaderTitle:   { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F" },
   loaderSub:     { fontSize: fs(12), color: "#8A7F82" },
 
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
-  successCard:    { width: "100%", backgroundColor: "#FFFFFF", borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
-  checkCircle:    { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
-  successTitle:   { fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(6) },
-  successSub:     { fontSize: fs(13), color: "#8A7F82", marginBottom: ms(24), textAlign: "center" },
-  detailBox:      { width: "100%", backgroundColor: "#FAFAFA", borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: "#F0EDE8" },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
+  successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.primary },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(26), alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
+
+  checkStage:   { width: ms(130), height: ms(130), justifyContent: "center", alignItems: "center", marginBottom: ms(14) },
+  checkGlow:    { position: "absolute", width: ms(112), height: ms(112), borderRadius: ms(56), backgroundColor: C.greenBg },
+  pingRing:     { position: "absolute", width: ms(88), height: ms(88), borderRadius: ms(44), borderWidth: 2, borderColor: C.green },
+  checkCircle:  { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
+  sparkleTL:    { position: "absolute", top: ms(4), left: ms(12) },
+  sparkleBR:    { position: "absolute", bottom: ms(10), right: ms(6) },
+
+  successContent: { width: "100%", alignItems: "center" },
+  successTitle:   { fontSize: fs(23), fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
+  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(24), textAlign: "center" },
+  detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: C.border },
   doneBtnWrap:    { width: "100%" },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
   doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },

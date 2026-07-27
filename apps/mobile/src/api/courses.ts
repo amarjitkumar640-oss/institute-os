@@ -4,7 +4,7 @@ import type { ExamCategoryItem } from "./examCategories";
 
 export interface CreateCoursePayload {
   name: string;
-  examCategoryId?: string | null;
+  examCategoryIds?: string[];
   durationMonths: number;
   defaultFee: number;
 }
@@ -12,7 +12,7 @@ export interface CreateCoursePayload {
 export interface CourseItem {
   id: string;
   name: string;
-  examCategory: ExamCategoryItem | null;
+  examCategories: ExamCategoryItem[];
   durationMonths: number;
   defaultFee: number;
   batchCount: number;
@@ -73,7 +73,7 @@ export async function listCourses(params?: {
 
 export interface UpdateCoursePayload {
   name?: string;
-  examCategoryId?: string | null;
+  examCategoryIds?: string[];
   durationMonths?: number;
   defaultFee?: number;
 }

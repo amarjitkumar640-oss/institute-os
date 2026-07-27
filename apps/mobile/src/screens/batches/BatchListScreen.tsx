@@ -19,14 +19,16 @@ import { enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { useAuth } from "../../context/AuthContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "BatchList">;
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
-function examMeta(c: ExamCategoryItem | null): { label: string; color: string; bg: string } {
-  if (!c) return { label: "General", color: "#8A7F82", bg: "#F4F4F4" };
-  return { label: c.label, color: c.color, bg: c.color + "18" };
+function examMeta(cs: ExamCategoryItem[]): { label: string; color: string; bg: string } {
+  if (cs.length === 0) return { label: "General", color: "#8A7F82", bg: "#F4F4F4" };
+  const label = cs.length === 1 ? cs[0].label : `${cs[0].label} +${cs.length - 1}`;
+  return { label, color: cs[0].color, bg: cs[0].color + "18" };
 }
 
 const STATUS_META: Record<BatchStatus, { label: string; color: string; bg: string; dot: string }> = {
@@ -82,6 +84,7 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
   const [submitting, setSubmitting]           = useState<string | null>(null);
   const [result, setResult]                   = useState<{ ok: boolean; msg: string } | null>(null);
   const [localCount, setLocalCount]           = useState(batch.enrolledCount);
+  const colors = useThemeColors();
 
   useEffect(() => {
     setLoading(true);
@@ -184,7 +187,7 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
 
           {loading ? (
             <View style={sm.loaderWrap}>
-              <ActivityIndicator size="large" color="#8B1E3F" />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={sm.loaderT}>Loading students…</Text>
             </View>
           ) : (
@@ -230,7 +233,7 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
                     )}
 
                     {busy ? (
-                      <ActivityIndicator size="small" color="#8B1E3F" style={{ marginLeft: ms(4) }} />
+                      <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: ms(4) }} />
                     ) : enrolled ? (
                       <View style={sm.enrolledBadge}>
                         <Ionicons name="checkmark-circle" size={ms(14)} color="#1B9C63" />
@@ -238,7 +241,7 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
                       </View>
                     ) : !isFull ? (
                       <View style={sm.addBtn}>
-                        <Ionicons name="add" size={ms(16)} color="#8B1E3F" />
+                        <Ionicons name="add" size={ms(16)} color={colors.primary} />
                       </View>
                     ) : null}
                   </TouchableOpacity>
@@ -248,7 +251,7 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
           )}
 
           <TouchableOpacity style={sm.doneBtn} onPress={onClose} activeOpacity={0.85}>
-            <LinearGradient colors={["#8B1E3F", "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={sm.doneGrad}>
+            <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={sm.doneGrad}>
               <Text style={sm.doneT}>Done</Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -303,10 +306,11 @@ function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStud
   onAddStudent: () => void;
   isAllCenters?: boolean;
 }) {
-  const exam   = examMeta(batch.course.examCategory);
+  const exam   = examMeta(batch.course.examCategories);
   const status = STATUS_META[batch.status];
   const fill   = capacityFill(batch.enrolledCount, batch.capacity);
   const isFull = batch.enrolledCount >= batch.capacity;
+  const cs = useThemedStyles(makeCsStyles);
 
   return (
     <TouchableOpacity style={cs.card} onPress={onPress} activeOpacity={0.92}>
@@ -388,13 +392,15 @@ function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStud
 // ── Banner ────────────────────────────────────────────────────────────────────
 
 function Banner({ batches }: { batches: BatchItem[] }) {
+  const colors = useThemeColors();
+  const cs = useThemedStyles(makeCsStyles);
   const total     = batches.length;
   const running   = batches.filter((b) => b.status === "running").length;
   const upcoming  = batches.filter((b) => b.status === "upcoming").length;
   const completed = batches.filter((b) => b.status === "completed").length;
 
   const stats = [
-    { label: "Total",     value: total,     color: "#8B1E3F" },
+    { label: "Total",     value: total,     color: colors.primary },
     { label: "Running",   value: running,   color: "#1B9C63" },
     { label: "Upcoming",  value: upcoming,  color: "#2563A8" },
     { label: "Completed", value: completed, color: "#8A7F82" },
@@ -418,10 +424,11 @@ function Banner({ batches }: { batches: BatchItem[] }) {
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 function BatchEmpty({ search }: { search: string }) {
+  const colors = useThemeColors();
   return (
     <EmptyState
       scene="batches"
-      color="#8B1E3F"
+      color={colors.primary}
       title={search ? "No batches match your search" : "No batches yet"}
       subtitle={search ? "Try a different keyword" : "Create your first batch to get started"}
     />
@@ -434,6 +441,8 @@ function BatchEmpty({ search }: { search: string }) {
 export function BatchListScreen({ route, navigation }: Props) {
   const initialStatus = route.params?.initialFilter === "active" ? "running" : "All";
   const { isAllCenters } = useAuth();
+  const colors = useThemeColors();
+  const cs = useThemedStyles(makeCsStyles);
 
   const [batches, setBatches]           = useState<BatchItem[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -502,11 +511,11 @@ export function BatchListScreen({ route, navigation }: Props) {
     const STATUS_KEYS: string[] = ["running", "upcoming", "completed"];
     return batches.filter((b) => {
       const q = search.toLowerCase();
-      const matchSearch = !q || b.name.toLowerCase().includes(q) || b.course.name.toLowerCase().includes(q) || (b.course.examCategory?.label.toLowerCase().includes(q) ?? false);
+      const matchSearch = !q || b.name.toLowerCase().includes(q) || b.course.name.toLowerCase().includes(q) || b.course.examCategories.some((ec) => ec.label.toLowerCase().includes(q));
       if (!matchSearch) return false;
       if (filter === "All")             return true;
       if (STATUS_KEYS.includes(filter)) return b.status === filter;
-      return b.course.examCategory?.id === filter;
+      return b.course.examCategories.some((ec) => ec.id === filter);
     });
   }, [batches, search, filter]);
 
@@ -525,7 +534,7 @@ export function BatchListScreen({ route, navigation }: Props) {
       <View style={cs.content}>
         {loading ? (
           <View style={cs.loader}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={cs.loaderT}>Loading batches…</Text>
           </View>
         ) : error ? (
@@ -588,7 +597,7 @@ export function BatchListScreen({ route, navigation }: Props) {
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={<BatchEmpty search={search} />}
               refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={["#8B1E3F"]} tintColor="#8B1E3F" />
+                <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[colors.primary]} tintColor={colors.primary} />
               }
             />
           </>
@@ -644,8 +653,8 @@ export function BatchListScreen({ route, navigation }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const cs = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: "#8B1E3F" },
+const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.primary },
   content: { flex: 1, backgroundColor: "#FFFBF0" },
 
   loader:  { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(14) },
@@ -666,7 +675,7 @@ const cs = StyleSheet.create({
   filterRow:     { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
   filterDivider: { width: 1, height: ms(20), backgroundColor: "#EDE8E3", marginRight: ms(8) },
   chip:          { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  chipOn:        { backgroundColor: "#8B1E3F", borderColor: "#8B1E3F" },
+  chipOn:        { backgroundColor: colors.primary, borderColor: colors.primary },
   chipT:         { fontSize: fs(12), fontWeight: "600", color: "#8A7F82", includeFontPadding: false, lineHeight: fs(16) },
   chipTOn:       { color: "#FFFFFF" },
   resultT:       { paddingHorizontal: ms(16), paddingTop: ms(4), paddingBottom: ms(4), fontSize: fs(11.5), color: "#8A7F82" },
@@ -711,7 +720,7 @@ const cs = StyleSheet.create({
   deleteBtnT:    { fontSize: fs(12), fontWeight: "700", color: "#DC2626" },
 
   // FAB
-  fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: "#8B1E3F", justifyContent: "center", alignItems: "center", shadowColor: "#8B1E3F", shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
+  fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
 
   // Delete modal
   modalOverlay:    { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(28) },

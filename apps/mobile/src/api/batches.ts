@@ -17,7 +17,7 @@ export interface BatchItem {
   course: {
     id:             string;
     name:           string;
-    examCategory:   ExamCategoryItem | null;
+    examCategories: ExamCategoryItem[];
     durationMonths: number;
     defaultFee:     string;
   };

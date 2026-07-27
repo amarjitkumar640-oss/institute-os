@@ -15,6 +15,7 @@ import { LoginScreen }          from "../screens/auth/LoginScreen";
 import { CenterSelectScreen }      from "../screens/centers/CenterSelectScreen";
 import { CenterManagementScreen }  from "../screens/centers/CenterManagementScreen";
 import { StaffManagementScreen }   from "../screens/staff/StaffManagementScreen";
+import { OrganizationSettingsScreen } from "../screens/settings/OrganizationSettingsScreen";
 import { DashboardScreen }   from "../screens/dashboard/DashboardScreen";
 import { ProfileScreen }     from "../screens/profile/ProfileScreen";
 import { BatchListScreen }   from "../screens/batches/BatchListScreen";
@@ -101,6 +102,7 @@ function RootNavigatorInner() {
         {/* Admin-only management screens */}
         <Stack.Screen name="CenterManagement" component={CenterManagementScreen} />
         <Stack.Screen name="StaffManagement"  component={StaffManagementScreen} />
+        <Stack.Screen name="OrganizationSettings" component={OrganizationSettingsScreen} />
 
         {/* Legacy screens */}
         <Stack.Screen name="Students" component={StudentsScreen} options={{ headerShown: true }} />

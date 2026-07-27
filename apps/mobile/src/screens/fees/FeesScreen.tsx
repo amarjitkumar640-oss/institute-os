@@ -16,6 +16,7 @@ import type { RootStackParamList } from "../../navigation/types";
 import { useAuth } from "../../context/AuthContext";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 import {
   listSchedules, getFeeSummary,
@@ -30,13 +31,15 @@ type Props = NativeStackScreenProps<RootStackParamList, "FeesList">;
 
 type ScheduleFilter = "all" | "active" | "overdue" | "partial" | "completed";
 
-const FILTERS: { key: ScheduleFilter; label: string; icon: string; color: string }[] = [
-  { key: "all",       label: "All",     icon: "list-outline",             color: "#8B1E3F" },
-  { key: "active",    label: "Due",     icon: "calendar-outline",         color: "#2563A8" },
-  { key: "partial",   label: "Partial", icon: "time-outline",             color: "#946200" },
-  { key: "overdue",   label: "Overdue", icon: "warning-outline",          color: "#C0392B" },
-  { key: "completed", label: "Paid",    icon: "checkmark-circle-outline", color: "#1B9C63" },
-];
+function getFilters(colors: ThemeColors): { key: ScheduleFilter; label: string; icon: string; color: string }[] {
+  return [
+    { key: "all",       label: "All",     icon: "list-outline",             color: colors.primary },
+    { key: "active",    label: "Due",     icon: "calendar-outline",         color: "#2563A8" },
+    { key: "partial",   label: "Partial", icon: "time-outline",             color: "#946200" },
+    { key: "overdue",   label: "Overdue", icon: "warning-outline",          color: "#C0392B" },
+    { key: "completed", label: "Paid",    icon: "checkmark-circle-outline", color: "#1B9C63" },
+  ];
+}
 
 type DisplayStatus = "overdue" | "partial" | "due" | "paid";
 
@@ -47,7 +50,9 @@ const STATUS_META: Record<DisplayStatus, { label: string; color: string; bg: str
   paid:    { label: "PAID",     color: "#1B9C63", bg: "#E7F7EF", icon: "checkmark-circle-outline"  },
 };
 
-const AVATAR_PALETTE = ["#8B1E3F", "#E8752C", "#2CA6A4", "#2563A8", "#B3273F", "#5B2D8E"];
+function getAvatarPalette(colors: ThemeColors): string[] {
+  return [colors.primary, "#E8752C", colors.accent, "#2563A8", "#B3273F", "#5B2D8E"];
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,7 +111,9 @@ function ScheduleCard({
   index:    number;
   onPress:  () => void;
 }) {
-  const avatarColor = AVATAR_PALETTE[index % AVATAR_PALETTE.length];
+  const colors = useThemeColors();
+  const avatarPalette = getAvatarPalette(colors);
+  const avatarColor = avatarPalette[index % avatarPalette.length];
   const displayStatus = deriveDisplayStatus(schedule);
   const sm  = STATUS_META[displayStatus];
   const outstanding = scheduleTotalOutstanding(schedule);
@@ -183,6 +190,8 @@ function ScheduleCard({
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export function FeesScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const ls = useThemedStyles(makeLsStyles);
   const insets = useSafeAreaInsets();
   const { currentCenter } = useAuth();
 
@@ -246,6 +255,7 @@ export function FeesScreen({ navigation }: Props) {
     .reduce((sum, s) => sum + scheduleTotalOutstanding(s), 0);
 
   const centerLabel = currentCenter?.name ?? "All Centers";
+  const FILTERS = getFilters(colors);
 
   const ListHeader = (
     <View style={ls.listHeader}>
@@ -338,7 +348,7 @@ export function FeesScreen({ navigation }: Props) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <LinearGradient
-        colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={ls.header}
@@ -417,7 +427,7 @@ export function FeesScreen({ navigation }: Props) {
             !loading && !error ? (
               <EmptyState
                 scene="students"
-                color={FILTERS.find((f) => f.key === filter)?.color ?? C.primary}
+                color={FILTERS.find((f) => f.key === filter)?.color ?? colors.primary}
                 title={search ? "No records match" : "No fee schedules yet"}
                 subtitle={search ? "Try a different name" : "Fee schedules will appear here after admission"}
               />
@@ -429,15 +439,15 @@ export function FeesScreen({ navigation }: Props) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); load(true); }}
-              colors={[C.primary]}
-              tintColor={C.primary}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
         />
 
         {loading && (
           <View style={ls.overlay}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         )}
 
@@ -526,8 +536,8 @@ const fc = StyleSheet.create({
   due:    { fontSize: fs(10.5), flex: 1 },
 });
 
-const ls = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: "#8B1E3F" },
+const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.primary },
   header: { overflow: "hidden" },
   body:   { flex: 1, backgroundColor: "#FFFBF0" },
 
@@ -606,9 +616,9 @@ const ls = StyleSheet.create({
     borderWidth:       1,
     borderColor:       "#F1E7DD",
   },
-  chipOn:      { backgroundColor: "#8B1E3F", borderColor: "#8B1E3F" },
+  chipOn:      { backgroundColor: colors.primary, borderColor: colors.primary },
   chipBatch:   { borderColor: "#D0E8FF" },
-  chipBatchOn: { backgroundColor: "#2CA6A4", borderColor: "#2CA6A4" },
+  chipBatchOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipT:       { fontSize: fs(12), fontWeight: "600", color: "#8A7F82" },
   chipTOn:     { color: "#fff" },
 

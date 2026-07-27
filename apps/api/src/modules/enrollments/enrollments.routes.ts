@@ -18,11 +18,11 @@ enrollmentsRouter.get(
     if (!studentId) return res.status(400).json({ error: "studentId query param required" });
 
     const enrollments = await prisma.enrollment.findMany({
-      where: { studentId, status: "active" },
+      where: { studentId, status: "active", student: { tenantId: req.auth!.tenantId } },
       include: {
         batch: {
           include: {
-            course: true,
+            course: { include: { examCategories: { include: { examCategory: true } } } },
             _count: { select: { enrollments: true } },
           },
         },
@@ -31,16 +31,20 @@ enrollmentsRouter.get(
     });
 
     return res.json(
-      enrollments.map((e) => ({
-        id: e.id,
-        enrolledOn: e.enrolledOn,
-        status: e.status,
-        batch: {
-          ...e.batch,
-          enrolledCount: e.batch._count.enrollments,
-          _count: undefined,
-        },
-      }))
+      enrollments.map((e) => {
+        const { examCategories, ...courseRest } = e.batch.course;
+        return {
+          id: e.id,
+          enrolledOn: e.enrolledOn,
+          status: e.status,
+          batch: {
+            ...e.batch,
+            course: { ...courseRest, examCategories: examCategories.map((ec) => ec.examCategory) },
+            enrolledCount: e.batch._count.enrollments,
+            _count: undefined,
+          },
+        };
+      })
     );
   }
 );
@@ -52,9 +56,11 @@ enrollmentsRouter.post(
   validateBody(createEnrollmentSchema),
   async (req, res) => {
     const { studentId, batchId } = req.body;
+    const student = await prisma.student.findFirst({ where: { id: studentId, tenantId: req.auth!.tenantId } });
+    if (!student) return res.status(404).json({ error: "Student not found" });
     try {
       const enrollment = await prisma.$transaction(
-        (tx) => createEnrollment(tx, studentId, batchId),
+        (tx) => createEnrollment(tx, studentId, batchId, req.auth!.tenantId),
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
       res.status(201).json(enrollment);

@@ -19,6 +19,7 @@ import {
   type CenterItem, type CenterStaffItem, type AllStaffItem,
 } from "../../api/centers";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, lighten, type ThemeColors } from "../../context/ThemeContext";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -28,11 +29,13 @@ const ROLE_LABELS: Record<string, string> = {
   frontdesk: "Front Desk",
 };
 
-const ROLE_COLORS: Record<string, string> = {
-  admin:     "#8B1E3F",
-  teacher:   "#2CA6A4",
-  frontdesk: "#E8752C",
-};
+function roleColors(colors: ThemeColors): Record<string, string> {
+  return {
+    admin:     colors.primary,
+    teacher:   colors.accent,
+    frontdesk: "#E8752C",
+  };
+}
 
 // ── Create / Edit center modal ────────────────────────────────────────────────
 
@@ -45,6 +48,8 @@ interface CenterFormModal {
 
 function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) {
   const { showAlert } = useAlert();
+  const colors = useThemeColors();
+  const m = useThemedStyles(makeMStyles);
   const [name,    setName]    = useState("");
   const [address, setAddress] = useState("");
   const [phone,   setPhone]   = useState("");
@@ -127,7 +132,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
           <View style={m.fHeader}>
             <View style={m.fHeaderLeft}>
               <View style={m.fHeaderIcon}>
-                <Ionicons name="business-outline" size={ms(20)} color={C.primary} />
+                <Ionicons name="business-outline" size={ms(20)} color={colors.primary} />
               </View>
               <View>
                 <Text style={m.fTitle}>{isEdit ? "Edit Center" : "New Center"}</Text>
@@ -157,7 +162,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
 
             <View style={m.fieldWrap}>
               <View style={m.fieldLabelRow}>
-                <Ionicons name="business-outline" size={ms(12)} color={C.primary} />
+                <Ionicons name="business-outline" size={ms(12)} color={colors.primary} />
                 <Text style={m.fieldLabelT}>
                   Center Name <Text style={m.req}>*</Text>
                 </Text>
@@ -178,7 +183,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
 
             <View style={m.fieldWrap}>
               <View style={m.fieldLabelRow}>
-                <Ionicons name="location-outline" size={ms(12)} color={C.accent} />
+                <Ionicons name="location-outline" size={ms(12)} color={colors.accent} />
                 <Text style={m.fieldLabelT}>Address</Text>
               </View>
               <View style={[m.inputBox, focused === "address" && m.inputBoxFocused]}>
@@ -224,7 +229,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
             activeOpacity={0.88}
           >
             <LinearGradient
-              colors={["#8B1E3F", "#C0422E", "#E87830"]}
+              colors={[colors.primary, lighten(colors.primary, 0.15), lighten(colors.primary, 0.32)]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={m.btnGrad}
             >
@@ -262,6 +267,8 @@ interface AssignStaffModalProps {
 
 function AssignStaffModal({ visible, centerId, assigned, onDone, onClose }: AssignStaffModalProps) {
   const { showAlert } = useAlert();
+  const colors = useThemeColors();
+  const m = useThemedStyles(makeMStyles);
   const [allStaff, setAllStaff] = useState<AllStaffItem[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [saving,   setSaving]   = useState<string | null>(null); // staffId being saved
@@ -305,7 +312,7 @@ function AssignStaffModal({ visible, centerId, assigned, onDone, onClose }: Assi
             {(["admin", "teacher", "frontdesk"] as const).map((r) => (
               <TouchableOpacity
                 key={r}
-                style={[m.roleChip, role === r && { backgroundColor: ROLE_COLORS[r] }]}
+                style={[m.roleChip, role === r && { backgroundColor: roleColors(colors)[r] }]}
                 onPress={() => setRole(r)}
               >
                 <Text style={[m.roleChipT, role === r && { color: "#fff" }]}>
@@ -316,7 +323,7 @@ function AssignStaffModal({ visible, centerId, assigned, onDone, onClose }: Assi
           </View>
 
           {loading ? (
-            <ActivityIndicator color={C.primary} style={{ marginVertical: ms(24) }} />
+            <ActivityIndicator color={colors.primary} style={{ marginVertical: ms(24) }} />
           ) : unassigned.length === 0 ? (
             <Text style={m.emptyT}>All active staff are already assigned to this center.</Text>
           ) : (
@@ -364,6 +371,8 @@ interface CenterDetailProps {
 
 function CenterDetail({ center, onEdit, onToggleActive }: CenterDetailProps) {
   const { showAlert, showConfirm } = useAlert();
+  const colors = useThemeColors();
+  const d = useThemedStyles(makeDStyles);
   const [staff,    setStaff]    = useState<CenterStaffItem[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [showAssign, setShowAssign] = useState(false);
@@ -435,8 +444,8 @@ function CenterDetail({ center, onEdit, onToggleActive }: CenterDetailProps) {
       {/* Action buttons */}
       <View style={d.actions}>
         <TouchableOpacity style={d.actionBtn} onPress={onEdit}>
-          <Ionicons name="create-outline" size={ms(15)} color={C.primary} />
-          <Text style={[d.actionT, { color: C.primary }]}>Edit</Text>
+          <Ionicons name="create-outline" size={ms(15)} color={colors.primary} />
+          <Text style={[d.actionT, { color: colors.primary }]}>Edit</Text>
         </TouchableOpacity>
         <TouchableOpacity style={d.actionBtn} onPress={onToggleActive}>
           <Ionicons
@@ -460,7 +469,7 @@ function CenterDetail({ center, onEdit, onToggleActive }: CenterDetailProps) {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={C.primary} style={{ marginVertical: ms(12) }} />
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: ms(12) }} />
       ) : staff.length === 0 ? (
         <Text style={d.noStaff}>No staff assigned yet.</Text>
       ) : (
@@ -473,8 +482,8 @@ function CenterDetail({ center, onEdit, onToggleActive }: CenterDetailProps) {
               <Text style={d.staffName} numberOfLines={1}>{s.fullName}</Text>
               <Text style={d.staffEmail} numberOfLines={1}>{s.email}</Text>
             </View>
-            <View style={[d.roleChip, { backgroundColor: ROLE_COLORS[s.role] + "22" }]}>
-              <Text style={[d.roleChipT, { color: ROLE_COLORS[s.role] }]}>
+            <View style={[d.roleChip, { backgroundColor: roleColors(colors)[s.role] + "22" }]}>
+              <Text style={[d.roleChipT, { color: roleColors(colors)[s.role] }]}>
                 {ROLE_LABELS[s.role]}
               </Text>
             </View>
@@ -508,6 +517,8 @@ function CenterDetail({ center, onEdit, onToggleActive }: CenterDetailProps) {
 export function CenterManagementScreen() {
   const navigation = useNavigation();
   const { showAlert, showConfirm } = useAlert();
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const [centers,    setCenters]    = useState<CenterItem[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -571,7 +582,7 @@ export function CenterManagementScreen() {
 
       {loading ? (
         <View style={s.loader}>
-          <ActivityIndicator size="large" color={C.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={s.loaderT}>Loading centers…</Text>
         </View>
       ) : (
@@ -583,8 +594,8 @@ export function CenterManagementScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => load(true)}
-              colors={[C.primary]}
-              tintColor={C.primary}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
         >
@@ -664,8 +675,8 @@ export function CenterManagementScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.primary },
 
   scroll: { flex: 1, backgroundColor: C.bg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
@@ -675,10 +686,10 @@ const s = StyleSheet.create({
   empty:     { alignItems: "center", paddingVertical: ms(64), gap: ms(8) },
   emptyT:    { fontSize: fs(16), fontWeight: "700", color: "#B0A9AC", marginTop: ms(8) },
   emptySub:  { fontSize: fs(12), color: "#C7BAB4", textAlign: "center", paddingHorizontal: ms(32) },
-  emptyBtn:  { marginTop: ms(16), backgroundColor: C.primary, borderRadius: ms(12), paddingHorizontal: ms(24), paddingVertical: ms(10) },
+  emptyBtn:  { marginTop: ms(16), backgroundColor: colors.primary, borderRadius: ms(12), paddingHorizontal: ms(24), paddingVertical: ms(10) },
   emptyBtnT: { fontSize: fs(14), fontWeight: "700", color: "#fff" },
 
-  fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: C.primary, justifyContent: "center", alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
+  fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
 
   card:         { backgroundColor: C.card, borderRadius: ms(18), marginBottom: ms(14), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(3) }, shadowOpacity: 0.1, shadowRadius: ms(8), elevation: 3, overflow: "hidden" },
   cardInactive: { opacity: 0.65 },
@@ -691,7 +702,7 @@ const s = StyleSheet.create({
   inactiveBadgeT: { fontSize: fs(10), color: C.muted, fontWeight: "600" },
 });
 
-const d = StyleSheet.create({
+const makeDStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap:      { borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: ms(14), paddingBottom: ms(14) },
   statsRow:  { flexDirection: "row", paddingVertical: ms(12) },
   stat:      { flex: 1, alignItems: "center" },
@@ -718,7 +729,7 @@ const d = StyleSheet.create({
   roleChipT:   { fontSize: fs(10), fontWeight: "700" },
 });
 
-const m = StyleSheet.create({
+const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   // ── Shared shell ────────────────────────────────────────────────────────────
   overlay:  { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(16,4,8,0.50)" },
@@ -741,9 +752,9 @@ const m = StyleSheet.create({
   fieldWrap:      { gap: ms(7) },
   fieldLabelRow:  { flexDirection: "row", alignItems: "center", gap: ms(6) },
   fieldLabelT:    { fontSize: fs(12.5), fontWeight: "700", color: C.text },
-  req:            { color: C.primary },
+  req:            { color: colors.primary },
   inputBox:       { backgroundColor: "#FAF6F4", borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border },
-  inputBoxFocused:{ borderColor: C.primary, backgroundColor: "#FFF8FB" },
+  inputBoxFocused:{ borderColor: colors.primary, backgroundColor: "#FFF8FB" },
   input:          { paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(14), color: C.text },
   multiInput:     { minHeight: ms(72), textAlignVertical: "top" },
 

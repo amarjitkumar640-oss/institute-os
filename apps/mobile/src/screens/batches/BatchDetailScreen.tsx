@@ -14,6 +14,7 @@ import { type BatchItem, type BatchStatus } from "../../api/batches";
 import { enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -56,6 +57,8 @@ function AddStudentModal({ visible, batch, enrolledIds, onClose, onEnrolled }: {
   onClose: () => void;
   onEnrolled: () => void;
 }) {
+  const colors = useThemeColors();
+  const am = useThemedStyles(makeAmStyles);
   const [allStudents, setAllStudents]     = useState<StudentItem[]>([]);
   const [loading, setLoading]             = useState(true);
   const [search, setSearch]               = useState("");
@@ -157,7 +160,7 @@ function AddStudentModal({ visible, batch, enrolledIds, onClose, onEnrolled }: {
 
           {loading ? (
             <View style={am.loaderWrap}>
-              <ActivityIndicator size="large" color={C.primary} />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={am.loaderT}>Loading students…</Text>
             </View>
           ) : (
@@ -191,7 +194,7 @@ function AddStudentModal({ visible, batch, enrolledIds, onClose, onEnrolled }: {
                       <Text style={am.studentSub}>{student.studentCode}{student.phone ? ` · ${student.phone}` : ""}</Text>
                     </View>
                     {busy ? (
-                      <ActivityIndicator size="small" color={C.primary} />
+                      <ActivityIndicator size="small" color={colors.primary} />
                     ) : enrolled ? (
                       <View style={am.enrolledBadge}>
                         <Ionicons name="checkmark-circle" size={ms(14)} color={C.green} />
@@ -199,7 +202,7 @@ function AddStudentModal({ visible, batch, enrolledIds, onClose, onEnrolled }: {
                       </View>
                     ) : !isFull ? (
                       <View style={am.addBtn}>
-                        <Ionicons name="add" size={ms(16)} color={C.primary} />
+                        <Ionicons name="add" size={ms(16)} color={colors.primary} />
                       </View>
                     ) : null}
                   </TouchableOpacity>
@@ -216,7 +219,7 @@ function AddStudentModal({ visible, batch, enrolledIds, onClose, onEnrolled }: {
   );
 }
 
-const am = StyleSheet.create({
+const makeAmStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetPad:     { paddingTop: ms(12), paddingHorizontal: ms(16), paddingBottom: ms(8) },
   handle:       { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
   header:       { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(8) },
@@ -240,8 +243,8 @@ const am = StyleSheet.create({
   studentSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
   enrolledBadge:{ flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.green + "18", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
   enrolledT:    { fontSize: fs(11), fontWeight: "700", color: C.green },
-  addBtn:       { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: C.primary + "10", justifyContent: "center", alignItems: "center" },
-  doneBtn:      { marginTop: ms(12), marginBottom: ms(24), borderRadius: ms(14), backgroundColor: C.primary, alignItems: "center", paddingVertical: ms(14) },
+  addBtn:       { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: colors.primary + "10", justifyContent: "center", alignItems: "center" },
+  doneBtn:      { marginTop: ms(12), marginBottom: ms(24), borderRadius: ms(14), backgroundColor: colors.primary, alignItems: "center", paddingVertical: ms(14) },
   doneT:        { fontSize: fs(14), fontWeight: "800", color: "#fff" },
 });
 
@@ -294,6 +297,8 @@ const sr = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function BatchDetailScreen({ navigation, route }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const { batch: initialBatch } = route.params;
   const [batch, setBatch]           = useState<BatchItem>(initialBatch);
   const [students, setStudents]     = useState<StudentItem[]>([]);
@@ -314,8 +319,10 @@ export function BatchDetailScreen({ navigation, route }: Props) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useRefetchOnReconnect(() => load(true));
 
-  const examColor = batch.course.examCategory?.color ?? C.muted;
-  const examLabel = batch.course.examCategory?.label ?? "General";
+  const examColor = batch.course.examCategories[0]?.color ?? C.muted;
+  const examLabel = batch.course.examCategories.length
+    ? batch.course.examCategories.map((c) => c.label).join(", ")
+    : "General";
   const status    = STATUS_META[batch.status];
   const pct       = batch.capacity ? Math.min(batch.enrolledCount / batch.capacity, 1) : 0;
   const isFull    = batch.enrolledCount >= batch.capacity;
@@ -338,7 +345,7 @@ export function BatchDetailScreen({ navigation, route }: Props) {
         contentContainerStyle={s.body}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[C.primary]} tintColor={C.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[colors.primary]} tintColor={colors.primary} />
         }
       >
         {/* ── Combined batch info card ── */}
@@ -363,7 +370,7 @@ export function BatchDetailScreen({ navigation, route }: Props) {
           {/* 2×2 info grid */}
           <View style={s.infoGrid}>
             {[
-              { icon: "time-outline",     label: "Duration", value: `${batch.course.durationMonths} months`, color: C.primary },
+              { icon: "time-outline",     label: "Duration", value: `${batch.course.durationMonths} months`, color: colors.primary },
               { icon: "cash-outline",     label: "Fee",      value: `₹${Number(batch.course.defaultFee).toLocaleString("en-IN")}`, color: C.green },
               { icon: "calendar-outline", label: "Start",    value: fmtDate(batch.startDate), color: C.blue },
               { icon: "flag-outline",     label: "End",      value: fmtDate(batch.endDate),   color: C.orange },
@@ -403,8 +410,8 @@ export function BatchDetailScreen({ navigation, route }: Props) {
           onPress={() => navigation.navigate("BatchSchedule", { batchId: batch.id, batchName: batch.name })}
           activeOpacity={0.78}
         >
-          <View style={[s.navIcon, { backgroundColor: C.primary + "12" }]}>
-            <Ionicons name="calendar-outline" size={ms(18)} color={C.primary} />
+          <View style={[s.navIcon, { backgroundColor: colors.primary + "12" }]}>
+            <Ionicons name="calendar-outline" size={ms(18)} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.navTitle}>Class Schedule</Text>
@@ -416,8 +423,8 @@ export function BatchDetailScreen({ navigation, route }: Props) {
         {/* ── Enrolled Students ── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
-            <View style={[s.cardHeaderIcon, { backgroundColor: C.primary + "12" }]}>
-              <Ionicons name="school-outline" size={ms(15)} color={C.primary} />
+            <View style={[s.cardHeaderIcon, { backgroundColor: colors.primary + "12" }]}>
+              <Ionicons name="school-outline" size={ms(15)} color={colors.primary} />
             </View>
             <Text style={s.cardTitle}>Enrolled Students</Text>
             <View style={s.countPill}>
@@ -428,7 +435,7 @@ export function BatchDetailScreen({ navigation, route }: Props) {
 
           {loading ? (
             <View style={s.centerBlock}>
-              <ActivityIndicator size="small" color={C.primary} />
+              <ActivityIndicator size="small" color={colors.primary} />
               <Text style={s.centerT}>Loading students…</Text>
             </View>
           ) : students.length === 0 ? (
@@ -480,8 +487,8 @@ export function BatchDetailScreen({ navigation, route }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: C.primary },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.primary },
   scroll: { flex: 1, backgroundColor: C.bg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16), gap: ms(14) },
 
@@ -534,8 +541,8 @@ const s = StyleSheet.create({
   cardHeaderIcon: { width: ms(32), height: ms(32), borderRadius: ms(9), alignItems: "center", justifyContent: "center" },
   cardTitle:      { flex: 1, fontSize: fs(14), fontWeight: "800", color: C.text },
   cardDivider:    { height: 1, backgroundColor: C.border },
-  countPill:      { backgroundColor: C.primary + "12", borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(4) },
-  countPillT:     { fontSize: fs(12), fontWeight: "800", color: C.primary },
+  countPill:      { backgroundColor: colors.primary + "12", borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(4) },
+  countPillT:     { fontSize: fs(12), fontWeight: "800", color: colors.primary },
 
   // Nav card (Class Schedule)
   navCard: {

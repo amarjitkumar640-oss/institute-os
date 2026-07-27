@@ -16,6 +16,7 @@ import { feesRouter }     from "./modules/fees/fees.routes";
 import { scheduleRouter } from "./modules/schedule/schedule.routes";
 import { documentTypesRouter } from "./modules/documents/documentTypes.routes";
 import { examCategoriesRouter } from "./modules/examCategories/examCategories.routes";
+import { tenantsRouter } from "./modules/tenants/tenants.routes";
 import { errorHandler }  from "./middleware/errorHandler";
 
 export const app = express();
@@ -49,5 +50,6 @@ app.use("/api/fees",     feesRouter);
 app.use("/api/schedule", scheduleRouter);
 app.use("/api/document-types", documentTypesRouter);
 app.use("/api/exam-categories", examCategoriesRouter);
+app.use("/api/tenants", tenantsRouter);
 
 app.use(errorHandler);

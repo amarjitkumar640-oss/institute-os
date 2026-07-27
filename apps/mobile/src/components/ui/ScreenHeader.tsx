@@ -5,6 +5,7 @@ import Svg, { Circle, Path } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ms, fs, sw } from "../../utils/responsive";
+import { useThemeColors, darken, lighten } from "../../context/ThemeContext";
 
 const BG = "#FFFBF0";
 const WAVE_H = Math.round(ms(34));
@@ -61,10 +62,18 @@ interface Props {
 export function ScreenHeader({ title, count, countLabel = "total", onBack, rightIcon, onRight, heroIllustration }: Props) {
   const insets = useSafeAreaInsets();
   const dotAreaH = Math.round(ms(110));
+  const colors = useThemeColors();
+  // Single-hue gradient derived entirely from the tenant's primary color, so
+  // it always looks coherent no matter what a tenant picks.
+  const gradientColors: [string, string, string] = [
+    darken(colors.primary, 0.1),
+    colors.primary,
+    lighten(colors.primary, 0.22),
+  ];
 
   return (
     <LinearGradient
-      colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+      colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={s.header}

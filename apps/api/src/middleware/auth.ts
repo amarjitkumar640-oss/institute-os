@@ -7,6 +7,7 @@ export interface AuthPayload {
   staffId: string;
   role: StaffRole;
   centerId?: string | null;
+  tenantId: string;
 }
 
 declare global {

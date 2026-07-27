@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
@@ -16,6 +16,7 @@ import { createSubject, type SubjectItem } from "../../api/subjects";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateSubject">;
 
@@ -43,13 +44,16 @@ const CATEGORY_SUB: Record<string, string> = {
 
 interface CreatedSubject {
   name: string;
-  examCategory: ExamCategoryItem | null;
+  examCategories: ExamCategoryItem[];
 }
 
 export function CreateSubjectScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
+  const insets = useSafeAreaInsets();
   const [name, setName]                   = useState("");
   const [nameError, setNameError]         = useState<string | undefined>();
-  const [category, setCategory]           = useState<string | null>(null);
+  const [categoryIds, setCategoryIds]     = useState<string[]>([]);
   const [categoryError, setCategoryError] = useState<string | undefined>();
   const [submitError, setSubmitError]     = useState<string | undefined>();
   const [loading, setLoading]             = useState(false);
@@ -82,13 +86,17 @@ export function CreateSubjectScreen({ navigation }: Props) {
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentY       = useRef(new Animated.Value(ms(10))).current;
 
-  // track whether the user has explicitly chosen shared (null) vs not chosen
+  // track whether the user has explicitly made a choice (shared, or one-or-more categories)
   const [categoryChosen, setCategoryChosen] = useState(false);
 
-  function selectCategory(key: string | null) {
-    setCategory(key);
+  function toggleCategory(key: string | null) {
     setCategoryChosen(true);
     setCategoryError(undefined);
+    if (key === null) {
+      setCategoryIds([]); // "Shared" — mutually exclusive with specific categories
+    } else {
+      setCategoryIds((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    }
   }
 
   function validate(): boolean {
@@ -104,7 +112,7 @@ export function CreateSubjectScreen({ navigation }: Props) {
   }
 
   function showSuccess(s: SubjectItem) {
-    setCreated({ name: s.name, examCategory: s.examCategory });
+    setCreated({ name: s.name, examCategories: s.examCategories });
     Animated.parallel([
       Animated.timing(cardOpacity, { toValue: 1, duration: 260, useNativeDriver: true }),
       Animated.spring(cardSlide,   { toValue: 0, useNativeDriver: true, tension: 80, friction: 10, delay: 40 }),
@@ -125,7 +133,7 @@ export function CreateSubjectScreen({ navigation }: Props) {
     setLoading(true);
     setSubmitError(undefined);
     try {
-      const result = await createSubject({ name: name.trim(), examCategoryId: category });
+      const result = await createSubject({ name: name.trim(), examCategoryIds: categoryIds });
       if (result.ok) {
         showSuccess(result.subject);
       } else if ("conflict" in result) {
@@ -138,8 +146,10 @@ export function CreateSubjectScreen({ navigation }: Props) {
     }
   }
 
-  const catLabel = created?.examCategory?.label ?? "Shared";
-  const catColor = created?.examCategory?.color ?? "#E8752C";
+  const catLabel = created && created.examCategories.length
+    ? created.examCategories.map((c) => c.label).join(", ")
+    : "Shared";
+  const catColor = created?.examCategories[0]?.color ?? "#E8752C";
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
@@ -152,7 +162,7 @@ export function CreateSubjectScreen({ navigation }: Props) {
 
           {/* ── Name ── */}
           <View style={s.section}>
-            <SectionHead dot="#8B1E3F" title="Subject Name" />
+            <SectionHead dot={colors.primary} title="Subject Name" />
             <FormField
               label="NAME"
               value={name}
@@ -168,16 +178,18 @@ export function CreateSubjectScreen({ navigation }: Props) {
 
           {/* ── Category ── */}
           <View style={s.section}>
-            <SectionHead dot="#8B1E3F" title="Exam Category" />
-            <Text style={s.catHint}>Choose which exam this subject belongs to.</Text>
+            <SectionHead dot={colors.primary} title="Exam Category" />
+            <Text style={s.catHint}>Choose one or more exams this subject belongs to (or leave as Shared).</Text>
             <View style={s.catGrid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
               {CATEGORIES.map((opt) => {
-                const active = categoryChosen && category === opt.key;
+                const active = opt.key === null
+                  ? categoryChosen && categoryIds.length === 0
+                  : categoryIds.includes(opt.key);
                 return (
                   <TouchableOpacity
                     key={String(opt.key)}
                     style={[s.catCard, { width: catCardW }, active && { borderColor: opt.color, borderWidth: 2, backgroundColor: opt.color + "0C" }]}
-                    onPress={() => selectCategory(opt.key)}
+                    onPress={() => toggleCategory(opt.key)}
                     activeOpacity={0.75}
                   >
                     <View style={[s.catIcon, { backgroundColor: active ? opt.color : opt.color + "22" }]}>
@@ -219,7 +231,7 @@ export function CreateSubjectScreen({ navigation }: Props) {
       {loading && (
         <View style={s.loaderOverlay}>
           <View style={s.loaderCard}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderTitle}>Adding Subject…</Text>
             <Text style={s.loaderSub}>Please wait</Text>
           </View>
@@ -229,6 +241,8 @@ export function CreateSubjectScreen({ navigation }: Props) {
       {/* Full-screen success card */}
       {created !== null && (
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
+          <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+          <View style={[s.successStatusBarBg, { height: insets.top }]} />
           <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
 
             <View style={s.checkStage}>
@@ -251,10 +265,10 @@ export function CreateSubjectScreen({ navigation }: Props) {
               </Animated.View>
 
               <Animated.View style={[s.sparkleTL, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
-                <Ionicons name="sparkles" size={ms(14)} color={C.secondary} />
+                <Ionicons name="sparkles" size={ms(14)} color={colors.secondary} />
               </Animated.View>
               <Animated.View style={[s.sparkleBR, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
-                <Ionicons name="sparkles" size={ms(10)} color={C.accent} />
+                <Ionicons name="sparkles" size={ms(10)} color={colors.accent} />
               </Animated.View>
             </View>
 
@@ -263,12 +277,12 @@ export function CreateSubjectScreen({ navigation }: Props) {
               <Text style={s.successSub}>The subject has been created successfully</Text>
 
               <View style={s.detailBox}>
-                <DetailRow icon="book-outline"   label="Subject Name" value={created.name}  color={C.primary} />
+                <DetailRow icon="book-outline"   label="Subject Name" value={created.name}  color={colors.primary} />
                 <DetailRow icon="layers-outline" label="Category"     value={catLabel}       color={catColor} last />
               </View>
 
               <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-                <LinearGradient colors={[C.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+                <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
                   <Ionicons name="list-outline" size={ms(18)} color="#fff" />
                   <Text style={s.doneBtnT}>View All Subjects</Text>
                 </LinearGradient>
@@ -285,6 +299,7 @@ export function CreateSubjectScreen({ navigation }: Props) {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function SectionHead({ dot, title }: { dot: string; title: string }) {
+  const s = useThemedStyles(makeSStyles);
   return (
     <View style={s.sectionHeader}>
       <View style={[s.sectionDot, { backgroundColor: dot }]} />
@@ -318,8 +333,8 @@ const dr = StyleSheet.create({
   value:     { fontSize: fs(13), color: C.text, fontWeight: "700" },
 });
 
-const s = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:          { flex: 1, backgroundColor: colors.primary },
   flex:          { flex: 1 },
   content:       { flex: 1, backgroundColor: "#FFFBF0", paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(8), paddingBottom: ms(20), justifyContent: "space-between" },
 
@@ -346,7 +361,8 @@ const s = StyleSheet.create({
   loaderSub:     { fontSize: fs(12), color: "#8A7F82" },
 
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
-  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(26), alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
+  successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.primary },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(26), alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
 
   checkStage:   { width: ms(130), height: ms(130), justifyContent: "center", alignItems: "center", marginBottom: ms(14) },
   checkGlow:    { position: "absolute", width: ms(112), height: ms(112), borderRadius: ms(56), backgroundColor: C.greenBg },

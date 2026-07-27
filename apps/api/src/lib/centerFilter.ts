@@ -1,12 +1,14 @@
 import type { Request } from "express";
 
 /**
- * Returns a Prisma `where` fragment that scopes a query to the JWT's centerId.
- * centerId=null (all-centers mode) or absent (old tokens) → empty object → no filter.
+ * Returns a Prisma `where` fragment that scopes a query to the JWT's tenantId
+ * (always present) and centerId (only when a specific center is selected).
+ * centerId=null (all-centers mode) → tenantId-only filter.
  */
-export function centerFilter(req: Request): { centerId?: string } {
+export function centerFilter(req: Request): { tenantId: string; centerId?: string } {
+  const tenantId = req.auth!.tenantId;
   const cid = req.auth?.centerId;
-  return cid ? { centerId: cid } : {};
+  return cid ? { tenantId, centerId: cid } : { tenantId };
 }
 
 /**
@@ -17,4 +19,9 @@ export function centerFilter(req: Request): { centerId?: string } {
  */
 export function centerIdForCreate(req: Request, fallback?: string | null): string | null {
   return req.auth?.centerId ?? fallback ?? null;
+}
+
+/** tenantId to stamp onto a newly-created record — always present on an authenticated request. */
+export function tenantIdForCreate(req: Request): string {
+  return req.auth!.tenantId;
 }

@@ -6,6 +6,7 @@ import {
 } from "../illustrations/Scenes";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors } from "../../context/ThemeContext";
 
 export type EmptyScene =
   | "batches" | "students" | "faculty"
@@ -38,18 +39,20 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export function EmptyState({ scene, title, subtitle, color = C.primary, action }: Props) {
+export function EmptyState({ scene, title, subtitle, color, action }: Props) {
+  const colors = useThemeColors();
+  const resolvedColor = color ?? colors.primary;
   const Scene = SCENES[scene];
   return (
     <View style={s.wrap}>
-      <View style={[s.illusWrap, { backgroundColor: hexToRgba(color, 0.06) }]}>
-        <Scene color={color} size={160} />
+      <View style={[s.illusWrap, { backgroundColor: hexToRgba(resolvedColor, 0.06) }]}>
+        <Scene color={resolvedColor} size={160} />
       </View>
       <Text style={s.title}>{title}</Text>
       {subtitle ? <Text style={s.sub}>{subtitle}</Text> : null}
       {action ? (
         <TouchableOpacity
-          style={[s.btn, { backgroundColor: color }]}
+          style={[s.btn, { backgroundColor: resolvedColor }]}
           onPress={action.onPress}
           activeOpacity={0.82}
         >

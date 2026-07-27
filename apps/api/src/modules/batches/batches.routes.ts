@@ -4,17 +4,22 @@ import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/role";
 import { validateBody } from "../../middleware/validate";
-import { centerFilter, centerIdForCreate } from "../../lib/centerFilter";
+import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
 
 export const batchesRouter = Router();
 
 function serialize(b: any) {
-  const { _count, ...rest } = b;
-  return { ...rest, enrolledCount: _count?.enrollments ?? 0 };
+  const { _count, course, ...rest } = b;
+  const { examCategories, ...courseRest } = course;
+  return {
+    ...rest,
+    course: { ...courseRest, examCategories: examCategories.map((ec: any) => ec.examCategory) },
+    enrolledCount: _count?.enrollments ?? 0,
+  };
 }
 
 const INCLUDE = {
-  course:  true,
+  course:  { include: { examCategories: { include: { examCategory: true } } } },
   center:  { select: { id: true, name: true } },
   _count:  { select: { enrollments: true } },
 } as const;
@@ -29,8 +34,8 @@ batchesRouter.get("/", requireAuth, async (req, res) => {
 });
 
 batchesRouter.get("/:id", requireAuth, async (req, res) => {
-  const batch = await prisma.batch.findUnique({
-    where: { id: req.params.id },
+  const batch = await prisma.batch.findFirst({
+    where: { id: req.params.id, tenantId: req.auth!.tenantId },
     include: INCLUDE,
   });
   if (!batch) return res.status(404).json({ error: "Batch not found" });
@@ -43,14 +48,14 @@ batchesRouter.post(
   requireRole("admin", "frontdesk"),
   validateBody(createBatchSchema),
   async (req, res) => {
-    const course = await prisma.course.findUnique({ where: { id: req.body.courseId } });
+    const course = await prisma.course.findFirst({ where: { id: req.body.courseId, tenantId: req.auth!.tenantId } });
     if (!course) return res.status(404).json({ error: "Course not found" });
 
     const centerId = centerIdForCreate(req, req.body.centerId);
     if (!centerId) return res.status(400).json({ error: "centerId required when using all-centers mode" });
 
     const batch = await prisma.batch.create({
-      data: { ...req.body, centerId },
+      data: { ...req.body, centerId, tenantId: tenantIdForCreate(req) },
       include: INCLUDE,
     });
     res.status(201).json(serialize(batch));
@@ -63,7 +68,7 @@ batchesRouter.patch(
   requireRole("admin", "frontdesk"),
   validateBody(updateBatchSchema),
   async (req, res) => {
-    const batch = await prisma.batch.findUnique({ where: { id: req.params.id } });
+    const batch = await prisma.batch.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!batch) return res.status(404).json({ error: "Batch not found" });
 
     const updated = await prisma.batch.update({
@@ -76,8 +81,8 @@ batchesRouter.patch(
 );
 
 batchesRouter.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
-  const batch = await prisma.batch.findUnique({
-    where: { id: req.params.id },
+  const batch = await prisma.batch.findFirst({
+    where: { id: req.params.id, tenantId: req.auth!.tenantId },
     include: { _count: { select: { enrollments: true } } },
   });
   if (!batch) return res.status(404).json({ error: "Batch not found" });

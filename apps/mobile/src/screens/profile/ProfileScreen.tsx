@@ -11,6 +11,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 import { ROLE_META } from "../../constants/roleMeta";
 import { useAuth } from "../../context/AuthContext";
 import { useAppLock } from "../../context/AppLockContext";
@@ -20,7 +21,6 @@ import type { RootStackParamList } from "../../navigation/types";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const WAVE_H   = Math.round(ms(40));
-const GRAD     = ["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"] as const;
 const BG       = "#FFFBF0";
 
 // ── Shared SVG decorations (same as ScreenHeader) ────────────────────────────
@@ -100,6 +100,7 @@ function Row({ icon, iconColor, label, sub, right, onPress, danger, last }: RowP
 const PIN_LENGTH = 4;
 
 function PinPad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDelete: () => void }) {
+  const pm = useThemedStyles(makePmStyles);
   const rows = [["1","2","3"],["4","5","6"],["7","8","9"]];
   return (
     <View style={pm.pad}>
@@ -126,6 +127,7 @@ function PinPad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDelete:
 }
 
 function PinDots({ filled, error }: { filled: number; error: boolean }) {
+  const pm = useThemedStyles(makePmStyles);
   return (
     <View style={pm.dots}>
       {Array.from({ length: PIN_LENGTH }).map((_, i) => (
@@ -148,6 +150,8 @@ interface PinSetupModalProps {
 }
 
 function PinSetupModal({ visible, mode, onDone, onCancel }: PinSetupModalProps) {
+  const colors = useThemeColors();
+  const pm = useThemedStyles(makePmStyles);
   const [step,      setStep]    = useState<PinStep>("enter");
   const [first,     setFirst]   = useState("");
   const [pin,       setPin]     = useState("");
@@ -205,8 +209,8 @@ function PinSetupModal({ visible, mode, onDone, onCancel }: PinSetupModalProps) 
         </View>
 
         <View style={pm.sheetBody}>
-          <View style={[pm.stepIcon, { backgroundColor: C.primary + "15" }]}>
-            <Ionicons name="lock-closed-outline" size={ms(28)} color={C.primary} />
+          <View style={[pm.stepIcon, { backgroundColor: colors.primary + "15" }]}>
+            <Ionicons name="lock-closed-outline" size={ms(28)} color={colors.primary} />
           </View>
           <Text style={pm.stepTitle}>{title}</Text>
           <Text style={pm.stepSub}>{sub}</Text>
@@ -223,6 +227,7 @@ function PinSetupModal({ visible, mode, onDone, onCancel }: PinSetupModalProps) 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export function ProfileScreen() {
+  const colors = useThemeColors();
   const navigation = useNavigation<Nav>();
   const insets     = useSafeAreaInsets();
   const { staff, currentCenter, isAllCenters, logout, switchCenter } = useAuth();
@@ -280,7 +285,11 @@ export function ProfileScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* ── Hero header ─────────────────────────────────────────────────────── */}
-      <LinearGradient colors={GRAD} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
+      <LinearGradient
+        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={s.hero}
+      >
         <PolkaDots height={dotAreaH} />
 
         {/* Back + title bar */}
@@ -350,7 +359,7 @@ export function ProfileScreen() {
           />
           <Row
             icon="swap-horizontal-outline"
-            iconColor={C.accent}
+            iconColor={colors.accent}
             label="Switch Center"
             sub="Change your active center"
             onPress={handleSwitchCenter}
@@ -376,6 +385,13 @@ export function ProfileScreen() {
                 label="Staff Management"
                 sub="Manage roles and access"
                 onPress={() => navigation.navigate("StaffManagement")}
+              />
+              <Row
+                icon="settings-outline"
+                iconColor={colors.primary}
+                label="Organization Settings"
+                sub="Branding and login method"
+                onPress={() => navigation.navigate("OrganizationSettings")}
                 last
               />
             </View>
@@ -387,7 +403,7 @@ export function ProfileScreen() {
         <View style={s.card}>
           <Row
             icon="keypad-outline"
-            iconColor={C.primary}
+            iconColor={colors.primary}
             label={hasPin ? "Change PIN" : "Set up PIN Lock"}
             sub={hasPin ? "Update your 4-digit unlock PIN" : "Protect the app when closed"}
             onPress={() => setPinModal(hasPin ? "change" : "setup")}
@@ -462,7 +478,7 @@ export function ProfileScreen() {
       {loggingOut && (
         <View style={s.logoutOverlay}>
           <View style={s.logoutBox}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.logoutText}>Signing out…</Text>
           </View>
         </View>
@@ -640,7 +656,7 @@ const s = StyleSheet.create({
 
 // ── PIN modal styles ───────────────────────────────────────────────────────────
 
-const pm = StyleSheet.create({
+const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
   sheet: {
     flex:            1,
     backgroundColor: BG,
@@ -655,7 +671,7 @@ const pm = StyleSheet.create({
     borderBottomColor: C.border,
   },
   cancelBtn: { width: ms(60) },
-  cancelT: { fontSize: fs(15), color: C.primary, fontWeight: "600" },
+  cancelT: { fontSize: fs(15), color: colors.primary, fontWeight: "600" },
   sheetTitle: {
     fontSize:   fs(16),
     fontWeight: "700",
@@ -702,8 +718,8 @@ const pm = StyleSheet.create({
     backgroundColor: "transparent",
   },
   dotFilled: {
-    backgroundColor: C.primary,
-    borderColor:     C.primary,
+    backgroundColor: colors.primary,
+    borderColor:     colors.primary,
   },
   dotError: {
     backgroundColor: C.red,

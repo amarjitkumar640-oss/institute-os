@@ -26,6 +26,7 @@ import { listCourses, type CourseItem } from "../../api/courses";
 import { getCourseMeta } from "../../constants/courseMeta";
 import { ms, fs, sw } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditStudent">;
 
@@ -89,6 +90,7 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
   onSelect:   (course: CourseItem) => void;
   onClose:    () => void;
 }) {
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
 
@@ -96,7 +98,7 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
 
   const filtered = courses.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.examCategory?.label ?? "General").toLowerCase().includes(search.toLowerCase())
+    (c.examCategories.length ? c.examCategories.map((ec) => ec.label).join(", ") : "General").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -105,7 +107,7 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
         <LinearGradient
-          colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+          colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={cp.header}
@@ -155,8 +157,8 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
           ) : (
             <View style={cp.grid}>
               {filtered.map((course) => {
-                const color = course.examCategory?.color ?? C.muted;
-                const label = course.examCategory?.label ?? "General";
+                const color = course.examCategories[0]?.color ?? C.muted;
+                const label = course.examCategories.length ? course.examCategories.map((ec) => ec.label).join(", ") : "General";
                 const sel   = selectedId === course.id;
                 return (
                   <TouchableOpacity
@@ -272,8 +274,9 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
   onSelect: (k: Qualification) => void;
   onClose:  () => void;
 }) {
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const TEAL   = C.accent;
+  const TEAL   = colors.accent;
   const items: { key: Qualification; icon: string; label: string; sub: string }[] = [
     { key: "class10",         icon: "book-outline",    label: "Class 10",        sub: "Secondary"        },
     { key: "class12",         icon: "library-outline", label: "Class 12",        sub: "Senior Secondary" },
@@ -287,7 +290,7 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
         <LinearGradient
-          colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+          colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={qpm.header}
@@ -453,26 +456,27 @@ const STEPS = [
 // ── Step bar (identical to admission) ────────────────────────────────────────
 
 function StepBar({ current }: { current: number }) {
+  const colors = useThemeColors();
   return (
     <View style={sb.wrap}>
       {STEPS.map((step, i) => {
         const done   = i < current;
         const active = i === current;
-        const color  = done || active ? C.primary : "#D5CCC8";
+        const color  = done || active ? colors.primary : "#D5CCC8";
         return (
           <React.Fragment key={i}>
             <View style={sb.stepCol}>
-              <View style={[sb.circle, { borderColor: color, backgroundColor: done ? C.primary : active ? "#FEF4F4" : "#F7F4F2" }]}>
+              <View style={[sb.circle, { borderColor: color, backgroundColor: done ? colors.primary : active ? "#FEF4F4" : "#F7F4F2" }]}>
                 {done
                   ? <Ionicons name="checkmark" size={ms(12)} color="#fff" />
                   : <Text style={[sb.num, { color }]}>{i + 1}</Text>}
               </View>
-              <Text style={[sb.lbl, { color: active ? C.primary : done ? C.primary : "#B0A9AC", fontWeight: active ? "800" : "600" }]} numberOfLines={1}>
+              <Text style={[sb.lbl, { color: active ? colors.primary : done ? colors.primary : "#B0A9AC", fontWeight: active ? "800" : "600" }]} numberOfLines={1}>
                 {step.label}
               </Text>
             </View>
             {i < STEPS.length - 1 && (
-              <View style={[sb.line, { backgroundColor: done ? C.primary : "#E0D8D4" }]} />
+              <View style={[sb.line, { backgroundColor: done ? colors.primary : "#E0D8D4" }]} />
             )}
           </React.Fragment>
         );
@@ -492,18 +496,20 @@ const sb = StyleSheet.create({
 
 // ── Option row (identical to admission) ──────────────────────────────────────
 
-function OptionRow<T extends string>({ options, value, onSelect, color = C.primary }: {
+function OptionRow<T extends string>({ options, value, onSelect, color }: {
   options: { key: T; label: string }[];
   value: T | null | undefined;
   onSelect: (k: T) => void;
   color?: string;
 }) {
+  const colors = useThemeColors();
+  const resolvedColor = color ?? colors.primary;
   return (
     <View style={or.row}>
       {options.map((opt) => {
         const active = value === opt.key;
         return (
-          <TouchableOpacity key={opt.key} style={[or.pill, active && { backgroundColor: color, borderColor: color }]} onPress={() => onSelect(opt.key)} activeOpacity={0.75}>
+          <TouchableOpacity key={opt.key} style={[or.pill, active && { backgroundColor: resolvedColor, borderColor: resolvedColor }]} onPress={() => onSelect(opt.key)} activeOpacity={0.75}>
             <View style={[or.radio, { borderColor: active ? "#fff" : "#C0B8B4" }]}>
               {active && <View style={or.radioDot} />}
             </View>
@@ -527,13 +533,14 @@ const or = StyleSheet.create({
 // ── Section heading (identical to admission — same color throughout) ─────────
 
 function SectionHead({ icon, label, sub }: { icon: string; label: string; sub?: string }) {
+  const colors = useThemeColors();
   return (
     <View style={sh.wrap}>
-      <View style={[sh.iconBox, { backgroundColor: C.primary + "18" }]}>
-        <Ionicons name={icon as any} size={ms(16)} color={C.primary} />
+      <View style={[sh.iconBox, { backgroundColor: colors.primary + "18" }]}>
+        <Ionicons name={icon as any} size={ms(16)} color={colors.primary} />
       </View>
       <View style={sh.col}>
-        <Text style={[sh.label, { color: C.primary }]}>{label.toUpperCase()}</Text>
+        <Text style={[sh.label, { color: colors.primary }]}>{label.toUpperCase()}</Text>
         {sub && <Text style={sh.sub}>{sub}</Text>}
       </View>
     </View>
@@ -551,6 +558,7 @@ const sh = StyleSheet.create({
 // ── Detail row (success card) ─────────────────────────────────────────────────
 
 function DetailRow({ icon, label, value, color, last }: { icon: string; label: string; value: string; color: string; last?: boolean }) {
+  const s = useThemedStyles(makeSStyles);
   return (
     <View style={[s.detailRow, !last && s.detailRowBorder]}>
       <View style={[s.detailIcon, { backgroundColor: color + "18" }]}>
@@ -571,6 +579,7 @@ type UploadKey = "photo" | string; // "photo" or a documentTypeId
 function UploadRow({ label, uri, loading, error, onPress, onView }: {
   label: string; uri: string | null; loading: boolean; error?: string; onPress: () => void; onView: () => void;
 }) {
+  const colors = useThemeColors();
   return (
     <View style={ds.row}>
       <TouchableOpacity
@@ -580,7 +589,7 @@ function UploadRow({ label, uri, loading, error, onPress, onView }: {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator size="small" color={C.primary} />
+          <ActivityIndicator size="small" color={colors.primary} />
         ) : uri ? (
           <Image source={{ uri }} style={ds.rowThumb} />
         ) : (
@@ -602,6 +611,7 @@ function UploadRow({ label, uri, loading, error, onPress, onView }: {
 function DocumentsView({ studentId, initialPhotoUri, onClose }: {
   studentId: string; initialPhotoUri: string | null; onClose: (photoUri: string | null) => void;
 }) {
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [docTypes, setDocTypes]               = useState<DocumentType[]>([]);
   const [docsLoading, setDocsLoading]         = useState(true);
@@ -677,7 +687,7 @@ function DocumentsView({ studentId, initialPhotoUri, onClose }: {
   return (
     <View style={ds.overlay}>
       <LinearGradient
-        colors={["#8B1E3F", "#A8264A", "#C64A3E", "#E8752C"]}
+        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={ds.header}
@@ -699,7 +709,7 @@ function DocumentsView({ studentId, initialPhotoUri, onClose }: {
 
       <ScrollView contentContainerStyle={ds.scroll} showsVerticalScrollIndicator={false}>
         {docsLoading ? (
-          <ActivityIndicator color={C.primary} style={{ marginVertical: ms(16) }} />
+          <ActivityIndicator color={colors.primary} style={{ marginVertical: ms(16) }} />
         ) : (
           <>
             <UploadRow
@@ -729,8 +739,8 @@ function DocumentsView({ studentId, initialPhotoUri, onClose }: {
         <View style={ds.sheetInner}>
           <Text style={ds.sheetTitle}>Update {activeLabel}</Text>
           <TouchableOpacity style={ds.sheetOption} onPress={() => activeSheet && pickAndUpload(activeSheet, true)} activeOpacity={0.8}>
-            <View style={[ds.sheetOptionIcon, { backgroundColor: C.primary + "18" }]}>
-              <Ionicons name="camera-outline" size={ms(22)} color={C.primary} />
+            <View style={[ds.sheetOptionIcon, { backgroundColor: colors.primary + "18" }]}>
+              <Ionicons name="camera-outline" size={ms(22)} color={colors.primary} />
             </View>
             <Text style={ds.sheetOptionLabel}>Take Photo</Text>
           </TouchableOpacity>
@@ -813,6 +823,8 @@ const GENDER_OPTIONS: { key: Gender; label: string }[] = [{ key: "male", label: 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export function EditStudentScreen({ navigation, route }: Props) {
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
   const insets = useSafeAreaInsets();
   const { student } = route.params;
 
@@ -1012,7 +1024,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
               <View style={s.docsEntryThumb}>
                 {photoUri
                   ? <Image source={{ uri: photoUri }} style={s.docsEntryThumbImg} />
-                  : <Ionicons name="person" size={ms(24)} color={C.primary} />
+                  : <Ionicons name="person" size={ms(24)} color={colors.primary} />
                 }
               </View>
               <View style={{ flex: 1 }}>
@@ -1071,7 +1083,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
                   </>
                 ) : selectedCourseName ? (
                   <>
-                    <View style={[s.courseSelDot, { backgroundColor: courses.find((c) => c.id === selectedCourseId)?.examCategory?.color ?? C.primary }]} />
+                    <View style={[s.courseSelDot, { backgroundColor: courses.find((c) => c.id === selectedCourseId)?.examCategories[0]?.color ?? colors.primary }]} />
                     <Text style={s.courseSelValue} numberOfLines={1}>{selectedCourseName}</Text>
                     <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
                   </>
@@ -1104,7 +1116,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
               <TouchableOpacity style={s.courseSel} onPress={() => setQualPickerOpen(true)} activeOpacity={0.75}>
                 {qualification ? (
                   <>
-                    <Ionicons name={QUAL_DISPLAY[qualification]?.icon as any ?? "ribbon-outline"} size={ms(16)} color={C.accent} />
+                    <Ionicons name={QUAL_DISPLAY[qualification]?.icon as any ?? "ribbon-outline"} size={ms(16)} color={colors.accent} />
                     <Text style={s.courseSelValue} numberOfLines={1}>{QUAL_DISPLAY[qualification]?.label}</Text>
                     <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
                   </>
@@ -1206,18 +1218,18 @@ export function EditStudentScreen({ navigation, route }: Props) {
           <View style={s.navRow}>
             {step > 0 && (
               <TouchableOpacity style={s.prevBtn} onPress={handlePrev} activeOpacity={0.75}>
-                <Ionicons name="chevron-back" size={ms(18)} color={C.primary} />
+                <Ionicons name="chevron-back" size={ms(18)} color={colors.primary} />
                 <Text style={s.prevBtnT}>Back</Text>
               </TouchableOpacity>
             )}
             <View style={s.navSpacer} />
             {step < STEPS.length - 1 ? (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: C.primary }]} onPress={handleNext} activeOpacity={0.85}>
+              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleNext} activeOpacity={0.85}>
                 <Text style={s.nextBtnT}>Next</Text>
                 <Ionicons name="chevron-forward" size={ms(18)} color="#fff" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: C.primary }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
                 {loading
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <>
@@ -1238,7 +1250,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
       {loading && (
         <View style={s.loaderOverlay}>
           <View style={s.loaderCard}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderTitle}>Saving Changes…</Text>
             <Text style={s.loaderSub}>Please wait a moment</Text>
           </View>
@@ -1254,7 +1266,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
         onSelect={(course) => {
           setSelectedCourseId(course.id);
           setSelectedCourseName(course.name);
-          setCoursePreference((course.examCategory?.key as CoursePreference) ?? null);
+          setCoursePreference((course.examCategories[0]?.key as CoursePreference) ?? null);
           setDurationPreference(monthsToDurationPref(course.durationMonths));
           setCoursePickerOpen(false);
         }}
@@ -1282,7 +1294,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
         <View style={s.discardOverlay}>
           <View style={s.discardCard}>
             <View style={s.discardIconCircle}>
-              <Ionicons name="trash-outline" size={ms(30)} color={C.primary} />
+              <Ionicons name="trash-outline" size={ms(30)} color={colors.primary} />
             </View>
 
             <Text style={s.discardTitle}>Discard Changes?</Text>
@@ -1306,7 +1318,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
               onPress={() => setDiscardVisible(false)}
               activeOpacity={0.82}
             >
-              <Ionicons name="arrow-back-outline" size={ms(16)} color={C.primary} />
+              <Ionicons name="arrow-back-outline" size={ms(16)} color={colors.primary} />
               <Text style={s.discardCancelTxt}>Continue Editing</Text>
             </TouchableOpacity>
           </View>
@@ -1337,24 +1349,24 @@ export function EditStudentScreen({ navigation, route }: Props) {
                 </LinearGradient>
               </Animated.View>
               <Animated.View style={[s.sparkleTL, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
-                <Ionicons name="sparkles" size={ms(14)} color={C.secondary} />
+                <Ionicons name="sparkles" size={ms(14)} color={colors.secondary} />
               </Animated.View>
               <Animated.View style={[s.sparkleBR, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
-                <Ionicons name="sparkles" size={ms(10)} color={C.accent} />
+                <Ionicons name="sparkles" size={ms(10)} color={colors.accent} />
               </Animated.View>
             </View>
 
             <Animated.View style={[s.successContent, { opacity: contentOpacity, transform: [{ translateY: contentY }] }]}>
               <Text style={s.successTitle}>Student Updated!</Text>
               <View style={s.regCodeRow}>
-                <Ionicons name="id-card-outline" size={ms(14)} color={C.primary} />
+                <Ionicons name="id-card-outline" size={ms(14)} color={colors.primary} />
                 <Text style={s.regCode}>{updated.studentCode}</Text>
               </View>
               <Text style={s.successSub}>Profile updated successfully</Text>
 
               <View style={s.detailBox}>
-                <DetailRow icon="person-outline" label="Student Name" value={updated.fullName} color={C.primary} />
-                <DetailRow icon="call-outline"   label="Phone"        value={updated.phone}     color={C.accent} />
+                <DetailRow icon="person-outline" label="Student Name" value={updated.fullName} color={colors.primary} />
+                <DetailRow icon="call-outline"   label="Phone"        value={updated.phone}     color={colors.accent} />
                 {updated.coursePreference && (
                   <DetailRow icon="book-outline" label="Course Pref." value={updated.coursePreference.toUpperCase()} color={C.blue} />
                 )}
@@ -1367,7 +1379,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
               </View>
 
               <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-                <LinearGradient colors={[C.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+                <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
                   <Ionicons name="people-outline" size={ms(18)} color="#fff" />
                   <Text style={s.doneBtnT}>View All Students</Text>
                 </LinearGradient>
@@ -1383,8 +1395,8 @@ export function EditStudentScreen({ navigation, route }: Props) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  safe:        { flex: 1, backgroundColor: C.primary },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:        { flex: 1, backgroundColor: colors.primary },
   flex:        { flex: 1 },
   scroll:      { flex: 1, backgroundColor: C.bg },
   body:        { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(40) },
@@ -1416,7 +1428,7 @@ const s = StyleSheet.create({
   navRow:       { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
   navSpacer:    { flex: 1 },
   prevBtn:      { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(16), paddingVertical: ms(12), borderRadius: ms(14), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border },
-  prevBtnT:     { fontSize: fs(14), fontWeight: "700", color: C.primary },
+  prevBtnT:     { fontSize: fs(14), fontWeight: "700", color: colors.primary },
   nextBtn:      { borderRadius: ms(14) },
   nextBtnGrad:  { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(22), paddingVertical: ms(13), borderRadius: ms(14) },
   nextBtnT:     { fontSize: fs(14), fontWeight: "800", color: "#fff" },
@@ -1428,8 +1440,8 @@ const s = StyleSheet.create({
   loaderSub:     { fontSize: fs(12), color: C.muted },
 
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
-  successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: C.primary },
-  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(22), alignItems: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
+  successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.primary },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(22), alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
 
   checkStage:   { width: ms(104), height: ms(104), justifyContent: "center", alignItems: "center", marginBottom: ms(8) },
   checkGlow:    { position: "absolute", width: ms(90), height: ms(90), borderRadius: ms(45), backgroundColor: C.greenBg },
@@ -1441,7 +1453,7 @@ const s = StyleSheet.create({
   successContent: { width: "100%", alignItems: "center" },
   successTitle:   { fontSize: fs(21), fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
   regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF4F4", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(5), marginBottom: ms(6) },
-  regCode:        { fontSize: fs(14), fontWeight: "800", color: C.primary, letterSpacing: 1 },
+  regCode:        { fontSize: fs(14), fontWeight: "800", color: colors.primary, letterSpacing: 1 },
   successSub:     { fontSize: fs(12.5), color: C.muted, marginBottom: ms(12), textAlign: "center" },
 
   detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(12), borderWidth: 1, borderColor: C.border },
@@ -1457,7 +1469,7 @@ const s = StyleSheet.create({
   doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 
   docsEntry:      { flexDirection: "row", alignItems: "center", gap: ms(12), backgroundColor: C.inputBg, borderRadius: ms(16), borderWidth: 1.5, borderColor: C.border, padding: ms(12), marginBottom: ms(18) },
-  docsEntryThumb: { width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: C.primary + "18", borderWidth: 2, borderColor: C.primary, overflow: "hidden", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  docsEntryThumb: { width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary + "18", borderWidth: 2, borderColor: colors.primary, overflow: "hidden", justifyContent: "center", alignItems: "center", flexShrink: 0 },
   docsEntryThumbImg: { width: ms(52), height: ms(52), borderRadius: ms(26) },
   docsEntryTitle: { fontSize: fs(14), fontWeight: "800", color: C.text },
   docsEntrySub:   { fontSize: fs(11.5), color: C.muted, marginTop: ms(1) },
@@ -1468,8 +1480,8 @@ const s = StyleSheet.create({
   discardTitle:          { fontSize: fs(18), fontWeight: "800", color: C.text, marginBottom: ms(10), letterSpacing: 0.2 },
   discardBody:           { fontSize: fs(13), color: "#6B5B5F", textAlign: "center", lineHeight: fs(20), marginBottom: ms(20) },
   discardDivider:        { width: "100%", height: 1, backgroundColor: "#F2EAE8", marginBottom: ms(16) },
-  discardDestructiveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: C.primary, borderRadius: ms(14), paddingVertical: ms(14), marginBottom: ms(10) },
+  discardDestructiveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14), marginBottom: ms(10) },
   discardDestructiveTxt: { fontSize: fs(14), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
   discardCancelBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: "#FFF0F3", borderRadius: ms(14), paddingVertical: ms(13), borderWidth: 1.5, borderColor: "#F5C2CE" },
-  discardCancelTxt:      { fontSize: fs(14), fontWeight: "700", color: C.primary },
+  discardCancelTxt:      { fontSize: fs(14), fontWeight: "700", color: colors.primary },
 });

@@ -33,7 +33,7 @@ scheduleRouter.get(
   "/batches/:batchId/slots",
   requireAuth,
   async (req, res) => {
-    const slots = await listSlots(prisma, req.params.batchId);
+    const slots = await listSlots(prisma, req.params.batchId, req.auth!.tenantId);
     res.json(slots);
   },
 );
@@ -43,7 +43,8 @@ scheduleRouter.post(
   requireAuth,
   validateBody(createSlotSchema),
   async (req, res) => {
-    const slot = await createSlot(prisma, req.params.batchId, req.body);
+    const slot = await createSlot(prisma, req.params.batchId, req.auth!.tenantId, req.body);
+    if (!slot) return res.status(404).json({ error: "Batch not found" });
     res.status(201).json(slot);
   },
 );
@@ -53,7 +54,8 @@ scheduleRouter.patch(
   requireAuth,
   validateBody(updateSlotSchema),
   async (req, res) => {
-    const slot = await updateSlot(prisma, req.params.slotId, req.body);
+    const slot = await updateSlot(prisma, req.params.slotId, req.auth!.tenantId, req.body);
+    if (!slot) return res.status(404).json({ error: "Slot not found" });
     res.json(slot);
   },
 );
@@ -62,7 +64,8 @@ scheduleRouter.delete(
   "/class-slots/:slotId",
   requireAuth,
   async (req, res) => {
-    await deleteSlot(prisma, req.params.slotId);
+    const slot = await deleteSlot(prisma, req.params.slotId, req.auth!.tenantId);
+    if (!slot) return res.status(404).json({ error: "Slot not found" });
     res.json({ success: true });
   },
 );
@@ -74,7 +77,7 @@ scheduleRouter.get(
   requireAuth,
   validateQuery(sessionQuerySchema),
   async (req, res) => {
-    const sessions = await listSessions(prisma, req.params.batchId, req.query as any);
+    const sessions = await listSessions(prisma, req.params.batchId, req.auth!.tenantId, req.query as any);
     res.json(sessions);
   },
 );
@@ -85,7 +88,8 @@ scheduleRouter.post(
   requireAuth,
   validateBody(generateSessionsSchema),
   async (req, res) => {
-    const result = await generateSessions(prisma, req.params.batchId, req.body);
+    const result = await generateSessions(prisma, req.params.batchId, req.auth!.tenantId, req.body);
+    if (!result) return res.status(404).json({ error: "Batch not found" });
     res.status(201).json(result);
   },
 );
@@ -96,7 +100,8 @@ scheduleRouter.post(
   requireAuth,
   validateBody(createAdHocSessionSchema),
   async (req, res) => {
-    const session = await createAdHocSession(prisma, req.params.batchId, req.body);
+    const session = await createAdHocSession(prisma, req.params.batchId, req.auth!.tenantId, req.body);
+    if (!session) return res.status(404).json({ error: "Batch not found" });
     res.status(201).json(session);
   },
 );
@@ -106,7 +111,8 @@ scheduleRouter.patch(
   requireAuth,
   validateBody(patchSessionSchema),
   async (req, res) => {
-    const session = await patchSession(prisma, req.params.sessionId, req.body);
+    const session = await patchSession(prisma, req.params.sessionId, req.auth!.tenantId, req.body);
+    if (!session) return res.status(404).json({ error: "Session not found" });
     res.json(session);
   },
 );
@@ -124,6 +130,7 @@ scheduleRouter.get(
     const sessions = await listFacultySessions(
       prisma,
       req.params.facultyId,
+      req.auth!.tenantId,
       req.query as any,
     );
     res.json(sessions);
@@ -135,7 +142,7 @@ scheduleRouter.get(
   requireAuth,
   async (req, res) => {
     const cFilter = centerFilter(req);
-    const sessions = await listTodaySessions(prisma, cFilter.centerId);
+    const sessions = await listTodaySessions(prisma, cFilter.tenantId, cFilter.centerId);
     res.json(sessions);
   },
 );

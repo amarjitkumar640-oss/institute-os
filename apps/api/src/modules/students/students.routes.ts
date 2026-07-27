@@ -7,7 +7,7 @@ import { requireRole } from "../../middleware/role";
 import { validateBody } from "../../middleware/validate";
 import { deletePhoto, uploadPhoto } from "../../lib/s3";
 import { generateStudentCode, withPhotoUrl, withPhotoUrls, serializeStudentDocument, serializeStudentDocuments } from "./students.service";
-import { centerFilter, centerIdForCreate } from "../../lib/centerFilter";
+import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
 import { BatchFullError, createEnrollment } from "../enrollments/enrollments.service";
 import { generateReceiptNo, generateSchedule } from "../fees/fees.service";
 
@@ -19,7 +19,7 @@ studentsRouter.get("/", requireAuth, async (req, res) => {
   const { batchId } = req.query as { batchId?: string };
   if (batchId) {
     const enrollments = await prisma.enrollment.findMany({
-      where: { batchId, status: "active" },
+      where: { batchId, status: "active", batch: { tenantId: req.auth!.tenantId } },
       include: { student: true, batch: { select: { id: true, name: true } } },
     });
     return res.json(await withPhotoUrls(enrollments.map((e) => ({
@@ -49,8 +49,8 @@ studentsRouter.get("/", requireAuth, async (req, res) => {
 });
 
 studentsRouter.get("/:id", requireAuth, async (req, res) => {
-  const student = await prisma.student.findUnique({
-    where: { id: req.params.id },
+  const student = await prisma.student.findFirst({
+    where: { id: req.params.id, tenantId: req.auth!.tenantId },
     include: { enrollments: { include: { batch: true } } },
   });
   if (!student) return res.status(404).json({ error: "Student not found" });
@@ -65,9 +65,10 @@ studentsRouter.post(
   async (req, res) => {
     const centerId = centerIdForCreate(req, req.body.centerId);
     if (!centerId) return res.status(400).json({ error: "centerId required when using all-centers mode" });
-    const studentCode = await generateStudentCode(prisma);
+    const tenantId = tenantIdForCreate(req);
+    const studentCode = await generateStudentCode(prisma, tenantId);
     const student = await prisma.student.create({
-      data: { ...req.body, studentCode, centerId },
+      data: { ...req.body, studentCode, centerId, tenantId },
     });
     res.status(201).json(await withPhotoUrl(student));
   }
@@ -86,11 +87,13 @@ studentsRouter.post(
     try {
       const centerId = centerIdForCreate(req, req.body.centerId);
       if (!centerId) return res.status(400).json({ error: "centerId required when using all-centers mode" });
+      const tenantId = tenantIdForCreate(req);
 
       const result = await prisma.$transaction(async (tx) => {
-        const studentCode = await generateStudentCode(tx as any);
+        const studentCode = await generateStudentCode(tx as any, tenantId);
         const student = await tx.student.create({
           data: {
+            tenantId,
             studentCode,
             centerId,
             fullName:           studentData.fullName,
@@ -121,12 +124,12 @@ studentsRouter.post(
         let enrollment = null;
         if (batchId) {
           // Fetch batch → course → fee template before creating enrollment
-          const batch = await (tx as any).batch.findUnique({
-            where:   { id: batchId },
+          const batch = await (tx as any).batch.findFirst({
+            where:   { id: batchId, tenantId },
             include: { course: { include: { feeTemplate: { include: { lines: { orderBy: { sortOrder: "asc" } } } } } } },
           });
 
-          enrollment = await createEnrollment(tx as any, student.id, batchId);
+          enrollment = await createEnrollment(tx as any, student.id, batchId, tenantId);
 
           const paid       = amountPaid ? Number(amountPaid) : 0;
           const today      = new Date();
@@ -137,7 +140,7 @@ studentsRouter.post(
 
           if (feeTemplate && feeTemplate.lines.length > 0) {
             // Generate full installment schedule from course fee template
-            const schedule = await generateSchedule(tx as any, enrollment.id, { totalFee, discountAmount: 0 });
+            const schedule = await generateSchedule(tx as any, enrollment.id, { totalFee, discountAmount: 0 }, tenantId);
 
             if (paid > 0) {
               // Apply admission payment to first installment
@@ -152,6 +155,7 @@ studentsRouter.post(
 
               await (tx as any).paymentTransaction.create({
                 data: {
+                  tenantId,
                   scheduleId:    schedule.id,
                   installmentId: firstInst.id,
                   amount:        paid,
@@ -195,6 +199,7 @@ studentsRouter.post(
 
             await (tx as any).paymentTransaction.create({
               data: {
+                tenantId,
                 scheduleId:    schedule.id,
                 installmentId: schedule.installments[0].id,
                 amount:        paid,
@@ -227,7 +232,7 @@ studentsRouter.patch(
   requireRole("admin", "frontdesk"),
   validateBody(updateStudentSchema),
   async (req, res) => {
-    const student = await prisma.student.findUnique({ where: { id: req.params.id } });
+    const student = await prisma.student.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!student) return res.status(404).json({ error: "Student not found" });
     const updated = await prisma.student.update({
       where: { id: req.params.id },
@@ -244,6 +249,8 @@ studentsRouter.post(
   upload.single("photo"),
   async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Missing photo file" });
+    const existing = await prisma.student.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Student not found" });
     const key = `students/${req.params.id}/${Date.now()}-${req.file.originalname}`;
     await uploadPhoto(key, req.file.buffer, req.file.mimetype);
     const student = await prisma.student.update({
@@ -259,7 +266,7 @@ studentsRouter.delete(
   requireAuth,
   requireRole("admin", "frontdesk"),
   async (req, res) => {
-    const existing = await prisma.student.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.student.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!existing) return res.status(404).json({ error: "Student not found" });
 
     if (existing.photoUrl) {
@@ -282,6 +289,8 @@ studentsRouter.get(
   requireAuth,
   requireRole("admin", "frontdesk"),
   async (req, res) => {
+    const student = await prisma.student.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
+    if (!student) return res.status(404).json({ error: "Student not found" });
     const docs = await prisma.studentDocument.findMany({
       where:   { studentId: req.params.id },
       include: { documentType: true },
@@ -299,6 +308,9 @@ studentsRouter.post(
   async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Missing document file" });
     const { id: studentId, documentTypeId } = req.params;
+
+    const student = await prisma.student.findFirst({ where: { id: studentId, tenantId: req.auth!.tenantId } });
+    if (!student) return res.status(404).json({ error: "Student not found" });
 
     const existing = await prisma.studentDocument.findUnique({
       where: { studentId_documentTypeId: { studentId, documentTypeId } },
@@ -327,6 +339,8 @@ studentsRouter.delete(
   requireRole("admin", "frontdesk"),
   async (req, res) => {
     const { id: studentId, documentTypeId } = req.params;
+    const student = await prisma.student.findFirst({ where: { id: studentId, tenantId: req.auth!.tenantId } });
+    if (!student) return res.status(404).json({ error: "Student not found" });
     const existing = await prisma.studentDocument.findUnique({
       where: { studentId_documentTypeId: { studentId, documentTypeId } },
     });

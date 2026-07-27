@@ -7,21 +7,36 @@ export const batchStatusSchema = z.enum(["upcoming", "running", "completed"]);
 export const enrollmentStatusSchema = z.enum(["active", "paused", "completed", "dropped"]);
 export const leadStatusSchema = z.enum(["new", "contacted", "visited", "converted", "lost"]);
 
+// The whole app only ever deals in plain 10-digit Indian mobile numbers (no
+// country-code UI anywhere), so phone handling stays simple: strip
+// everything but digits, no "+"/E.164 normalization. Still useful for
+// tolerating loosely-formatted phone input at login.
+export function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+export const staffLoginMethodSchema = z.enum(["phone", "email_username"]);
+export type StaffLoginMethod = z.infer<typeof staffLoginMethodSchema>;
+
+// The organization is known up front (baked into the app build), so login no
+// longer needs to guess a format or resolve a tenant from a bare identifier —
+// it just needs to know which tenant to look the identifier up within.
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  tenantId:   z.string().uuid(),
+  identifier: z.string().trim().min(1, "Enter your email, username, or phone number"),
+  password:   z.string().min(1),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const createSubjectSchema = z.object({
   name: z.string().min(1).max(120),
-  examCategoryId: z.string().uuid().nullable().optional(),
+  examCategoryIds: z.array(z.string().uuid()).default([]),
 });
 export type CreateSubjectInput = z.infer<typeof createSubjectSchema>;
 
 export const updateSubjectSchema = z.object({
   name: z.string().min(1).max(120).optional(),
-  examCategoryId: z.string().uuid().nullable().optional(),
+  examCategoryIds: z.array(z.string().uuid()).optional(),
 });
 export type UpdateSubjectInput = z.infer<typeof updateSubjectSchema>;
 
@@ -32,7 +47,7 @@ export const subjectQuerySchema = z.object({
 
 export const createCourseSchema = z.object({
   name: z.string().min(1).max(120),
-  examCategoryId: z.string().uuid().nullable().optional(),
+  examCategoryIds: z.array(z.string().uuid()).default([]),
   durationMonths: z.number().int().positive().max(60),
   defaultFee: z.number().nonnegative().max(10_000_000),
 });

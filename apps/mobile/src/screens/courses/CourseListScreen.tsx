@@ -16,6 +16,7 @@ import { ms, fs } from "../../utils/responsive";
 import { listCourses, deleteCourse, type CourseItem } from "../../api/courses";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -25,11 +26,12 @@ type Props = NativeStackScreenProps<RootStackParamList, "CourseList">;
 const GENERAL_META = { label: "General", code: "ALL", color: "#8A7F82" };
 
 function courseMeta(course: CourseItem): { label: string; code: string; color: string } {
-  if (!course.examCategory) return GENERAL_META;
+  if (course.examCategories.length === 0) return GENERAL_META;
+  const [first, ...rest] = course.examCategories;
   return {
-    label: course.examCategory.label,
-    code:  course.examCategory.key.slice(0, 4).toUpperCase(),
-    color: course.examCategory.color,
+    label: rest.length ? `${first.label} +${rest.length}` : first.label,
+    code:  first.key.slice(0, 4).toUpperCase(),
+    color: first.color,
   };
 }
 
@@ -51,6 +53,7 @@ function CourseCard({
   onFeeStructure: () => void;
 }) {
   const { showAlert } = useAlert();
+  const cs = useThemedStyles(makeCsStyles);
   const meta = courseMeta(course);
   const isActive = course.activeBatches > 0;
   const locked = course.batchCount > 0;
@@ -176,10 +179,11 @@ function CourseCard({
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
 function CourseEmpty({ search }: { search: string }) {
+  const colors = useThemeColors();
   return (
     <EmptyState
       scene="courses"
-      color="#2CA6A4"
+      color={colors.accent}
       title={search ? "No courses match your search" : "No courses yet"}
       subtitle={search ? "Try a different keyword" : "Create your first course to get started"}
     />
@@ -189,6 +193,8 @@ function CourseEmpty({ search }: { search: string }) {
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export function CourseListScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const cs = useThemedStyles(makeCsStyles);
   const nav = useNavigation<Nav>();
   const { showAlert, showConfirm } = useAlert();
   const [courses, setCourses] = useState<CourseItem[]>([]);
@@ -372,7 +378,7 @@ export function CourseListScreen({ navigation }: Props) {
         {/* Centered loader overlay */}
         {loading && (
           <View style={cs.loaderOverlay}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         )}
 
@@ -396,12 +402,12 @@ export function CourseListScreen({ navigation }: Props) {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const cs = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#8B1E3F" },
+const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.primary },
   content: { flex: 1, backgroundColor: "#FFFBF0" },
   banner: { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
-  bannerNum: { fontSize: fs(18), fontWeight: "800", color: "#8B1E3F" },
+  bannerNum: { fontSize: fs(18), fontWeight: "800", color: colors.primary },
   bannerLbl: { fontSize: fs(10), color: "#8A7F82", fontWeight: "600", marginTop: ms(1) },
   bannerDiv: { width: 1, backgroundColor: "#F0EDE8", marginHorizontal: ms(6) },
   searchWrap: { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
@@ -410,7 +416,7 @@ const cs = StyleSheet.create({
   filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
   filterRow: { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
   chip: { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  chipOn: { backgroundColor: "#8B1E3F", borderColor: "#8B1E3F" },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipT: { fontSize: fs(12), fontWeight: "600", color: "#8A7F82", includeFontPadding: false, lineHeight: fs(16) },
   chipTOn: { color: "#FFFFFF" },
   resultT: { paddingHorizontal: ms(16), paddingBottom: ms(4), fontSize: fs(11.5), color: "#8A7F82" },
@@ -420,9 +426,9 @@ const cs = StyleSheet.create({
   fab: {
     position: "absolute", bottom: ms(24), right: ms(20),
     width: ms(56), height: ms(56), borderRadius: ms(28),
-    backgroundColor: "#8B1E3F",
+    backgroundColor: colors.primary,
     justifyContent: "center", alignItems: "center",
-    shadowColor: "#8B1E3F", shadowOffset: { width: 0, height: ms(6) },
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) },
     shadowOpacity: 0.45, shadowRadius: ms(12), elevation: 10,
   },
 
