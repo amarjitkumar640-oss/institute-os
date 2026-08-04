@@ -8,12 +8,13 @@ import { validateBody } from "../../middleware/validate";
 import { BatchFullError } from "../enrollments/enrollments.service";
 import { convertLead } from "./leads.service";
 import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
+import { notifyEnrollmentEvents } from "../notifications/notification.service";
 
 export const leadsRouter = Router();
 
 leadsRouter.get("/", requireAuth, requireRole("admin", "frontdesk"), async (req, res) => {
   const leads = await prisma.lead.findMany({
-    where:   centerFilter(req),
+    where:   await centerFilter(req),
     orderBy: { createdAt: "desc" },
     include: { targetExam: true },
   });
@@ -44,6 +45,7 @@ leadsRouter.post(
   async (req, res) => {
     try {
       const result = await convertLead(prisma, req.params.id, req.body, req.auth!.tenantId);
+      await notifyEnrollmentEvents(prisma, req.auth!.tenantId, result.enrollment.batchId).catch(console.error);
       res.status(201).json(result);
     } catch (err) {
       if (err instanceof BatchFullError) {

@@ -6,10 +6,15 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
 import { useThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type AlertType   = "error" | "warning" | "info" | "success";
+// "brand" is distinct from the other four: its color comes from the tenant's
+// theme at render time (see `meta` below), not a fixed semantic hex — for
+// confirmations that aren't a warning (e.g. logging out) but still deserve
+// more presence than a plain info dialog.
+export type AlertType   = "error" | "warning" | "info" | "success" | "brand";
 export type ButtonStyle = "primary" | "danger" | "cancel";
 
 export interface AlertButton {
@@ -22,18 +27,20 @@ export interface AlertConfig {
   title:    string;
   message?: string;
   type?:    AlertType;
+  icon?:    string;
   buttons?: AlertButton[];
 }
 
 // ── Meta ──────────────────────────────────────────────────────────────────────
 // These are structural/semantic (error/warning/info/success), not brand
-// tokens — fixed app-wide regardless of tenant branding.
+// tokens — fixed app-wide regardless of tenant branding. "brand" isn't here;
+// it's computed from useThemeColors() where `meta` is built below.
 
-const TYPE_META: Record<AlertType, { icon: string; color: string; bg: string }> = {
-  error:   { icon: "alert-circle",       color: "#C0392B", bg: "#FEF0F0" },
-  warning: { icon: "warning",            color: "#E8752C", bg: "#FFF8EE" },
-  info:    { icon: "information-circle", color: "#2563A8", bg: "#EEF4FF" },
-  success: { icon: "checkmark-circle",   color: "#1B9C63", bg: "#EAF7F1" },
+const TYPE_META: Record<Exclude<AlertType, "brand">, { icon: string; color: string; bg: string }> = {
+  error:   { icon: "alert-circle",       color: C.red,    bg: "#FEF0F0" },
+  warning: { icon: "warning",            color: C.orange, bg: "#FFF8EE" },
+  info:    { icon: "information-circle", color: C.blue,   bg: "#EEF4FF" },
+  success: { icon: "checkmark-circle",   color: C.green,  bg: C.greenBg },
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -69,7 +76,9 @@ export function AppAlert({ visible, config, onClose }: Props) {
   if (!config) return null;
 
   const type    = config.type ?? "info";
-  const meta    = TYPE_META[type];
+  const meta    = type === "brand"
+    ? { icon: config.icon ?? "log-out-outline", color: colors.primary, bg: colors.primary + "17" }
+    : { ...TYPE_META[type], icon: config.icon ?? TYPE_META[type].icon };
   const buttons = config.buttons ?? [{ label: "OK" }];
   const isMulti = buttons.length > 2;
   const isTwo   = buttons.length === 2;
@@ -108,8 +117,8 @@ export function AppAlert({ visible, config, onClose }: Props) {
                       >
                         <Text style={[
                           s.multiRowT,
-                          isDanger  && { color: "#C0392B" },
-                          isCancel  && { color: "#8A7F82", fontWeight: "500" },
+                          isDanger  && { color: C.red },
+                          isCancel  && { color: C.muted, fontFamily: "Inter_500Medium", fontWeight: "500" },
                         ]}>
                           {btn.label}
                         </Text>
@@ -117,7 +126,7 @@ export function AppAlert({ visible, config, onClose }: Props) {
                           <Ionicons
                             name="chevron-forward"
                             size={ms(16)}
-                            color={isDanger ? "#C0392B" : "#8A7F82"}
+                            color={isDanger ? C.red : C.muted}
                           />
                         )}
                       </TouchableOpacity>
@@ -199,7 +208,7 @@ const s = StyleSheet.create({
   },
   card: {
     width:           "100%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.card,
     borderRadius:    ms(24),
     overflow:        "hidden",
     shadowColor:     "#1A0010",
@@ -224,15 +233,15 @@ const s = StyleSheet.create({
   // Text
   title: {
     fontSize:      fs(17),
-    fontWeight:    "800",
-    color:         "#2B1B1F",
+    fontFamily: "Inter_800ExtraBold", fontWeight: "800",
+    color:         C.text,
     textAlign:     "center",
     paddingHorizontal: ms(24),
     marginBottom:  ms(8),
   },
   message: {
     fontSize:      fs(13.5),
-    color:         "#8A7F82",
+    color:         C.muted,
     textAlign:     "center",
     lineHeight:    fs(20),
     paddingHorizontal: ms(24),
@@ -256,10 +265,10 @@ const s = StyleSheet.create({
   },
   btnFull:    { width: "100%" },
   btnHalf:    { flex: 1 },
-  btnDanger:  { backgroundColor: "#C0392B" },
-  btnOutline: { borderWidth: 1.5, borderColor: "#EDE8E3", backgroundColor: "transparent" },
-  btnT:       { fontSize: fs(14), fontWeight: "700", color: "#fff" },
-  btnOutlineT:{ color: "#2B1B1F" },
+  btnDanger:  { backgroundColor: C.red },
+  btnOutline: { borderWidth: 1.5, borderColor: C.border, backgroundColor: "transparent" },
+  btnT:       { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
+  btnOutlineT:{ color: C.text },
 
   // Multi-action
   multiHeader: {
@@ -269,17 +278,17 @@ const s = StyleSheet.create({
   },
   multiTitle: {
     fontSize:   fs(16),
-    fontWeight: "800",
-    color:      "#2B1B1F",
+    fontFamily: "Inter_800ExtraBold", fontWeight: "800",
+    color:      C.text,
     marginBottom: ms(4),
   },
   multiMsg: {
     fontSize:   fs(12.5),
-    color:      "#8A7F82",
+    color:      C.muted,
     lineHeight: fs(18),
   },
-  divider:       { height: 1, backgroundColor: "#EDE8E3", marginHorizontal: ms(0) },
+  divider:       { height: 1, backgroundColor: C.border, marginHorizontal: ms(0) },
   multiRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(20), paddingVertical: ms(16) },
   multiRowCancel:{ paddingVertical: ms(14), justifyContent: "center" },
-  multiRowT:     { fontSize: fs(14.5), fontWeight: "600", color: "#2B1B1F" },
+  multiRowT:     { fontSize: fs(14.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
 });

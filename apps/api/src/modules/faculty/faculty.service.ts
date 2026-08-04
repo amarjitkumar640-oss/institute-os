@@ -40,11 +40,10 @@ async function nextEmployeeCode(tenantId: string): Promise<string> {
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
-export async function listFaculty(query: FacultyQuery, tenantId: string, centerId?: string | null) {
+export async function listFaculty(query: FacultyQuery, tenantId: string, centerIds: string[]) {
   const { search, examCategoryId, isActive, page, limit } = query;
 
-  const where: Prisma.FacultyWhereInput = { tenantId };
-  if (centerId) where.centerId = centerId;
+  const where: Prisma.FacultyWhereInput = { tenantId, centerId: { in: centerIds } };
 
   if (isActive !== undefined) where.isActive = isActive;
 
@@ -160,7 +159,9 @@ export type UpdateFacultyResult =
   | { ok: true; faculty: ReturnType<typeof serializeFaculty> }
   | { ok: false; notFound: true }
   | { ok: false; emailConflict: true }
-  | { ok: false; phoneConflict: true };
+  | { ok: false; phoneConflict: true }
+  | { ok: false; staffNotFound: true }
+  | { ok: false; staffConflict: true };
 
 export async function updateFaculty(
   id: string,
@@ -177,6 +178,14 @@ export async function updateFaculty(
   if (data.phone && data.phone !== existing.phone) {
     const clash = await prisma.faculty.findUnique({ where: { tenantId_phone: { tenantId, phone: data.phone } } });
     if (clash) return { ok: false, phoneConflict: true };
+  }
+  if (data.staffId !== undefined && data.staffId !== existing.staffId) {
+    if (data.staffId !== null) {
+      const staff = await prisma.staff.findFirst({ where: { id: data.staffId, tenantId, role: "teacher" } });
+      if (!staff) return { ok: false, staffNotFound: true };
+      const clash = await prisma.faculty.findUnique({ where: { staffId: data.staffId } });
+      if (clash) return { ok: false, staffConflict: true };
+    }
   }
 
   const { subjectIds, joiningDate, ...scalarFields } = data;

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl, StatusBar,
+  ActivityIndicator, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -18,6 +18,7 @@ import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { ManageSlotModal } from "./ManageSlotModal";
+import { useAuth } from "../../context/AuthContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "BatchSchedule">;
 
@@ -65,7 +66,7 @@ function fmtSessionDate(iso: string): string {
 
 const STATUS_META = {
   scheduled: { label: "Scheduled", color: C.blue,    bg: "#EEF4FF", icon: "calendar-outline"         },
-  completed: { label: "Completed", color: C.green,   bg: "#EAF7F1", icon: "checkmark-circle-outline"  },
+  completed: { label: "Completed", color: C.green,   bg: C.greenBg, icon: "checkmark-circle-outline"  },
   cancelled: { label: "Cancelled", color: C.red,     bg: "#FEF0EE", icon: "close-circle-outline"      },
 } as const;
 
@@ -79,20 +80,19 @@ function typeMeta(colors: ThemeColors) {
 
 // ── Slot Card ─────────────────────────────────────────────────────────────────
 
-function SlotCard({ slot, onEdit }: { slot: ClassSlot; onEdit: (slot: ClassSlot) => void }) {
+function SlotCard({ slot, onEdit }: { slot: ClassSlot; onEdit?: (slot: ClassSlot) => void }) {
   const colors = useThemeColors();
   const sc = useThemedStyles(makeScStyles);
   const color = dayColorMap(colors)[slot.dayOfWeek] ?? colors.primary;
-  return (
-    <TouchableOpacity style={sc.card} onPress={() => onEdit(slot)} activeOpacity={0.78}>
-      <View style={[sc.stripe, { backgroundColor: color }]} />
+  const inner = (
+    <>
       <View style={sc.cardBody}>
         <View style={sc.cardTopRow}>
           <View style={[sc.timeIconWrap, { backgroundColor: color + "18" }]}>
             <Ionicons name="time-outline" size={ms(13)} color={color} />
           </View>
           <Text style={sc.timeText}>{fmtTimeRange(slot.startTime, slot.endTime)}</Text>
-          <Ionicons name="chevron-forward" size={ms(14)} color={C.placeholder} />
+          {onEdit && <Ionicons name="chevron-forward" size={ms(14)} color={C.placeholder} />}
         </View>
 
         {(slot.subject || slot.faculty || slot.room) && (
@@ -118,6 +118,13 @@ function SlotCard({ slot, onEdit }: { slot: ClassSlot; onEdit: (slot: ClassSlot)
           </View>
         )}
       </View>
+    </>
+  );
+
+  if (!onEdit) return <View style={sc.card}>{inner}</View>;
+  return (
+    <TouchableOpacity style={sc.card} onPress={() => onEdit(slot)} activeOpacity={0.78}>
+      {inner}
     </TouchableOpacity>
   );
 }
@@ -138,7 +145,6 @@ function SessionCard({ session, onPress }: { session: ClassSession; onPress: () 
       onPress={onPress}
       activeOpacity={0.78}
     >
-      <View style={[sc.stripe, { backgroundColor: sm.color }]} />
       <View style={sc.cardBody}>
         <View style={sc.cardTopRow}>
           <View style={{ flex: 1 }}>
@@ -198,6 +204,8 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
   const colors = useThemeColors();
   const sc = useThemedStyles(makeScStyles);
   const { batchId, batchName } = route.params;
+  const { staff } = useAuth();
+  const canEditSlots = staff?.role !== "teacher";
 
   const [activeTab, setActiveTab]       = useState<"template" | "week">("template");
   const [slots, setSlots]               = useState<ClassSlot[]>([]);
@@ -264,7 +272,6 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={sc.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScreenHeader
         title={batchName}
@@ -335,7 +342,7 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
                         <SlotCard
                           key={slot.id}
                           slot={slot}
-                          onEdit={(s) => setSlotModal({ visible: true, slot: s })}
+                          onEdit={canEditSlots ? (s) => setSlotModal({ visible: true, slot: s }) : undefined}
                         />
                       ))}
                     </View>
@@ -400,8 +407,8 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
           </View>
         )}
 
-        {/* FAB — add slot (template tab only) */}
-        {activeTab === "template" && (
+        {/* FAB — add slot (template tab, admin/frontdesk only) */}
+        {activeTab === "template" && canEditSlots && (
           <TouchableOpacity
             style={sc.fab}
             onPress={() => setSlotModal({ visible: true })}
@@ -426,13 +433,13 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: colors.primary },
-  content: { flex: 1, backgroundColor: C.bg, marginTop: ms(8) },
+  safe:    { flex: 1, backgroundColor: colors.screenBg },
+  content: { flex: 1, backgroundColor: colors.screenBg, marginTop: ms(8) },
 
   // Tabs
   tabBar: {
     flexDirection:   "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.card,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
@@ -447,8 +454,8 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabActive:  { borderBottomColor: colors.primary },
-  tabT:       { fontSize: fs(12), color: C.muted,   fontWeight: "600" },
-  tabTActive: { fontSize: fs(12), color: colors.primary, fontWeight: "700" },
+  tabT:       { fontSize: fs(12), color: C.muted,   fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  tabTActive: { fontSize: fs(12), color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
 
   // Content
   listContent: { padding: ms(16), paddingBottom: ms(96) },
@@ -470,34 +477,33 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent:  "center",
     marginBottom:    ms(16),
   },
-  emptyTitle: { fontSize: fs(15), fontWeight: "700", color: C.text, marginBottom: ms(6), textAlign: "center" },
+  emptyTitle: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(6), textAlign: "center" },
   emptySub:   { fontSize: fs(12), color: C.muted, textAlign: "center", lineHeight: fs(19) },
 
   // Day section header
   daySection:    { marginBottom: ms(20) },
   dayHeaderRow:  { flexDirection: "row", alignItems: "center", marginBottom: ms(10), gap: ms(6) },
   dayDot:        { width: ms(7), height: ms(7), borderRadius: ms(3.5), flexShrink: 0 },
-  dayLabel:      { fontSize: fs(11), fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" },
+  dayLabel:      { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" },
   dayLine:       { flex: 1, height: 1, backgroundColor: C.border },
   dayCountPill:  { borderRadius: ms(10), paddingHorizontal: ms(7), paddingVertical: ms(2) },
-  dayCountT:     { fontSize: fs(10), fontWeight: "700" },
+  dayCountT:     { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700" },
 
   // Shared card
   card: {
     flexDirection:    "row",
-    backgroundColor:  "#FFFFFF",
+    backgroundColor:  C.card,
     borderRadius:     ms(16),
     marginHorizontal: ms(0),
     marginBottom:     ms(10),
-    shadowColor:      "#2B1B1F",
+    shadowColor:      C.text,
     shadowOffset:     { width: 0, height: ms(2) },
     shadowOpacity:    0.07,
     shadowRadius:     ms(8),
     elevation:        2,
     overflow:         "hidden",
   },
-  stripe:   { width: ms(4), alignSelf: "stretch", flexShrink: 0 },
-  cardBody: { flex: 1, padding: ms(14), gap: ms(8) },
+  cardBody:{ flex: 1, padding: ms(14), gap: ms(8) },
 
   cardTopRow: { flexDirection: "row", alignItems: "center", gap: ms(8) },
   timeIconWrap: {
@@ -506,16 +512,16 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     flexShrink: 0,
   },
-  timeText: { flex: 1, fontSize: fs(13), fontWeight: "700", color: C.text },
+  timeText: { flex: 1, fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   // Session-specific
-  sessionDate: { fontSize: fs(13), fontWeight: "700", color: C.text },
+  sessionDate: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   sessionTime: { fontSize: fs(11), color: C.muted, marginTop: ms(1) },
   badgeGroup:  { flexDirection: "row", gap: ms(4), flexShrink: 0 },
   statusBadge: { flexDirection: "row", alignItems: "center", gap: ms(3), borderRadius: ms(5), paddingHorizontal: ms(6), paddingVertical: ms(2) },
-  statusBadgeT:{ fontSize: fs(9.5), fontWeight: "700" },
+  statusBadgeT:{ fontSize: fs(9.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
   typeBadge:   { borderRadius: ms(5), paddingHorizontal: ms(6), paddingVertical: ms(2) },
-  typeBadgeT:  { fontSize: fs(9.5), fontWeight: "600" },
+  typeBadgeT:  { fontSize: fs(9.5), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
   cancelReason:{ fontSize: fs(10), color: C.red, fontStyle: "italic" },
 
   // Pills
@@ -525,7 +531,7 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: ms(6), borderWidth: 1,
     paddingHorizontal: ms(7), paddingVertical: ms(3),
   },
-  pillT: { fontSize: fs(10.5), fontWeight: "600", maxWidth: ms(110) },
+  pillT: { fontSize: fs(10.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", maxWidth: ms(110) },
 
   // Week navigation
   weekNav: {
@@ -534,7 +540,7 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent:   "space-between",
     paddingHorizontal: ms(16),
     paddingVertical:  ms(10),
-    backgroundColor:  "#FFFFFF",
+    backgroundColor:  C.card,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
@@ -543,7 +549,7 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.primary + "10",
     alignItems: "center", justifyContent: "center",
   },
-  weekLabel: { fontSize: fs(13), fontWeight: "700", color: C.text },
+  weekLabel: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   // FAB
   fab: {

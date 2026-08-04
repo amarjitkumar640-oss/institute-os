@@ -701,7 +701,7 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: ms(20), paddingVertical: ms(14),
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  title:    { fontSize: fs(16), fontWeight: "800", color: C.text },
+  title:    { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   closeBtn: {
     width: ms(32), height: ms(32), borderRadius: ms(10),
     backgroundColor: C.border, alignItems: "center", justifyContent: "center",
@@ -711,7 +711,7 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   loadingT:   { fontSize: fs(12), color: C.muted },
 
   section:  { paddingHorizontal: ms(20), paddingTop: ms(8) },
-  label:    { fontSize: fs(11), fontWeight: "700", color: C.muted, marginBottom: ms(8), textTransform: "uppercase", letterSpacing: 0.5 },
+  label:    { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted, marginBottom: ms(8), textTransform: "uppercase", letterSpacing: 0.5 },
   hint:     { fontSize: fs(10), color: C.placeholder, marginTop: ms(4) },
   timeRow:  { flexDirection: "row", gap: ms(12), paddingHorizontal: ms(20), paddingTop: ms(16) },
 
@@ -725,7 +725,7 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   dayGrid:      { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   dayChip:      { paddingHorizontal: ms(12), paddingVertical: ms(7), borderRadius: ms(8), borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg },
   dayChipActive:{ backgroundColor: colors.primary, borderColor: colors.primary },
-  dayChipT:     { fontSize: fs(12), color: C.muted, fontWeight: "600" },
+  dayChipT:     { fontSize: fs(12), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
   dayChipTActive:{ color: "#FFFFFF" },
 
   // ── Picker cards ──
@@ -743,8 +743,8 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
     width: ms(36), height: ms(36), borderRadius: ms(10),
     alignItems: "center", justifyContent: "center",
   },
-  pickerAvatarT:   { fontSize: fs(12), fontWeight: "800", color: "#fff" },
-  pickerSelected:  { fontSize: fs(13), fontWeight: "700", color: C.text },
+  pickerAvatarT:   { fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  pickerSelected:  { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   pickerMeta:      { fontSize: fs(10), color: C.muted, marginTop: ms(1) },
   pickerPlaceholder: { fontSize: fs(13), color: C.placeholder },
 
@@ -767,7 +767,7 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     backgroundColor: C.red + "14",
   },
-  deleteBtnT: { fontSize: fs(13), fontWeight: "700", color: C.red },
+  deleteBtnT: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.red },
   saveBtn: {
     flex: 1, height: ms(46), borderRadius: ms(10),
     backgroundColor: colors.primary,
@@ -775,7 +775,7 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
     shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(4) },
     shadowOpacity: 0.35, shadowRadius: ms(8), elevation: 6,
   },
-  saveBtnT: { fontSize: fs(14), fontWeight: "700", color: "#FFFFFF" },
+  saveBtnT: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#FFFFFF" },
 });
 
 // ── Subject grid styles ───────────────────────────────────────────────────────
@@ -791,10 +791,10 @@ const makeSgStyles = (colors: ThemeColors) => StyleSheet.create({
     width: ms(32), height: ms(32), borderRadius: ms(10),
     backgroundColor: C.border, alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: fs(15), fontWeight: "800", color: C.text },
+  headerTitle: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   headerSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(1) },
   clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: colors.primary + "14" },
-  clearT:      { fontSize: fs(12), color: colors.primary, fontWeight: "700" },
+  clearT:      { fontSize: fs(12), color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
@@ -806,19 +806,19 @@ const makeSgStyles = (colors: ThemeColors) => StyleSheet.create({
 
   listContent: { paddingHorizontal: ms(16), paddingBottom: ms(24) },
   empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(40) },
-  emptyT:      { fontSize: fs(13), fontWeight: "600", color: C.muted },
+  emptyT:      { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
 
   group:       { marginBottom: ms(8) },
   groupHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), paddingTop: ms(14), paddingBottom: ms(10) },
   groupDot:    { width: ms(8), height: ms(8), borderRadius: ms(4), flexShrink: 0 },
-  groupLabel:  { fontSize: fs(11), fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", flex: 1 },
+  groupLabel:  { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", flex: 1 },
   groupCount:  { fontSize: fs(10.5), color: C.muted },
 
   grid:    { flexDirection: "row", flexWrap: "wrap", gap: ms(10) },
-  card:    { width: "47%", backgroundColor: "#FFFFFF", borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
+  card:    { width: "47%", backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
   cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(10), paddingVertical: ms(8) },
   cardDot: { width: ms(9), height: ms(9), borderRadius: ms(4.5) },
-  cardName:{ fontSize: fs(12.5), fontWeight: "700", color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(8), lineHeight: fs(18) },
+  cardName:{ fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(8), lineHeight: fs(18) },
 });
 
 // ── Faculty grid styles ───────────────────────────────────────────────────────
@@ -834,10 +834,10 @@ const makeFgStyles = (colors: ThemeColors) => StyleSheet.create({
     width: ms(32), height: ms(32), borderRadius: ms(10),
     backgroundColor: C.border, alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: fs(15), fontWeight: "800", color: C.text },
+  headerTitle: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   headerSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(1) },
   clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: colors.primary + "14" },
-  clearT:      { fontSize: fs(12), color: colors.primary, fontWeight: "700" },
+  clearT:      { fontSize: fs(12), color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
@@ -849,17 +849,17 @@ const makeFgStyles = (colors: ThemeColors) => StyleSheet.create({
 
   listContent: { padding: ms(12), gap: ms(8) },
   empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(40) },
-  emptyT:      { fontSize: fs(13), fontWeight: "600", color: C.muted },
+  emptyT:      { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
 
   card: {
     flexDirection: "row", alignItems: "center", gap: ms(12),
     paddingHorizontal: ms(14), paddingVertical: ms(13),
-    backgroundColor: "#FFFFFF", borderRadius: ms(14),
+    backgroundColor: C.card, borderRadius: ms(14),
     borderWidth: 1.5, borderColor: C.border,
   },
   avatar:   { width: ms(42), height: ms(42), borderRadius: ms(13), alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  initials: { fontSize: fs(14), fontWeight: "800" },
-  name:     { fontSize: fs(13.5), fontWeight: "700", color: C.text },
+  initials: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  name:     { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   subs:     { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
-  code:     { fontSize: fs(10), color: C.placeholder, marginTop: ms(2), fontWeight: "600" },
+  code:     { fontSize: fs(10), color: C.placeholder, marginTop: ms(2), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 });

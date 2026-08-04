@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, StatusBar, TextInput, Animated, Easing, TouchableOpacity,
+  Platform, TextInput, Animated, Easing, TouchableOpacity,
   ActivityIndicator, Modal, Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Path } from "react-native-svg";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -24,9 +22,9 @@ import {
 } from "../../api/documents";
 import { listCourses, type CourseItem } from "../../api/courses";
 import { getCourseMeta } from "../../constants/courseMeta";
-import { ms, fs, sw } from "../../utils/responsive";
+import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
-import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditStudent">;
 
@@ -66,20 +64,26 @@ function monthsToDurationPref(months: number): DurationPref {
   return "1year";
 }
 
-// ── Header wave — same curved-bottom edge used across the admission screen ───
+// ── Shared picker-sheet styles ────────────────────────────────────────────────
 
-const HEADER_WAVE_H = Math.round(ms(34));
-
-function HeaderWave() {
-  return (
-    <Svg width={sw} height={HEADER_WAVE_H} viewBox={`0 0 ${sw} 34`} preserveAspectRatio="none">
-      <Path
-        d={`M0 18 C${sw * 0.25} 36,${sw * 0.75} 2,${sw} 18 L${sw} 34 L0 34 Z`}
-        fill={C.bg}
-      />
-    </Svg>
-  );
-}
+const ps = StyleSheet.create({
+  backdrop:    { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" },
+  panel:       { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), maxHeight: "92%", paddingTop: ms(10) },
+  handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(12) },
+  headerRow:   { flexDirection: "row", alignItems: "center", gap: ms(12), paddingHorizontal: ms(16), paddingBottom: ms(14), borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  headerIco:   { width: ms(40), height: ms(40), borderRadius: ms(13), alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  headerTitle: { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  headerSub:   { fontSize: fs(12), color: C.muted, marginTop: ms(2) },
+  closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
+  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(4) },
+  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.inputBg, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), borderWidth: 1, borderColor: C.border },
+  searchInput: { flex: 1, fontSize: fs(14), color: C.text, includeFontPadding: false, padding: 0 },
+  list:        { flexGrow: 0 },
+  listContent: { paddingHorizontal: ms(16), paddingTop: ms(14), paddingBottom: ms(24) },
+  empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(32) },
+  emptyT:      { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  emptySub:    { fontSize: fs(12), color: C.placeholder },
+});
 
 // ── Course picker modal (identical concept to admission) ─────────────────────
 
@@ -102,36 +106,30 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
   );
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={cp.safe} edges={["bottom"]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+      <TouchableOpacity style={ps.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={[ps.panel, { paddingBottom: insets.bottom + ms(8) }]}>
+        <View style={ps.handle} />
 
-        <LinearGradient
-          colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={cp.header}
-        >
-          <View style={[cp.headerContent, { paddingTop: insets.top + ms(10) }]}>
-            <View style={cp.headerIcon}>
-              <Ionicons name="book-outline" size={ms(18)} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={cp.headerTitle}>Select Course</Text>
-              <Text style={cp.headerSub}>{courses.length} course{courses.length !== 1 ? "s" : ""} available</Text>
-            </View>
-            <TouchableOpacity style={cp.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={ms(20)} color="#fff" />
-            </TouchableOpacity>
+        <View style={ps.headerRow}>
+          <View style={[ps.headerIco, { backgroundColor: C.purple + "18" }]}>
+            <Ionicons name="book-outline" size={ms(18)} color={C.purple} />
           </View>
-          <HeaderWave />
-        </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={ps.headerTitle}>Select Course</Text>
+            <Text style={ps.headerSub}>{courses.length} course{courses.length !== 1 ? "s" : ""} available</Text>
+          </View>
+          <TouchableOpacity style={ps.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={ms(18)} color={C.muted} />
+          </TouchableOpacity>
+        </View>
 
-        <View style={cp.searchWrap}>
-          <View style={cp.searchRow}>
-            <Ionicons name="search-outline" size={ms(16)} color={C.muted} />
+        <View style={ps.searchWrap}>
+          <View style={ps.searchRow}>
+            <Ionicons name="search-outline" size={ms(15)} color={C.muted} />
             <TextInput
-              style={cp.searchInput}
+              style={ps.searchInput}
               value={search}
               onChangeText={setSearch}
               placeholder="Search courses…"
@@ -141,18 +139,18 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
             />
             {!!search && (
               <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Ionicons name="close-circle" size={ms(16)} color={C.placeholder} />
+                <Ionicons name="close-circle" size={ms(15)} color={C.placeholder} />
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        <ScrollView style={cp.list} contentContainerStyle={cp.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView style={ps.list} contentContainerStyle={cp.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {filtered.length === 0 ? (
-            <View style={cp.empty}>
+            <View style={ps.empty}>
               <Ionicons name="search-outline" size={ms(32)} color={C.placeholder} />
-              <Text style={cp.emptyT}>No courses found</Text>
-              <Text style={cp.emptySub}>Try a different search term</Text>
+              <Text style={ps.emptyT}>No courses found</Text>
+              <Text style={ps.emptySub}>Try a different search term</Text>
             </View>
           ) : (
             <View style={cp.grid}>
@@ -167,14 +165,16 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
                     onPress={() => onSelect(course)}
                     activeOpacity={0.75}
                   >
-                    <View style={cp.gridTop}>
+                    <View style={cp.gridNameRow}>
+                      <Text style={[cp.gridName, sel && { color }]} numberOfLines={2}>{course.name}</Text>
+                      {sel && <Ionicons name="checkmark-circle" size={ms(16)} color={color} style={{ marginLeft: ms(4), flexShrink: 0 }} />}
+                    </View>
+                    <View style={cp.gridCatRow}>
                       <View style={[cp.gridCatPill, { backgroundColor: color + "16" }]}>
                         <View style={[cp.gridDot, { backgroundColor: color }]} />
                         <Text style={[cp.gridCat, { color }]}>{label}</Text>
                       </View>
-                      {sel && <Ionicons name="checkmark-circle" size={ms(16)} color={color} />}
                     </View>
-                    <Text style={[cp.gridName, sel && { color }]} numberOfLines={2}>{course.name}</Text>
                     <View style={cp.gridMeta}>
                       <Text style={cp.gridDur}>{course.durationMonths}mo</Text>
                       {course.defaultFee > 0 && (
@@ -187,37 +187,25 @@ function CoursePickerModal({ visible, courses, selectedId, onSelect, onClose }: 
             </View>
           )}
         </ScrollView>
-      </SafeAreaView>
+      </View>
+      </View>
     </Modal>
   );
 }
 
 const cp = StyleSheet.create({
-  safe:        { flex: 1, backgroundColor: C.bg },
-  header:      { overflow: "hidden" },
-  headerContent: { flexDirection: "row", alignItems: "center", gap: ms(10), paddingHorizontal: ms(18), paddingBottom: ms(14) },
-  headerIcon:  { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  headerTitle: { fontSize: fs(16), fontWeight: "800", color: "#fff" },
-  headerSub:   { fontSize: fs(11.5), color: "rgba(255,255,255,0.8)", marginTop: ms(1) },
-  closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(10), paddingBottom: ms(2) },
-  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2 },
-  searchInput: { flex: 1, fontSize: fs(14), color: C.text, includeFontPadding: false, padding: 0 },
-  list:        { flex: 1, backgroundColor: C.bg },
   listContent: { paddingHorizontal: ms(16), paddingTop: ms(14), paddingBottom: ms(40) },
-  empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(48) },
-  emptyT:      { fontSize: fs(14), fontWeight: "700", color: C.muted },
-  emptySub:    { fontSize: fs(12), color: C.placeholder },
   grid:        { flexDirection: "row", flexWrap: "wrap", gap: ms(10) },
   gridCard:    { width: "47%", backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
-  gridTop:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(10), paddingVertical: ms(8) },
+  gridNameRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: ms(10), paddingTop: ms(10), paddingBottom: ms(4) },
+  gridCatRow:  { paddingHorizontal: ms(10), paddingBottom: ms(8) },
   gridCatPill: { flexDirection: "row", alignItems: "center", gap: ms(5), borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
   gridDot:     { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  gridCat:     { fontSize: fs(9.5), fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
-  gridName:    { fontSize: fs(12.5), fontWeight: "700", color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(4), lineHeight: fs(18) },
+  gridCat:     { fontSize: fs(9.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  gridName:    { flex: 1, fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, lineHeight: fs(18) },
   gridMeta:    { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(10), paddingBottom: ms(10) },
-  gridDur:     { fontSize: fs(10.5), color: C.muted, fontWeight: "600" },
-  gridFee:     { fontSize: fs(10.5), color: C.green, fontWeight: "700" },
+  gridDur:     { fontSize: fs(10.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  gridFee:     { fontSize: fs(10.5), color: C.green, fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
 // ── Duration picker (identical concept to admission) ──────────────────────────
@@ -255,7 +243,7 @@ function DurationPicker({ value, onSelect }: {
 const dp = StyleSheet.create({
   row:   { flexDirection: "row", gap: ms(8) },
   card:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border, gap: ms(3) },
-  label: { fontSize: fs(14), fontWeight: "800", color: C.text },
+  label: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   hint:  { fontSize: fs(10.5), color: C.muted },
 });
 
@@ -285,30 +273,24 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
   ];
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={qpm.safe} edges={["bottom"]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+      <TouchableOpacity style={ps.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={[ps.panel, { paddingBottom: insets.bottom + ms(8) }]}>
+        <View style={ps.handle} />
 
-        <LinearGradient
-          colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={qpm.header}
-        >
-          <View style={[qpm.headerContent, { paddingTop: insets.top + ms(10) }]}>
-            <View style={qpm.headerIcon}>
-              <Ionicons name="ribbon-outline" size={ms(18)} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={qpm.headerTitle}>Highest Qualification</Text>
-              <Text style={qpm.headerSub}>Select your most recent education level</Text>
-            </View>
-            <TouchableOpacity style={qpm.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={ms(20)} color="#fff" />
-            </TouchableOpacity>
+        <View style={ps.headerRow}>
+          <View style={[ps.headerIco, { backgroundColor: TEAL + "18" }]}>
+            <Ionicons name="ribbon-outline" size={ms(18)} color={TEAL} />
           </View>
-          <HeaderWave />
-        </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={ps.headerTitle}>Highest Qualification</Text>
+            <Text style={ps.headerSub}>Select your most recent education level</Text>
+          </View>
+          <TouchableOpacity style={ps.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={ms(18)} color={C.muted} />
+          </TouchableOpacity>
+        </View>
 
         <ScrollView contentContainerStyle={qpm.body} showsVerticalScrollIndicator={false}>
           <View style={qpm.grid}>
@@ -336,26 +318,20 @@ function QualPickerModal({ visible, value, onSelect, onClose }: {
             })}
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </View>
+      </View>
     </Modal>
   );
 }
 
 const qpm = StyleSheet.create({
-  safe:        { flex: 1, backgroundColor: C.bg },
-  header:      { overflow: "hidden" },
-  headerContent: { flexDirection: "row", alignItems: "center", gap: ms(10), paddingHorizontal: ms(18), paddingBottom: ms(14) },
-  headerIcon:  { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  headerTitle: { fontSize: fs(16), fontWeight: "800", color: "#fff" },
-  headerSub:   { fontSize: fs(11.5), color: "rgba(255,255,255,0.8)", marginTop: ms(1) },
-  closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  body:        { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(48) },
-  grid:        { flexDirection: "row", flexWrap: "wrap", gap: ms(14) },
-  card:        { width: "47%", alignItems: "center", paddingTop: ms(22), paddingBottom: ms(16), paddingHorizontal: ms(8), borderRadius: ms(18), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, gap: ms(8), position: "relative" },
-  iconWrap:    { width: ms(56), height: ms(56), borderRadius: ms(18), justifyContent: "center", alignItems: "center" },
-  cardLabel:   { fontSize: fs(13.5), fontWeight: "800", color: C.text, textAlign: "center" },
-  cardSub:     { fontSize: fs(10.5), color: C.muted, textAlign: "center" },
-  checkBadge:  { position: "absolute", top: ms(8), right: ms(8) },
+  body:       { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(48) },
+  grid:       { flexDirection: "row", flexWrap: "wrap", gap: ms(14) },
+  card:       { width: "47%", alignItems: "center", paddingTop: ms(22), paddingBottom: ms(16), paddingHorizontal: ms(8), borderRadius: ms(18), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, gap: ms(8), position: "relative" },
+  iconWrap:   { width: ms(56), height: ms(56), borderRadius: ms(18), justifyContent: "center", alignItems: "center" },
+  cardLabel:  { fontSize: fs(13.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, textAlign: "center" },
+  cardSub:    { fontSize: fs(10.5), color: C.muted, textAlign: "center" },
+  checkBadge: { position: "absolute", top: ms(8), right: ms(8) },
 });
 
 // ── Timing picker (identical concept to admission) ────────────────────────────
@@ -393,8 +369,8 @@ function TimingPicker({ value, onSelect }: {
 
 const tp = StyleSheet.create({
   row:   { flexDirection: "row", gap: ms(8) },
-  card:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: "#F0F5FF", borderWidth: 1.5, borderColor: "#C8D9F5", gap: ms(4) },
-  label: { fontSize: fs(12), fontWeight: "800", color: C.blue },
+  card:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border, gap: ms(4) },
+  label: { fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.blue },
   sub:   { fontSize: fs(10), color: C.muted },
 });
 
@@ -439,7 +415,7 @@ const pmp = StyleSheet.create({
   row:      { flexDirection: "row", gap: ms(10) },
   card:     { flex: 1, flexDirection: "row", alignItems: "center", paddingVertical: ms(10), paddingHorizontal: ms(10), borderRadius: ms(12), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, gap: ms(8) },
   iconWrap: { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  label:    { fontSize: fs(12.5), fontWeight: "800", color: C.text },
+  label:    { fontSize: fs(12.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   sub:      { fontSize: fs(9.5), color: C.muted, marginTop: ms(1) },
 });
 
@@ -462,21 +438,21 @@ function StepBar({ current }: { current: number }) {
       {STEPS.map((step, i) => {
         const done   = i < current;
         const active = i === current;
-        const color  = done || active ? colors.primary : "#D5CCC8";
+        const color  = done || active ? colors.primary : C.border;
         return (
           <React.Fragment key={i}>
             <View style={sb.stepCol}>
-              <View style={[sb.circle, { borderColor: color, backgroundColor: done ? colors.primary : active ? "#FEF4F4" : "#F7F4F2" }]}>
+              <View style={[sb.circle, { borderColor: color, backgroundColor: done ? colors.primary : C.inputBg }]}>
                 {done
                   ? <Ionicons name="checkmark" size={ms(12)} color="#fff" />
                   : <Text style={[sb.num, { color }]}>{i + 1}</Text>}
               </View>
-              <Text style={[sb.lbl, { color: active ? colors.primary : done ? colors.primary : "#B0A9AC", fontWeight: active ? "800" : "600" }]} numberOfLines={1}>
+              <Text style={[sb.lbl, { color: active ? colors.primary : done ? colors.primary : C.placeholder, fontWeight: active ? "800" : "600" }]} numberOfLines={1}>
                 {step.label}
               </Text>
             </View>
             {i < STEPS.length - 1 && (
-              <View style={[sb.line, { backgroundColor: done ? colors.primary : "#E0D8D4" }]} />
+              <View style={[sb.line, { backgroundColor: done ? colors.primary : C.border }]} />
             )}
           </React.Fragment>
         );
@@ -489,7 +465,7 @@ const sb = StyleSheet.create({
   wrap:    { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: ms(16), paddingVertical: ms(14), backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border },
   stepCol: { alignItems: "center", gap: ms(4), width: ms(52) },
   circle:  { width: ms(28), height: ms(28), borderRadius: ms(14), borderWidth: 2, justifyContent: "center", alignItems: "center" },
-  num:     { fontSize: fs(11), fontWeight: "800" },
+  num:     { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
   lbl:     { fontSize: fs(9), textAlign: "center" },
   line:    { flex: 1, height: 2, alignSelf: "center", marginBottom: ms(16), marginHorizontal: ms(-2) },
 });
@@ -510,7 +486,7 @@ function OptionRow<T extends string>({ options, value, onSelect, color }: {
         const active = value === opt.key;
         return (
           <TouchableOpacity key={opt.key} style={[or.pill, active && { backgroundColor: resolvedColor, borderColor: resolvedColor }]} onPress={() => onSelect(opt.key)} activeOpacity={0.75}>
-            <View style={[or.radio, { borderColor: active ? "#fff" : "#C0B8B4" }]}>
+            <View style={[or.radio, { borderColor: active ? "#fff" : C.border }]}>
               {active && <View style={or.radioDot} />}
             </View>
             <Text style={[or.label, active && or.labelActive]}>{opt.label}</Text>
@@ -525,9 +501,9 @@ const or = StyleSheet.create({
   row:         { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   pill:        { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(12), paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
   radio:       { width: ms(14), height: ms(14), borderRadius: ms(7), borderWidth: 2, justifyContent: "center", alignItems: "center" },
-  radioDot:    { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: "#fff" },
-  label:       { fontSize: fs(12.5), fontWeight: "600", color: C.muted },
-  labelActive: { color: "#fff", fontWeight: "700" },
+  radioDot:    { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: C.card },
+  label:       { fontSize: fs(12.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
+  labelActive: { color: "#fff", fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
 // ── Section heading (identical to admission — same color throughout) ─────────
@@ -551,7 +527,7 @@ const sh = StyleSheet.create({
   wrap:   { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(16) },
   iconBox:{ width: ms(36), height: ms(36), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
   col:    { flex: 1 },
-  label:  { fontSize: fs(12), fontWeight: "800", letterSpacing: 0.8 },
+  label:  { fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.8 },
   sub:    { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
 });
 
@@ -685,27 +661,21 @@ function DocumentsView({ studentId, initialPhotoUri, onClose }: {
   const activeLabel = activeSheet === "photo" ? "Photo" : docTypes.find((d) => d.id === activeSheet)?.label ?? "";
 
   return (
-    <View style={ds.overlay}>
-      <LinearGradient
-        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={ds.header}
-      >
-        <View style={[ds.headerContent, { paddingTop: insets.top + ms(10) }]}>
-          <View style={ds.headerIconWrap}>
-            <Ionicons name="images-outline" size={ms(18)} color="#fff" />
+    <View style={[ds.overlay, { backgroundColor: colors.screenBg }]}>
+      <View style={[ds.header, { paddingTop: insets.top + ms(4), backgroundColor: colors.headerBg }]}>
+        <View style={ds.headerContent}>
+          <View style={[ds.headerIconWrap, { backgroundColor: colors.primary + "18" }]}>
+            <Ionicons name="images-outline" size={ms(18)} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={ds.headerTitle}>Photo &amp; Documents</Text>
             <Text style={ds.headerSub}>Manage this student's files</Text>
           </View>
           <TouchableOpacity style={ds.closeBtn} onPress={() => onClose(photoUri)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={ms(20)} color="#fff" />
+            <Ionicons name="close" size={ms(18)} color={C.muted} />
           </TouchableOpacity>
         </View>
-        <HeaderWave />
-      </LinearGradient>
+      </View>
 
       <ScrollView contentContainerStyle={ds.scroll} showsVerticalScrollIndicator={false}>
         {docsLoading ? (
@@ -745,8 +715,8 @@ function DocumentsView({ studentId, initialPhotoUri, onClose }: {
             <Text style={ds.sheetOptionLabel}>Take Photo</Text>
           </TouchableOpacity>
           <TouchableOpacity style={ds.sheetOption} onPress={() => activeSheet && pickAndUpload(activeSheet, false)} activeOpacity={0.8}>
-            <View style={[ds.sheetOptionIcon, { backgroundColor: C.blue + "18" }]}>
-              <Ionicons name="image-outline" size={ms(22)} color={C.blue} />
+            <View style={[ds.sheetOptionIcon, { backgroundColor: colors.primary + "18" }]}>
+              <Ionicons name="image-outline" size={ms(22)} color={colors.primary} />
             </View>
             <Text style={ds.sheetOptionLabel}>Choose from Gallery</Text>
           </TouchableOpacity>
@@ -781,16 +751,20 @@ function DocumentsView({ studentId, initialPhotoUri, onClose }: {
   );
 }
 
+// backgroundColor for overlay/header/headerIconWrap is set inline at each
+// call site (colors.screenBg / colors.headerBg / colors.primary) — this
+// static StyleSheet has no access to the live theme, unlike ds in
+// StudentAdmissionScreen.tsx which is a themed factory.
 const ds = StyleSheet.create({
-  overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg },
+  overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   scroll:  { padding: ms(20), paddingBottom: ms(30) },
 
-  header:        { overflow: "hidden" },
-  headerContent: { flexDirection: "row", alignItems: "center", gap: ms(10), paddingHorizontal: ms(18), paddingBottom: ms(14) },
-  headerIconWrap: { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  headerTitle:   { fontSize: fs(16), fontWeight: "800", color: "#fff" },
-  headerSub:     { fontSize: fs(11.5), color: "rgba(255,255,255,0.8)", marginTop: ms(1) },
-  closeBtn:      { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  header:        { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  headerContent: { flexDirection: "row", alignItems: "center", gap: ms(12), paddingHorizontal: ms(16), paddingVertical: ms(12) },
+  headerIconWrap: { width: ms(40), height: ms(40), borderRadius: ms(13), justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  headerTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  headerSub:     { fontSize: fs(11.5), color: C.muted, marginTop: ms(1) },
+  closeBtn:      { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, justifyContent: "center", alignItems: "center", flexShrink: 0, borderWidth: 1, borderColor: C.border },
 
   row: {
     flexDirection: "row", alignItems: "center", gap: ms(12),
@@ -801,15 +775,15 @@ const ds = StyleSheet.create({
   rowIconDone: { backgroundColor: C.greenBg },
   rowThumb:    { width: ms(40), height: ms(40) },
   rowBody:     { flex: 1 },
-  rowLabel:    { fontSize: fs(14), fontWeight: "700", color: C.text },
+  rowLabel:    { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   rowSub:      { fontSize: fs(11.5), color: C.muted, marginTop: ms(2) },
   rowErr:      { fontSize: fs(11), color: C.red, marginTop: ms(3) },
 
   sheetInner:  { padding: ms(20) },
-  sheetTitle:  { fontSize: fs(16), fontWeight: "800", color: C.text, marginBottom: ms(14) },
+  sheetTitle:  { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(14) },
   sheetOption: { flexDirection: "row", alignItems: "center", gap: ms(14), paddingVertical: ms(12) },
   sheetOptionIcon: { width: ms(42), height: ms(42), borderRadius: ms(12), justifyContent: "center", alignItems: "center" },
-  sheetOptionLabel: { fontSize: fs(14.5), fontWeight: "700", color: C.text },
+  sheetOptionLabel: { fontSize: fs(14.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   previewOverlay:  { flex: 1, backgroundColor: "rgba(10,4,7,0.95)", justifyContent: "center", alignItems: "center" },
   previewCloseBtn: { position: "absolute", right: ms(16), width: ms(38), height: ms(38), borderRadius: ms(19), backgroundColor: "rgba(255,255,255,0.16)", justifyContent: "center", alignItems: "center", zIndex: 1 },
@@ -848,12 +822,23 @@ export function EditStudentScreen({ navigation, route }: Props) {
   const [coursesLoading, setCoursesLoading]         = useState(true);
   const [coursePickerOpen, setCoursePickerOpen]     = useState(false);
   const [qualPickerOpen, setQualPickerOpen]         = useState(false);
-  const [selectedCourseId, setSelectedCourseId]     = useState<string | null>(null);
-  const [selectedCourseName, setSelectedCourseName] = useState<string | null>(null);
+  const [selectedCourseId, setSelectedCourseId]     = useState<string | null>(student.courseId ?? null);
+  const [selectedCourseName, setSelectedCourseName] = useState<string | null>(student.course?.name ?? null);
 
   useEffect(() => {
     listCourses({ limit: 100 })
-      .then((r) => setCourses(r.data))
+      .then((r) => {
+        setCourses(r.data);
+        // If student has courseId, find and show the course name
+        if (student.courseId) {
+          const match = r.data.find((c) => c.id === student.courseId);
+          if (match) setSelectedCourseName(match.name);
+        } else if (student.coursePreference && !student.courseId) {
+          // Fallback for old records without courseId
+          const match = r.data.find((c) => c.examCategories[0]?.key === student.coursePreference);
+          if (match) { setSelectedCourseId(match.id); setSelectedCourseName(match.name); }
+        }
+      })
       .catch(() => {})
       .finally(() => setCoursesLoading(false));
   }, []);
@@ -990,6 +975,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
         qualification,
         passYear:           passYear.trim() || null,
         board:              board.trim() || null,
+        courseId:           selectedCourseId ?? null,
         coursePreference,
         durationPreference,
         whatsapp:           whatsapp.trim() || null,
@@ -1103,11 +1089,6 @@ export function EditStudentScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             </View>
 
-            <View style={s.fieldBlock}>
-              <Text style={s.fieldLabel}>DURATION PREFERENCE</Text>
-              <DurationPicker value={durationPreference} onSelect={setDurationPreference} />
-            </View>
-
             <View style={s.sectionDivider} />
             <SectionHead icon="ribbon-outline" label="Academic Background" />
 
@@ -1202,7 +1183,6 @@ export function EditStudentScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader title="Edit Student" onBack={handleHeaderBack} />
       <StepBar current={step} />
 
@@ -1294,7 +1274,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
         <View style={s.discardOverlay}>
           <View style={s.discardCard}>
             <View style={s.discardIconCircle}>
-              <Ionicons name="trash-outline" size={ms(30)} color={colors.primary} />
+              <Ionicons name="arrow-undo-outline" size={ms(30)} color={colors.primary} />
             </View>
 
             <Text style={s.discardTitle}>Discard Changes?</Text>
@@ -1309,7 +1289,7 @@ export function EditStudentScreen({ navigation, route }: Props) {
               onPress={() => { setDiscardVisible(false); navigation.goBack(); }}
               activeOpacity={0.82}
             >
-              <Ionicons name="trash-outline" size={ms(16)} color="#fff" />
+              <Ionicons name="arrow-undo-outline" size={ms(16)} color="#fff" />
               <Text style={s.discardDestructiveTxt}>Yes, Discard</Text>
             </TouchableOpacity>
 
@@ -1344,9 +1324,9 @@ export function EditStudentScreen({ navigation, route }: Props) {
               />
               <View style={s.checkGlow} />
               <Animated.View style={{ transform: [{ scale: checkScale }] }}>
-                <LinearGradient colors={[C.green, "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
+                <View style={[s.checkCircle, { backgroundColor: C.green }]}>
                   <Ionicons name="checkmark" size={ms(34)} color="#fff" />
-                </LinearGradient>
+                </View>
               </Animated.View>
               <Animated.View style={[s.sparkleTL, { opacity: sparkle, transform: [{ scale: sparkle }] }]}>
                 <Ionicons name="sparkles" size={ms(14)} color={colors.secondary} />
@@ -1379,10 +1359,10 @@ export function EditStudentScreen({ navigation, route }: Props) {
               </View>
 
               <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-                <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+                <View style={[s.doneBtn, { backgroundColor: colors.primary }]}>
                   <Ionicons name="people-outline" size={ms(18)} color="#fff" />
                   <Text style={s.doneBtnT}>View All Students</Text>
-                </LinearGradient>
+                </View>
               </TouchableOpacity>
             </Animated.View>
 
@@ -1396,47 +1376,47 @@ export function EditStudentScreen({ navigation, route }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:        { flex: 1, backgroundColor: colors.primary },
+  safe:        { flex: 1, backgroundColor: colors.screenBg },
   flex:        { flex: 1 },
-  scroll:      { flex: 1, backgroundColor: C.bg },
+  scroll:      { flex: 1, backgroundColor: colors.screenBg },
   body:        { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(40) },
 
   stepContent: { gap: ms(2) },
   card:        { backgroundColor: C.card, borderRadius: ms(20), padding: ms(18), marginBottom: ms(14), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 
   fieldBlock:  { marginBottom: ms(16), gap: ms(10) },
-  fieldLabel:  { fontSize: fs(11), fontWeight: "800", color: C.text, letterSpacing: 0.8, textTransform: "uppercase" },
+  fieldLabel:  { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, letterSpacing: 0.8, textTransform: "uppercase" },
   sectionDivider: { height: 1, backgroundColor: C.border, marginVertical: ms(16) },
 
   courseSel:            { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(14) },
   courseSelDot:         { width: ms(10), height: ms(10), borderRadius: ms(5), flexShrink: 0 },
-  courseSelValue:       { flex: 1, fontSize: fs(14), fontWeight: "700", color: C.text },
+  courseSelValue:       { flex: 1, fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   courseSelPlaceholder: { flex: 1, fontSize: fs(14), color: C.placeholder },
 
   officeBadgeWrap: { alignItems: "center", marginBottom: ms(18) },
-  officeBadge:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#EFF4FF", borderRadius: ms(20), paddingHorizontal: ms(14), paddingVertical: ms(7), borderWidth: 1, borderColor: "#C8D9F5" },
-  officeBadgeT:    { fontSize: fs(10.5), fontWeight: "800", color: C.blue, letterSpacing: 1.2 },
+  officeBadge:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.blue + "12", borderRadius: ms(20), paddingHorizontal: ms(14), paddingVertical: ms(7), borderWidth: 1, borderColor: C.blue + "30" },
+  officeBadgeT:    { fontSize: fs(10.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.blue, letterSpacing: 1.2 },
 
-  amountRow:    { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1.5, borderColor: "#C5E8D8", paddingHorizontal: ms(14), paddingVertical: ms(12), gap: ms(8) },
-  amountPrefix: { fontSize: fs(15), fontWeight: "800", color: C.green },
-  amountInput:  { flex: 1, fontSize: fs(15), fontWeight: "800", color: C.text, includeFontPadding: false, padding: 0 },
+  amountRow:    { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), gap: ms(8) },
+  amountPrefix: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
+  amountInput:  { flex: 1, fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, includeFontPadding: false, padding: 0 },
   amountHint:   { fontSize: fs(11.5), color: C.muted, marginTop: ms(5) },
 
-  submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginTop: ms(8) },
+  submitError:   { backgroundColor: C.red + "08", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(14), marginTop: ms(8) },
   submitErrorT:  { fontSize: fs(13), color: C.red, lineHeight: fs(18) },
 
   navRow:       { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
   navSpacer:    { flex: 1 },
   prevBtn:      { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(16), paddingVertical: ms(12), borderRadius: ms(14), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border },
-  prevBtnT:     { fontSize: fs(14), fontWeight: "700", color: colors.primary },
+  prevBtnT:     { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
   nextBtn:      { borderRadius: ms(14) },
   nextBtnGrad:  { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(22), paddingVertical: ms(13), borderRadius: ms(14) },
-  nextBtnT:     { fontSize: fs(14), fontWeight: "800", color: "#fff" },
-  stepPill:     { textAlign: "center", fontSize: fs(11), color: "#B0A9AC", marginTop: ms(2) },
+  nextBtnT:     { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  stepPill:     { textAlign: "center", fontSize: fs(11), color: C.placeholder, marginTop: ms(2) },
 
-  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(255,251,240,0.96)", justifyContent: "center", alignItems: "center" },
+  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
   loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontWeight: "800", color: C.text },
+  loaderTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   loaderSub:     { fontSize: fs(12), color: C.muted },
 
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
@@ -1451,9 +1431,9 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   sparkleBR:    { position: "absolute", bottom: ms(6), right: ms(4) },
 
   successContent: { width: "100%", alignItems: "center" },
-  successTitle:   { fontSize: fs(21), fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
-  regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF4F4", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(5), marginBottom: ms(6) },
-  regCode:        { fontSize: fs(14), fontWeight: "800", color: colors.primary, letterSpacing: 1 },
+  successTitle:   { fontSize: fs(21), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
+  regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: colors.primary + "12", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(5), marginBottom: ms(6) },
+  regCode:        { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary, letterSpacing: 1 },
   successSub:     { fontSize: fs(12.5), color: C.muted, marginBottom: ms(12), textAlign: "center" },
 
   detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(12), borderWidth: 1, borderColor: C.border },
@@ -1461,27 +1441,27 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   detailRowBorder:{ borderBottomWidth: 1, borderBottomColor: C.border },
   detailIcon:     { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
   detailMeta:     { flex: 1 },
-  detailLabel:    { fontSize: fs(10.5), color: C.muted, fontWeight: "600" },
-  detailValue:    { fontSize: fs(13.5), fontWeight: "700", color: C.text },
+  detailLabel:    { fontSize: fs(10.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  detailValue:    { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   doneBtnWrap:    { width: "100%" },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(15) },
-  doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 
   docsEntry:      { flexDirection: "row", alignItems: "center", gap: ms(12), backgroundColor: C.inputBg, borderRadius: ms(16), borderWidth: 1.5, borderColor: C.border, padding: ms(12), marginBottom: ms(18) },
   docsEntryThumb: { width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary + "18", borderWidth: 2, borderColor: colors.primary, overflow: "hidden", justifyContent: "center", alignItems: "center", flexShrink: 0 },
   docsEntryThumbImg: { width: ms(52), height: ms(52), borderRadius: ms(26) },
-  docsEntryTitle: { fontSize: fs(14), fontWeight: "800", color: C.text },
+  docsEntryTitle: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   docsEntrySub:   { fontSize: fs(11.5), color: C.muted, marginTop: ms(1) },
 
   discardOverlay:        { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(28) },
   discardCard:           { width: "100%", backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(24), paddingTop: ms(32), paddingBottom: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(12) }, shadowOpacity: 0.22, shadowRadius: ms(28), elevation: 18 },
-  discardIconCircle:     { width: ms(64), height: ms(64), borderRadius: ms(32), backgroundColor: "#FFF0F3", borderWidth: 2, borderColor: "#F5C2CE", justifyContent: "center", alignItems: "center", marginBottom: ms(18) },
-  discardTitle:          { fontSize: fs(18), fontWeight: "800", color: C.text, marginBottom: ms(10), letterSpacing: 0.2 },
-  discardBody:           { fontSize: fs(13), color: "#6B5B5F", textAlign: "center", lineHeight: fs(20), marginBottom: ms(20) },
+  discardIconCircle:     { width: ms(64), height: ms(64), borderRadius: ms(32), backgroundColor: colors.primary + "17", borderWidth: 2, borderColor: colors.primary + "33", justifyContent: "center", alignItems: "center", marginBottom: ms(18) },
+  discardTitle:          { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(10), letterSpacing: 0.2 },
+  discardBody:           { fontSize: fs(13), color: C.muted, textAlign: "center", lineHeight: fs(20), marginBottom: ms(20) },
   discardDivider:        { width: "100%", height: 1, backgroundColor: "#F2EAE8", marginBottom: ms(16) },
   discardDestructiveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14), marginBottom: ms(10) },
-  discardDestructiveTxt: { fontSize: fs(14), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
-  discardCancelBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: "#FFF0F3", borderRadius: ms(14), paddingVertical: ms(13), borderWidth: 1.5, borderColor: "#F5C2CE" },
-  discardCancelTxt:      { fontSize: fs(14), fontWeight: "700", color: colors.primary },
+  discardDestructiveTxt: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  discardCancelBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: colors.primary + "12", borderRadius: ms(14), paddingVertical: ms(13), borderWidth: 1.5, borderColor: colors.primary + "33" },
+  discardCancelTxt:      { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
 });

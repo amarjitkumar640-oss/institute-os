@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, TextInput, ActivityIndicator, StatusBar,
+  Platform, TouchableOpacity, TextInput, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,6 +12,7 @@ import { getFeeTemplate, upsertFeeTemplate } from "../../api/fees";
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FeeStructure">;
 
@@ -47,8 +48,8 @@ function newLine(defaults: Partial<DraftLine> = {}): DraftLine {
 
 const TRIGGERS: { key: DueTrigger; label: string; icon: keyof typeof import("@expo/vector-icons").Ionicons.glyphMap }[] = [
   { key: "on_admission", label: "On Admission", icon: "enter-outline"    },
-  { key: "after_days",   label: "After N days",  icon: "time-outline"     },
-  { key: "monthly",      label: "Monthly",        icon: "calendar-outline" },
+  { key: "after_days",   label: "After Days",    icon: "time-outline"     },
+  { key: "monthly",      label: "Monthly",       icon: "calendar-outline" },
 ];
 
 function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown }: {
@@ -75,18 +76,18 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
             disabled={index === 0}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="chevron-up" size={ms(17)} color={index === 0 ? "#E0D8D4" : "#8A7F82"} />
+            <Ionicons name="chevron-up" size={ms(17)} color={index === 0 ? C.border : C.muted} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={onMoveDown}
             disabled={index === total - 1}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="chevron-down" size={ms(17)} color={index === total - 1 ? "#E0D8D4" : "#8A7F82"} />
+            <Ionicons name="chevron-down" size={ms(17)} color={index === total - 1 ? C.border : C.muted} />
           </TouchableOpacity>
         </View>
         <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={lc.removeBtn}>
-          <Ionicons name="trash-outline" size={ms(16)} color="#C0392B" />
+          <Ionicons name="trash-outline" size={ms(16)} color={C.red} />
         </TouchableOpacity>
       </View>
 
@@ -98,7 +99,7 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
           value={line.label}
           onChangeText={(v) => onChange({ ...line, label: v })}
           placeholder="e.g. Admission Fee, 1st Installment"
-          placeholderTextColor="#C7BAB4"
+          placeholderTextColor={C.placeholder}
           returnKeyType="next"
         />
       </View>
@@ -115,7 +116,7 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
             value={line.amount}
             onChangeText={(v) => onChange({ ...line, amount: v.replace(/[^0-9.]/g, "") })}
             placeholder="0"
-            placeholderTextColor="#C7BAB4"
+            placeholderTextColor={C.placeholder}
             keyboardType="decimal-pad"
           />
           {line.trigger === "monthly" && !!line.amount && !!line.months && (
@@ -139,7 +140,7 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
                 onPress={() => onChange({ ...line, trigger: key })}
                 activeOpacity={0.75}
               >
-                <Ionicons name={icon} size={ms(12)} color={on ? colors.primary : "#8A7F82"} />
+                <Ionicons name={icon} size={ms(12)} color={on ? colors.primary : C.muted} />
                 <Text style={[lc.chipT, on && lc.chipTOn]}>{label}</Text>
               </TouchableOpacity>
             );
@@ -156,7 +157,7 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
             value={line.offsetDays}
             onChangeText={(v) => onChange({ ...line, offsetDays: v.replace(/\D/g, "") })}
             placeholder="e.g. 30"
-            placeholderTextColor="#C7BAB4"
+            placeholderTextColor={C.placeholder}
             keyboardType="number-pad"
           />
         </View>
@@ -170,7 +171,7 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
               value={line.months}
               onChangeText={(v) => onChange({ ...line, months: v.replace(/\D/g, "").slice(0, 2) })}
               placeholder="e.g. 4"
-              placeholderTextColor="#C7BAB4"
+              placeholderTextColor={C.placeholder}
               keyboardType="number-pad"
             />
           </View>
@@ -181,7 +182,7 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
               value={line.dayOfMonth}
               onChangeText={(v) => onChange({ ...line, dayOfMonth: v.replace(/\D/g, "").slice(0, 2) })}
               placeholder="e.g. 1"
-              placeholderTextColor="#C7BAB4"
+              placeholderTextColor={C.placeholder}
               keyboardType="number-pad"
             />
           </View>
@@ -192,24 +193,24 @@ function LineCard({ line, index, total, onChange, onRemove, onMoveUp, onMoveDown
 }
 
 const makeLcStyles = (colors: ThemeColors) => StyleSheet.create({
-  card:       { backgroundColor: "#FFFFFF", borderRadius: ms(16), borderWidth: 1.5, borderColor: "#EAE4DE", padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: ms(6), elevation: 1 },
+  card:       { backgroundColor: C.card, borderRadius: ms(16), borderWidth: 1.5, borderColor: C.border, padding: ms(14), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: ms(6), elevation: 1 },
   header:     { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(14) },
   badge:      { width: ms(26), height: ms(26), borderRadius: ms(13), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  badgeNum:   { fontSize: fs(11.5), fontWeight: "800", color: "#fff" },
+  badgeNum:   { fontSize: fs(11.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
   moveRow:    { flexDirection: "row", gap: ms(10), flex: 1 },
   removeBtn:  { padding: ms(2) },
   field:      { marginBottom: ms(12) },
-  label:      { fontSize: fs(10), fontWeight: "800", color: "#8A7F82", letterSpacing: 0.7, marginBottom: ms(6), textTransform: "uppercase" },
-  input:      { backgroundColor: "#FAFAF8", borderRadius: ms(10), borderWidth: 1.5, borderColor: "#E8E3DC", paddingHorizontal: ms(12), paddingVertical: ms(10), fontSize: fs(13.5), color: "#2B1B1F" },
-  amountWrap: { flexDirection: "row", alignItems: "center", backgroundColor: "#FAFAF8", borderRadius: ms(10), borderWidth: 1.5, borderColor: "#E8E3DC", paddingHorizontal: ms(12), paddingVertical: ms(10), gap: ms(6) },
-  amountSym:  { fontSize: fs(17), fontWeight: "800", color: "#1B9C63" },
-  amountInput:{ flex: 1, fontSize: fs(17), fontWeight: "800", color: "#2B1B1F", includeFontPadding: false, padding: 0 },
-  chipRow:    { flexDirection: "row", gap: ms(6), flexWrap: "wrap" },
-  chip:       { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(10), paddingVertical: ms(7), borderRadius: ms(8), backgroundColor: "#FAFAF8", borderWidth: 1.5, borderColor: "#E8E3DC" },
-  chipOn:     { backgroundColor: "#FFF0F4", borderColor: colors.primary },
-  chipT:      { fontSize: fs(11.5), fontWeight: "600", color: "#8A7F82" },
-  chipTOn:    { color: colors.primary, fontWeight: "700" },
-  amountTotal:{ fontSize: fs(12), fontWeight: "700", color: "#8A7F82" },
+  label:      { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 0.7, marginBottom: ms(6), textTransform: "uppercase" },
+  input:      { backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(12), paddingVertical: ms(10), fontSize: fs(13.5), color: C.text },
+  amountWrap: { flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(12), paddingVertical: ms(10), gap: ms(6) },
+  amountSym:  { fontSize: fs(17), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
+  amountInput:{ flex: 1, fontSize: fs(17), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, includeFontPadding: false, padding: 0 },
+  chipRow:    { flexDirection: "row", gap: ms(6) },
+  chip:       { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(7), borderRadius: ms(8), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
+  chipOn:     { backgroundColor: colors.primary + "10", borderColor: colors.primary },
+  chipT:      { fontSize: fs(11.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
+  chipTOn:    { color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
+  amountTotal:{ fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
   twoCol:     { flexDirection: "row", gap: ms(10) },
 });
 
@@ -345,7 +346,6 @@ export function FeeStructureScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader title="Fee Structure" onBack={() => navigation.goBack()} />
 
       {loading ? (
@@ -374,7 +374,7 @@ export function FeeStructureScreen({ route, navigation }: Props) {
               </View>
               {hasTemplate && (
                 <View style={s.savedBadge}>
-                  <Ionicons name="checkmark-circle" size={ms(13)} color="#1B9C63" />
+                  <Ionicons name="checkmark-circle" size={ms(13)} color={C.green} />
                   <Text style={s.savedBadgeT}>Template saved</Text>
                 </View>
               )}
@@ -397,7 +397,7 @@ export function FeeStructureScreen({ route, navigation }: Props) {
             {/* Empty hint */}
             {lines.length === 0 && (
               <View style={s.emptyHint}>
-                <Ionicons name="information-circle-outline" size={ms(18)} color="#B0A9AC" />
+                <Ionicons name="information-circle-outline" size={ms(18)} color={C.placeholder} />
                 <Text style={s.emptyHintT}>No installments yet — tap "Add Installment" to start</Text>
               </View>
             )}
@@ -434,7 +434,7 @@ export function FeeStructureScreen({ route, navigation }: Props) {
                 value={notes}
                 onChangeText={setNotes}
                 placeholder="e.g. Late fee ₹50/day after due date. Fees non-refundable."
-                placeholderTextColor="#C7BAB4"
+                placeholderTextColor={C.placeholder}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
@@ -471,45 +471,45 @@ export function FeeStructureScreen({ route, navigation }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: colors.primary },
+  safe:    { flex: 1, backgroundColor: colors.screenBg },
   flex:    { flex: 1 },
-  loader:  { flex: 1, backgroundColor: "#FFFBF0", justifyContent: "center", alignItems: "center", gap: ms(14) },
-  loaderT: { fontSize: fs(13), color: "#8A7F82" },
-  scroll:  { flex: 1, backgroundColor: "#FFFBF0" },
+  loader:  { flex: 1, backgroundColor: colors.screenBg, justifyContent: "center", alignItems: "center", gap: ms(14) },
+  loaderT: { fontSize: fs(13), color: C.muted },
+  scroll:  { flex: 1, backgroundColor: colors.screenBg },
   body:    { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(48) },
 
   // Course card
-  courseCard:       { backgroundColor: "#FFFFFF", borderRadius: ms(16), padding: ms(14), marginBottom: ms(20), borderWidth: 1, borderColor: "#F0EDE8", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: ms(8), elevation: 2 },
+  courseCard:       { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginBottom: ms(20), borderWidth: 1, borderColor: C.border, shadowColor: C.text, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: ms(8), elevation: 2 },
   courseLeft:       { flexDirection: "row", alignItems: "center", gap: ms(10) },
-  courseIcon:       { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: "#FEF4F4", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  courseName:       { fontSize: fs(14.5), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(3) },
-  courseDefaultFee: { fontSize: fs(11.5), color: "#8A7F82" },
-  savedBadge:       { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: "#E7F7EF", borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(5), marginTop: ms(10) },
-  savedBadgeT:      { fontSize: fs(11), fontWeight: "700", color: "#1B9C63" },
+  courseIcon:       { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: colors.primary + "12", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  courseName:       { fontSize: fs(14.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(3) },
+  courseDefaultFee: { fontSize: fs(11.5), color: C.muted },
+  savedBadge:       { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.greenBg, borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(5), marginTop: ms(10) },
+  savedBadgeT:      { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.green },
 
   // Section header
   sectionRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: ms(14) },
   sectionHead:   { flexDirection: "row", alignItems: "center", gap: ms(8) },
-  sectionIconWrap:{ width: ms(28), height: ms(28), borderRadius: ms(8), backgroundColor: "#FEF4F4", justifyContent: "center", alignItems: "center" },
-  sectionTitle:  { fontSize: fs(11), fontWeight: "800", color: colors.primary, letterSpacing: 0.8 },
-  totalPill:     { flexDirection: "row", alignItems: "center", backgroundColor: "#E7F7EF", borderRadius: ms(20), paddingHorizontal: ms(12), paddingVertical: ms(5) },
-  totalLabel:    { fontSize: fs(11.5), color: "#8A7F82", fontWeight: "600" },
-  totalAmt:      { fontSize: fs(13), fontWeight: "800", color: "#1B9C63" },
+  sectionIconWrap:{ width: ms(28), height: ms(28), borderRadius: ms(8), backgroundColor: colors.primary + "12", justifyContent: "center", alignItems: "center" },
+  sectionTitle:  { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary, letterSpacing: 0.8 },
+  totalPill:     { flexDirection: "row", alignItems: "center", backgroundColor: C.greenBg, borderRadius: ms(20), paddingHorizontal: ms(12), paddingVertical: ms(5) },
+  totalLabel:    { fontSize: fs(11.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  totalAmt:      { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
 
   // Empty
-  emptyHint:  { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: "#F5F1EE", borderRadius: ms(12), padding: ms(14), marginBottom: ms(14) },
-  emptyHintT: { flex: 1, fontSize: fs(12.5), color: "#8A7F82", lineHeight: fs(18) },
+  emptyHint:  { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.bg, borderRadius: ms(12), padding: ms(14), marginBottom: ms(14) },
+  emptyHintT: { flex: 1, fontSize: fs(12.5), color: C.muted, lineHeight: fs(18) },
 
   // Add button
-  addBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(14), borderWidth: 1.5, borderColor: "#E0D4CE", borderStyle: "dashed", paddingVertical: ms(14), marginBottom: ms(20), backgroundColor: "#FFFBF8" },
-  addBtnT: { fontSize: fs(13.5), fontWeight: "700", color: colors.primary },
+  addBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, borderStyle: "dashed", paddingVertical: ms(14), marginBottom: ms(20), backgroundColor: C.card },
+  addBtnT: { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
 
   // Notes
   notesBlock: { marginBottom: ms(24) },
-  notesLabel: { fontSize: fs(10), fontWeight: "800", color: "#8A7F82", letterSpacing: 0.7, marginBottom: ms(8), textTransform: "uppercase" },
-  notesInput: { backgroundColor: "#FFFFFF", borderRadius: ms(12), borderWidth: 1.5, borderColor: "#E8E3DC", paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(13), color: "#2B1B1F", minHeight: ms(80) },
+  notesLabel: { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 0.7, marginBottom: ms(8), textTransform: "uppercase" },
+  notesInput: { backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(13), color: C.text, minHeight: ms(80) },
 
   // Save button
   saveBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(16), paddingVertical: ms(16) },
-  saveBtnT: { fontSize: fs(15), fontWeight: "800", color: "#fff" },
+  saveBtnT: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
 });

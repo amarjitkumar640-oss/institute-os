@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "645073552615",
+    "project_id": "institute-os-358dd",
+    "storage_bucket": "institute-os-358dd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:645073552615:android:d46d18ee51a68539dc4e42",
+        "android_client_info": {
+          "package_name": "com.instituteos.defaultinstitute"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD6LtkTRtOm1cEB1__topov1YQSLUnv5TE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

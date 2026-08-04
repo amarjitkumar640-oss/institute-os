@@ -118,6 +118,7 @@ export const updateFacultySchema = z.object({
   joiningDate:     z.coerce.date().optional(),
   isActive:        z.boolean().optional(),
   subjectIds:      z.array(z.string().uuid()).optional(),
+  staffId:         z.string().uuid().nullable().optional(),
 });
 export type UpdateFacultyInput = z.infer<typeof updateFacultySchema>;
 
@@ -158,6 +159,7 @@ export const admitStudentSchema = z.object({
   qualification:      z.enum(["class10", "class12", "graduation", "post_graduation"]).nullable().optional(),
   passYear:           z.string().max(4).nullable().optional(),
   board:              z.string().max(100).nullable().optional(),
+  courseId:           z.string().uuid().nullable().optional(),
   coursePreference:   z.enum(["ssc", "banking", "railway", "foundation", "others"]).nullable().optional(),
   durationPreference: z.enum(["3months", "6months", "1year"]).nullable().optional(),
   whatsapp:           z.string().max(20).nullable().optional(),

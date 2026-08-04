@@ -1,158 +1,100 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Circle, Path } from "react-native-svg";
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ms, fs, sw } from "../../utils/responsive";
-import { useThemeColors, darken, lighten } from "../../context/ThemeContext";
-
-const BG = "#FFFBF0";
-const WAVE_H = Math.round(ms(34));
-
-function PolkaDots({ height }: { height: number }) {
-  const sp = ms(22);
-  const cols = Math.ceil(sw / sp) + 2;
-  const rows = Math.ceil(height / sp) + 1;
-  const dots: React.ReactNode[] = [];
-  for (let r = 0; r < rows; r++)
-    for (let c = 0; c < cols; c++)
-      dots.push(
-        <Circle
-          key={`${r}-${c}`}
-          cx={c * sp + (r % 2 ? sp / 2 : 0)}
-          cy={r * sp}
-          r={ms(1.5)}
-          fill="rgba(255,255,255,0.12)"
-        />
-      );
-  return (
-    <Svg width={sw} height={height} style={StyleSheet.absoluteFill}>
-      {dots}
-    </Svg>
-  );
-}
-
-function Wave() {
-  return (
-    <Svg
-      width={sw}
-      height={WAVE_H}
-      viewBox={`0 0 ${sw} 34`}
-      preserveAspectRatio="none"
-    >
-      <Path
-        d={`M0 18 C${sw * 0.25} 36,${sw * 0.75} 2,${sw} 18 L${sw} 34 L0 34 Z`}
-        fill={BG}
-      />
-    </Svg>
-  );
-}
+import { ms, fs } from "../../utils/responsive";
+import { useThemeColors } from "../../context/ThemeContext";
 
 interface Props {
-  title:              string;
-  count?:             number;
-  countLabel?:        string;
-  onBack:             () => void;
-  rightIcon?:         string;
-  onRight?:           () => void;
-  heroIllustration?:  React.ReactNode;
+  title:             string;
+  count?:            number;
+  countLabel?:       string;
+  onBack:            () => void;
+  rightIcon?:        string;
+  onRight?:          () => void;
+  right?:            React.ReactNode;
+  heroIllustration?: React.ReactNode;
 }
 
-export function ScreenHeader({ title, count, countLabel = "total", onBack, rightIcon, onRight, heroIllustration }: Props) {
+export function ScreenHeader({ title, count, countLabel = "total", onBack, rightIcon, onRight, right }: Props) {
   const insets = useSafeAreaInsets();
-  const dotAreaH = Math.round(ms(110));
   const colors = useThemeColors();
-  // Single-hue gradient derived entirely from the tenant's primary color, so
-  // it always looks coherent no matter what a tenant picks.
-  const gradientColors: [string, string, string] = [
-    darken(colors.primary, 0.1),
-    colors.primary,
-    lighten(colors.primary, 0.22),
-  ];
+
+  // headerText is auto-derived contrast color: white on dark headers, dark on light
+  const iconColor   = colors.headerText;
+  const btnBg       = colors.headerText + "18"; // 10% opacity tint for back button
+  const borderColor = colors.headerText + "20"; // 12% opacity for the bottom border
+  const barStyle    = colors.headerText === "#FFFFFF" ? "light-content" : "dark-content";
 
   return (
-    <LinearGradient
-      colors={gradientColors}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={s.header}
-    >
-      <PolkaDots height={dotAreaH} />
+    <>
+    <StatusBar barStyle={barStyle} translucent backgroundColor={colors.headerBg} />
+    <View style={[s.header, {
+      paddingTop:        insets.top + ms(10),
+      backgroundColor:   colors.headerBg,
+      borderBottomColor: borderColor,
+    }]}>
+      <TouchableOpacity
+        style={[s.back, { backgroundColor: btnBg }]}
+        onPress={onBack}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons name="arrow-back" size={ms(20)} color={iconColor} />
+      </TouchableOpacity>
 
-      {/* Hero illustration — right-side watermark */}
-      {heroIllustration && (
-        <View style={s.heroWrap} pointerEvents="none">
-          {heroIllustration}
+      <Text style={[s.title, { color: iconColor }]} numberOfLines={1}>{title}</Text>
+
+      {count !== undefined && (
+        <View style={[s.badge, { backgroundColor: iconColor + "18" }]}>
+          <Text style={[s.badgeT, { color: iconColor }]}>{count} {countLabel}</Text>
         </View>
       )}
 
-      <View style={[s.content, { paddingTop: insets.top + ms(10) }]}>
+      {rightIcon && onRight && (
         <TouchableOpacity
-          style={s.back}
-          onPress={onBack}
+          style={[s.back, { backgroundColor: btnBg }]}
+          onPress={onRight}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="arrow-back" size={ms(20)} color="#fff" />
+          <Ionicons name={rightIcon as any} size={ms(20)} color={iconColor} />
         </TouchableOpacity>
-        <Text style={s.title} numberOfLines={1}>{title}</Text>
-        {count !== undefined && (
-          <View style={s.badge}>
-            <Text style={s.badgeT}>{count} {countLabel}</Text>
-          </View>
-        )}
-        {rightIcon && onRight && (
-          <TouchableOpacity
-            style={s.back}
-            onPress={onRight}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name={rightIcon as any} size={ms(20)} color="#fff" />
-          </TouchableOpacity>
-        )}
-      </View>
-      <Wave />
-    </LinearGradient>
+      )}
+      {right}
+    </View>
+    </>
   );
 }
 
 const s = StyleSheet.create({
-  header:   { overflow: "hidden" },
-  heroWrap: {
-    position:  "absolute",
-    right:     ms(-12),
-    bottom:    WAVE_H + ms(4),
-    opacity:   0.18,
-  },
-  content: {
-    flexDirection: "row",
-    alignItems: "center",
+  header: {
+    flexDirection:     "row",
+    alignItems:        "center",
     paddingHorizontal: ms(16),
-    paddingBottom: ms(14),
-    gap: ms(12),
+    paddingBottom:     ms(14),
+    gap:               ms(12),
+    borderBottomWidth: 1,
   },
   back: {
-    width: ms(36),
-    height: ms(36),
+    width:        ms(36),
+    height:       ms(36),
     borderRadius: ms(10),
-    backgroundColor: "rgba(255,255,255,0.18)",
     justifyContent: "center",
-    alignItems: "center",
-    flexShrink: 0,
+    alignItems:     "center",
+    flexShrink:     0,
   },
   title: {
-    flex: 1,
-    fontSize: fs(18),
-    fontWeight: "700",
-    color: "#fff",
-    minWidth: 0,
+    flex:          1,
+    fontSize:      fs(18),
+    fontFamily:    "Inter_800ExtraBold",
+    fontWeight:    "800",
+    minWidth:      0,
+    letterSpacing: -0.3,
   },
   badge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: ms(20),
+    borderRadius:      ms(20),
     paddingHorizontal: ms(12),
-    paddingVertical: ms(5),
-    flexShrink: 0,
+    paddingVertical:   ms(5),
+    flexShrink:        0,
   },
-  badgeT: { fontSize: fs(11), fontWeight: "700", color: "#fff" },
+  badgeT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700" },
 });

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, StatusBar, ScrollView, ActivityIndicator, RefreshControl, Modal, Image,
+  TextInput, ScrollView, ActivityIndicator, RefreshControl, Modal, Image,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -23,22 +23,22 @@ import { COURSE_META } from "../../constants/courseMeta";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StudentList">;
-type Nav   = NativeStackNavigationProp<RootStackParamList>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
-  running:   { label: "Running",   color: "#1B9C63" },
-  upcoming:  { label: "Upcoming",  color: "#2563A8" },
-  completed: { label: "Completed", color: "#8A7F82" },
+  running: { label: "Running", color: C.green },
+  upcoming: { label: "Upcoming", color: C.blue },
+  completed: { label: "Completed", color: C.muted },
 };
 
 type FilterKey = "All" | CoursePreference;
 const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: "All",        label: "All"        },
-  { key: "ssc",        label: "SSC"        },
-  { key: "banking",    label: "Banking"    },
-  { key: "railway",    label: "Railway"    },
+  { key: "All", label: "All" },
+  { key: "ssc", label: "SSC" },
+  { key: "banking", label: "Banking" },
+  { key: "railway", label: "Railway" },
   { key: "foundation", label: "Foundation" },
-  { key: "others",     label: "Others"     },
+  { key: "others", label: "Others" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -62,11 +62,11 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
 }) {
   const colors = useThemeColors();
   const bm = useThemedStyles(makeBmStyles);
-  const [batches, setBatches]                 = useState<BatchItem[]>([]);
+  const [batches, setBatches] = useState<BatchItem[]>([]);
   const [enrolledBatchIds, setEnrolledBatchIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading]                 = useState(true);
-  const [submitting, setSubmitting]           = useState<string | null>(null); // batchId being submitted
-  const [result, setResult]                   = useState<{ ok: boolean; msg: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState<string | null>(null); // batchId being submitted
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -76,7 +76,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
     ]).then(([bs, enrs]) => {
       setBatches(bs);
       setEnrolledBatchIds(new Set(enrs.map((e) => e.batch.id)));
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => { }).finally(() => setLoading(false));
   }, [student.id]);
 
   async function handleEnroll(batch: BatchItem) {
@@ -113,16 +113,16 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
               <Text style={bm.title}>Enroll in Batch</Text>
               <Text style={bm.sub}>{student.fullName}</Text>
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={ms(24)} color="#C7BAB4" />
+            <TouchableOpacity style={bm.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={ms(18)} color={C.muted} />
             </TouchableOpacity>
           </View>
 
           {/* Result banner */}
           {result && (
-            <View style={[bm.resultBanner, { backgroundColor: result.ok ? "#E7F7EF" : "#FEE2E2" }]}>
-              <Ionicons name={result.ok ? "checkmark-circle-outline" : "alert-circle-outline"} size={ms(15)} color={result.ok ? "#1B9C63" : "#DC2626"} />
-              <Text style={[bm.resultT, { color: result.ok ? "#1B9C63" : "#DC2626" }]}>{result.msg}</Text>
+            <View style={[bm.resultBanner, { backgroundColor: result.ok ? C.greenBg : "#FEE2E2" }]}>
+              <Ionicons name={result.ok ? "checkmark-circle-outline" : "alert-circle-outline"} size={ms(15)} color={result.ok ? C.green : C.red} />
+              <Text style={[bm.resultT, { color: result.ok ? C.green : C.red }]}>{result.msg}</Text>
             </View>
           )}
 
@@ -139,17 +139,17 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
                 <View style={bm.emptyWrap}>
-                  <Ionicons name="layers-outline" size={ms(40)} color="#D5CCC8" />
+                  <Ionicons name="layers-outline" size={ms(40)} color={C.border} />
                   <Text style={bm.emptyT}>No batches available</Text>
                 </View>
               }
               renderItem={({ item: b }) => {
-                const color     = b.course.examCategories[0]?.color ?? "#8A7F82";
-                const sm        = STATUS_META[b.status] ?? { label: b.status, color: "#8A7F82" };
-                const enrolled  = enrolledBatchIds.has(b.id);
-                const full      = isFull(b);
-                const disabled  = enrolled || full || !!submitting;
-                const loading   = submitting === b.id;
+                const color = b.course.examCategories[0]?.color ?? C.muted;
+                const sm = STATUS_META[b.status] ?? { label: b.status, color: C.muted };
+                const enrolled = enrolledBatchIds.has(b.id);
+                const full = isFull(b);
+                const disabled = enrolled || full || !!submitting;
+                const loading = submitting === b.id;
 
                 return (
                   <TouchableOpacity
@@ -168,7 +168,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
                         <View style={[bm.statusDot, { backgroundColor: sm.color }]} />
                         <Text style={bm.batchMetaT}>{sm.label}</Text>
                         <Text style={bm.sep}>·</Text>
-                        <Text style={[bm.batchMetaT, { color: full ? "#DC2626" : C.muted }]}>
+                        <Text style={[bm.batchMetaT, { color: full ? C.red : C.muted }]}>
                           {b.enrolledCount}/{b.capacity} seats
                         </Text>
                       </View>
@@ -178,7 +178,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
                       <ActivityIndicator size="small" color={colors.primary} />
                     ) : enrolled ? (
                       <View style={bm.enrolledBadge}>
-                        <Ionicons name="checkmark-circle" size={ms(14)} color="#1B9C63" />
+                        <Ionicons name="checkmark-circle" size={ms(14)} color={C.green} />
                         <Text style={bm.enrolledT}>Enrolled</Text>
                       </View>
                     ) : full ? (
@@ -206,34 +206,35 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
 }
 
 const makeBmStyles = (colors: ThemeColors) => StyleSheet.create({
-  overlay:      { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "flex-end" },
-  sheet:        { backgroundColor: "#FFFFFF", borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(16), maxHeight: "80%" },
-  handle:       { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
-  header:       { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: ms(14) },
-  title:        { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F" },
-  sub:          { fontSize: fs(12), color: "#8A7F82", marginTop: ms(2) },
+  overlay: { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(16), maxHeight: "80%" },
+  handle: { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
+  header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: ms(14) },
+  closeBtn: { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
+  title: { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  sub: { fontSize: fs(12), color: C.muted, marginTop: ms(2) },
   resultBanner: { flexDirection: "row", alignItems: "center", gap: ms(8), borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(10), marginBottom: ms(10) },
-  resultT:      { fontSize: fs(12.5), fontWeight: "600", flex: 1 },
-  loaderWrap:   { alignItems: "center", paddingVertical: ms(40), gap: ms(12) },
-  loaderT:      { fontSize: fs(13), color: "#8A7F82" },
-  emptyWrap:    { alignItems: "center", paddingVertical: ms(32), gap: ms(10) },
-  emptyT:       { fontSize: fs(13), color: "#B0A9AC" },
-  batchRow:     { flexDirection: "row", alignItems: "center", paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: "#F0EDE8", gap: ms(12) },
-  batchName:    { fontSize: fs(13.5), fontWeight: "700", color: "#2B1B1F" },
-  batchMeta:    { flexDirection: "row", alignItems: "center", gap: ms(5), marginTop: ms(5), flexWrap: "wrap", rowGap: ms(4) },
-  courseBadge:  { borderRadius: ms(7), paddingHorizontal: ms(7), paddingVertical: ms(2.5), flexShrink: 1, maxWidth: ms(140) },
-  courseBadgeT: { fontSize: fs(10.5), fontWeight: "800" },
-  statusDot:    { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  batchMetaT:   { fontSize: fs(11), color: "#8A7F82" },
-  sep:          { fontSize: fs(11), color: "#C7BAB4" },
-  enrolledBadge:{ flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: "#E7F7EF", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
-  enrolledT:    { fontSize: fs(11), fontWeight: "700", color: "#1B9C63" },
-  fullBadge:    { backgroundColor: "#FEE2E2", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
-  fullT:        { fontSize: fs(11), fontWeight: "700", color: "#DC2626" },
-  addBtn:       { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: "#FEF4F4", justifyContent: "center", alignItems: "center" },
-  doneBtn:      { marginTop: ms(12), marginBottom: ms(24), borderRadius: ms(14) },
-  doneGrad:     { alignItems: "center", paddingVertical: ms(14), backgroundColor: colors.primary },
-  doneT:        { fontSize: fs(14), fontWeight: "800", color: "#fff" },
+  resultT: { fontSize: fs(12.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", flex: 1 },
+  loaderWrap: { alignItems: "center", paddingVertical: ms(40), gap: ms(12) },
+  loaderT: { fontSize: fs(13), color: C.muted },
+  emptyWrap: { alignItems: "center", paddingVertical: ms(32), gap: ms(10) },
+  emptyT: { fontSize: fs(13), color: C.placeholder },
+  batchRow: { flexDirection: "row", alignItems: "center", paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: C.border, gap: ms(12) },
+  batchName: { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  batchMeta: { flexDirection: "row", alignItems: "center", gap: ms(5), marginTop: ms(5), flexWrap: "wrap", rowGap: ms(4) },
+  courseBadge: { borderRadius: ms(7), paddingHorizontal: ms(7), paddingVertical: ms(2.5), flexShrink: 1, maxWidth: ms(140) },
+  courseBadgeT: { fontSize: fs(10.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3) },
+  batchMetaT: { fontSize: fs(11), color: C.muted },
+  sep: { fontSize: fs(11), color: C.placeholder },
+  enrolledBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.greenBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
+  enrolledT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.green },
+  fullBadge: { backgroundColor: "#FEE2E2", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
+  fullT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.red },
+  addBtn: { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: "#FEF4F4", justifyContent: "center", alignItems: "center" },
+  doneBtn: { marginTop: ms(12), marginBottom: ms(24), borderRadius: ms(14) },
+  doneGrad: { alignItems: "center", paddingVertical: ms(14), backgroundColor: colors.primary },
+  doneT: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
 });
 
 // ── Student Card ──────────────────────────────────────────────────────────────
@@ -245,24 +246,32 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
   onEnroll: () => void;
   isAllCenters?: boolean;
 }) {
-  const colors = useThemeColors();
   const cs = useThemedStyles(makeCsStyles);
   const meta = (student.coursePreference ? COURSE_META[student.coursePreference] : null) ?? { label: "—", color: C.muted };
-  const ini  = initials(student.fullName);
+  const courseLabel = student.course?.name ?? meta.label;
+  const ini = initials(student.fullName);
+  const accentColor = meta.color !== C.muted ? meta.color : C.muted;
+  const isEnrolled = !!student.activeEnrollment;
+
+  const genderColor = student.gender === "female" ? "#D96AAC" : student.gender === "male" ? C.blue : C.muted;
+  const genderIcon = student.gender === "female" ? "female-outline" : student.gender === "male" ? "male-outline" : "person-outline";
+  const genderLabel = student.gender === "female" ? "Female" : student.gender === "male" ? "Male" : "—";
 
   return (
-    <View style={[cs.card, { borderLeftColor: colors.primary }]}>
+    <View style={cs.card}>
       {isAllCenters && student.center && (
         <View style={cs.centerChip}>
-          <Ionicons name="business-outline" size={ms(10)} color="#5B2D8E" />
+          <Ionicons name="business-outline" size={ms(10)} color={C.purple} />
           <Text style={cs.centerChipT}>{student.center.name}</Text>
         </View>
       )}
+
+      {/* Top row */}
       <View style={cs.cardTop}>
-        <View style={cs.avatar}>
+        <View style={[cs.iconBox, { backgroundColor: student.photoUrl ? C.border : accentColor }]}>
           {student.photoUrl
-            ? <Image source={{ uri: student.photoUrl }} style={cs.avatarImg} />
-            : <Text style={cs.avatarT}>{ini}</Text>
+            ? <Image source={{ uri: student.photoUrl }} style={cs.iconImg} />
+            : <Text style={cs.iconCode}>{ini}</Text>
           }
         </View>
         <View style={cs.cardInfo}>
@@ -271,55 +280,62 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
             {student.studentCode}{student.phone ? ` · ${student.phone}` : ""}
           </Text>
         </View>
-        {showEnroll && (
-          <TouchableOpacity style={cs.enrollBtn} onPress={onEnroll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="link-outline" size={ms(15)} color="#1B9C63" />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={cs.editBtn} onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="pencil-outline" size={ms(15)} color="#2563A8" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={cs.divider} />
-
-      <View style={student.activeEnrollment ? cs.enrollStatusOn : cs.enrollStatusOff}>
-        <Ionicons
-          name={student.activeEnrollment ? "checkmark-circle" : "alert-circle-outline"}
-          size={ms(13)}
-          color={student.activeEnrollment ? "#1B9C63" : "#C0392B"}
-        />
-        <Text
-          style={[cs.enrollStatusT, { color: student.activeEnrollment ? "#1B9C63" : "#C0392B" }]}
-          numberOfLines={1}
-        >
-          {student.activeEnrollment ? `Enrolled in ${student.activeEnrollment.batchName}` : "Not enrolled in any batch"}
-        </Text>
-      </View>
-
-      <View style={cs.cardBottom}>
-        {student.coursePreference ? (
-          <View style={cs.courseBadge}>
-            <Ionicons name="book-outline" size={ms(11)} color={colors.primary} />
-            <Text style={cs.courseT}>{meta.label}</Text>
-          </View>
-        ) : null}
-        <View style={cs.metaItem}>
-          <Ionicons name="calendar-outline" size={ms(11)} color={C.muted} />
-          <Text style={cs.metaT}>Joined {formatDate(student.createdAt)}</Text>
+        <View style={[cs.statusBadge, { backgroundColor: isEnrolled ? C.greenBg : C.inputBg }]}>
+          <View style={[cs.statusDot, { backgroundColor: isEnrolled ? C.green : C.placeholder }]} />
+          <Text style={[cs.statusT, { color: isEnrolled ? C.green : C.muted }]}>
+            {isEnrolled ? "Enrolled" : "No batch"}
+          </Text>
         </View>
-        {student.gender ? (
-          <View style={cs.genderBadge}>
-            <Ionicons
-              name={student.gender === "female" ? "female-outline" : "male-outline"}
-              size={ms(11)}
-              color={student.gender === "female" ? "#D96AAC" : "#2563A8"}
-            />
-            <Text style={[cs.genderT, { color: student.gender === "female" ? "#D96AAC" : "#2563A8" }]}>
-              {student.gender === "female" ? "Female" : "Male"}
+      </View>
+
+      {/* Stats row */}
+      <View style={cs.divider} />
+      <View style={cs.statsRow}>
+        <View style={cs.statItem}>
+          <Ionicons name="book-outline" size={ms(13)} color={accentColor} />
+          <Text style={cs.statLabel}>{courseLabel}</Text>
+        </View>
+        <View style={cs.statDivider} />
+        <View style={cs.statItem}>
+          <Ionicons name="calendar-outline" size={ms(13)} color={accentColor} />
+          <Text style={cs.statLabel}>{formatDate(student.createdAt)}</Text>
+        </View>
+        <View style={cs.statDivider} />
+        <View style={cs.statItem}>
+          <Ionicons name={genderIcon as any} size={ms(13)} color={genderColor} />
+          <Text style={cs.statLabel}>{genderLabel}</Text>
+        </View>
+      </View>
+
+      {/* Active batch hint (only when enrolled) */}
+      {isEnrolled && (
+        <>
+          <View style={cs.divider} />
+          <View style={cs.batchHint}>
+            <Ionicons name="layers-outline" size={ms(12)} color={C.green} />
+            <Text style={cs.batchHintT} numberOfLines={1}>
+              {`Enrolled to ${student.activeEnrollment?.batchName ?? ""}`}
             </Text>
           </View>
-        ) : null}
+        </>
+      )}
+
+      {/* Action row */}
+      <View style={cs.divider} />
+      <View style={cs.actionBtns}>
+        {showEnroll && (
+          <>
+            <TouchableOpacity style={[cs.actionBtn, cs.enrollActionBtn]} onPress={onEnroll} activeOpacity={0.75}>
+              <Ionicons name="link-outline" size={ms(13)} color={C.green} />
+              <Text style={[cs.actionBtnT, { color: C.green }]}>Enroll</Text>
+            </TouchableOpacity>
+            <View style={cs.actionDivider} />
+          </>
+        )}
+        <TouchableOpacity style={[cs.actionBtn, cs.editActionBtn]} onPress={onEdit} activeOpacity={0.75}>
+          <Ionicons name="pencil-outline" size={ms(13)} color={C.blue} />
+          <Text style={[cs.actionBtnT, { color: C.blue }]}>Edit</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -329,20 +345,25 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
 
 function Banner({ students }: { students: StudentItem[] }) {
   const cs = useThemedStyles(makeCsStyles);
-  const counts = useMemo(() => {
-    const acc: Record<string, number> = { ssc: 0, banking: 0, railway: 0, foundation: 0 };
-    students.forEach((s) => { if (s.coursePreference && acc[s.coursePreference] !== undefined) acc[s.coursePreference]++; });
-    return acc;
-  }, [students]);
+  const enrolled = useMemo(() => students.filter((s) => !!s.activeEnrollment).length, [students]);
+  const notEnrolled = students.length - enrolled;
 
   return (
     <View style={cs.banner}>
-      {(["ssc", "banking", "railway", "foundation"] as CoursePreference[]).map((key) => (
-        <View key={key} style={cs.bannerItem}>
-          <Text style={[cs.bannerNum, { color: COURSE_META[key].color }]}>{counts[key]}</Text>
-          <Text style={cs.bannerLbl}>{COURSE_META[key].label}</Text>
-        </View>
-      ))}
+      <View style={cs.bannerItem}>
+        <Text style={cs.bannerNum}>{students.length}</Text>
+        <Text style={cs.bannerLbl}>Total</Text>
+      </View>
+      <View style={cs.bannerDiv} />
+      <View style={cs.bannerItem}>
+        <Text style={[cs.bannerNum, { color: C.green }]}>{enrolled}</Text>
+        <Text style={cs.bannerLbl}>Enrolled</Text>
+      </View>
+      <View style={cs.bannerDiv} />
+      <View style={cs.bannerItem}>
+        <Text style={[cs.bannerNum, { color: C.red }]}>{notEnrolled}</Text>
+        <Text style={cs.bannerLbl}>No Batch</Text>
+      </View>
     </View>
   );
 }
@@ -350,10 +371,11 @@ function Banner({ students }: { students: StudentItem[] }) {
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 function StudentEmpty({ search }: { search: string }) {
+  const colors = useThemeColors();
   return (
     <EmptyState
       scene="students"
-      color="#2563A8"
+      color={colors.primary}
       title={search ? "No students match your search" : "No students yet"}
       subtitle={search ? "Try a different name or roll number" : "Add the first student via the + button"}
     />
@@ -368,15 +390,15 @@ export function StudentListScreen({ navigation, route }: Props) {
   const cs = useThemedStyles(makeCsStyles);
   const nav = useNavigation<Nav>();
   const { isAllCenters } = useAuth();
-  const batchId   = route?.params?.batchId;
+  const batchId = route?.params?.batchId;
   const batchName = route?.params?.batchName;
 
-  const [students, setStudents]     = useState<StudentItem[]>([]);
-  const [loading, setLoading]       = useState(true);
+  const [students, setStudents] = useState<StudentItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError]           = useState(false);
-  const [search, setSearch]         = useState("");
-  const [filter, setFilter]         = useState<FilterKey>("All");
+  const [error, setError] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterKey>("All");
   const [enrollTarget, setEnrollTarget] = useState<StudentItem | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
@@ -410,7 +432,6 @@ export function StudentListScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={cs.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader
         title={batchName ? batchName : "Students"}
         count={students.length}
@@ -436,7 +457,7 @@ export function StudentListScreen({ navigation, route }: Props) {
                 <TextInput
                   style={cs.searchInput}
                   placeholder="Search by name, roll, or phone…"
-                  placeholderTextColor="#C7BAB4"
+                  placeholderTextColor={C.placeholder}
                   value={search}
                   onChangeText={setSearch}
                 />
@@ -455,11 +476,6 @@ export function StudentListScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-
-            <Text style={cs.resultT}>
-              {filtered.length} of {students.length} student{students.length !== 1 ? "s" : ""}
-              {filter !== "All" ? ` · ${COURSE_META[filter as CoursePreference]?.label ?? filter}` : ""}
-            </Text>
 
             <FlatList
               data={filtered}
@@ -503,57 +519,69 @@ export function StudentListScreen({ navigation, route }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: colors.primary },
-  content: { flex: 1, backgroundColor: "#FFFBF0", position: "relative" },
-  fab:     { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
+  safe: { flex: 1, backgroundColor: colors.screenBg },
+  content: { flex: 1, backgroundColor: colors.screenBg, position: "relative" },
+  fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(56), height: ms(56), borderRadius: ms(28), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(12), elevation: 10 },
 
-  loader:  { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(14) },
+  loader: { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(14) },
   loaderT: { fontSize: fs(14), color: C.muted },
 
-
-  banner:     { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(8), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
+  // Banner
+  banner: { flexDirection: "row", backgroundColor: C.card, marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
-  bannerNum:  { fontSize: fs(18), fontWeight: "800" },
-  bannerLbl:  { fontSize: fs(9.5), color: "#8A7F82", fontWeight: "600", marginTop: ms(2) },
+  bannerNum: { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary },
+  bannerLbl: { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600", marginTop: ms(1) },
+  bannerDiv: { width: 1, backgroundColor: C.border, marginHorizontal: ms(6) },
 
-  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
-  searchRow:   { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
-  searchInput: { flex: 1, fontSize: fs(13.5), color: "#2B1B1F", padding: 0, includeFontPadding: false },
-
+  // Search + filter
+  searchWrap: { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
+  searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
+  searchInput: { flex: 1, fontSize: fs(13.5), color: C.text, padding: 0, includeFontPadding: false },
   filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
-  filterRow:    { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
-  chip:         { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  chipOn:       { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipT:        { fontSize: fs(12), fontWeight: "600", color: "#8A7F82", includeFontPadding: false, lineHeight: fs(16) },
-  chipTOn:      { color: "#FFFFFF" },
-  resultT:      { paddingHorizontal: ms(16), paddingTop: ms(4), paddingBottom: ms(4), fontSize: fs(11.5), color: "#8A7F82" },
-  listContent:  { paddingHorizontal: ms(16), paddingBottom: ms(100) },
+  filterRow: { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
+  chip: { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipT: { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, includeFontPadding: false, lineHeight: fs(16) },
+  chipTOn: { color: "#FFFFFF" },
+  listContent: { paddingTop: ms(12), paddingBottom: ms(96) },
 
-  card:        { backgroundColor: "#FFFFFF", borderRadius: ms(16), borderLeftWidth: 3, padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
-  centerChip:  { flexDirection: "row", alignItems: "center", gap: ms(4), alignSelf: "flex-start", backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3), marginBottom: ms(6) },
-  centerChipT: { fontSize: fs(11), color: "#5B2D8E", fontWeight: "600" },
-  cardTop:     { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(10) },
-  avatar:      { width: ms(48), height: ms(48), borderRadius: ms(24), borderWidth: 1.5, borderColor: colors.primary + "40", backgroundColor: colors.primary + "1C", justifyContent: "center", alignItems: "center", flexShrink: 0, overflow: "hidden" },
-  avatarImg:   { width: ms(48), height: ms(48), borderRadius: ms(24) },
-  avatarT:     { fontSize: fs(15), fontWeight: "800", includeFontPadding: false, color: colors.primary },
-  cardInfo:    { flex: 1, minWidth: 0 },
-  studentName: { fontSize: fs(14), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(3) },
-  rollT:       { fontSize: fs(11), color: "#8A7F82" },
-  courseBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: colors.primary + "18", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  enrollBtn:   { width: ms(30), height: ms(30), borderRadius: ms(15), backgroundColor: C.greenBg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  editBtn:     { width: ms(30), height: ms(30), borderRadius: ms(15), backgroundColor: "#EFF6FF", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  courseT:     { fontSize: fs(10.5), fontWeight: "800", color: colors.primary },
-  divider:     { height: 1, backgroundColor: "#F0EDE8", marginBottom: ms(10) },
-  enrollStatusOn:  { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.greenBg, borderRadius: ms(10), paddingHorizontal: ms(10), paddingVertical: ms(6), marginBottom: ms(10) },
-  enrollStatusOff: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "#FEF0EE", borderRadius: ms(10), paddingHorizontal: ms(10), paddingVertical: ms(6), marginBottom: ms(10) },
-  enrollStatusT:   { fontSize: fs(11.5), fontWeight: "700", flex: 1 },
-  cardBottom:  { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: ms(8) },
-  metaItem:    { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: "#F5F1EE", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  metaT:       { fontSize: fs(10.5), fontWeight: "700", color: "#8A7F82" },
-  genderBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.purpleBg, borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  genderT:     { fontSize: fs(10.5), fontWeight: "700" },
+  // Card (matches CourseCard pattern)
+  card: { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginHorizontal: ms(16), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
+  centerChip: { flexDirection: "row", alignItems: "center", gap: ms(4), alignSelf: "flex-start", backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3), marginBottom: ms(8) },
+  centerChipT: { fontSize: fs(11), color: C.purple, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 
-  empty:      { alignItems: "center", paddingTop: ms(60), gap: ms(8), paddingHorizontal: ms(32) },
-  emptyTitle: { fontSize: fs(15), fontWeight: "700", color: "#B0A9AC", textAlign: "center" },
-  emptySubT:  { fontSize: fs(12), color: "#C7BAB4", textAlign: "center" },
+  // Top row
+  cardTop: { flexDirection: "row", alignItems: "flex-start", gap: ms(10), marginBottom: ms(10) },
+  iconBox: { width: ms(46), height: ms(46), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0, overflow: "hidden" },
+  iconImg: { width: ms(46), height: ms(46) },
+  iconCode: { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.3, includeFontPadding: false },
+  cardInfo: { flex: 1, minWidth: 0 },
+  studentName: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(3) },
+  rollT: { fontSize: fs(11), color: C.muted },
+  statusBadge: { flexDirection: "row", alignItems: "center", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(4), gap: ms(4), flexShrink: 0 },
+  statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3) },
+  statusT: { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
+
+  // Stats row
+  divider: { height: 1, backgroundColor: C.border, marginBottom: ms(10) },
+  statsRow: { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
+  statItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(4) },
+  statLabel: { fontSize: fs(11), color: C.text, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  statDivider: { width: 1, height: ms(16), backgroundColor: C.border },
+
+  // Batch hint row (enrolled only)
+  batchHint: { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(2), paddingBottom: ms(10), marginTop: ms(-2) },
+  batchHintT: { fontSize: fs(11), color: C.green, fontFamily: "Inter_600SemiBold", fontWeight: "600", flex: 1 },
+
+  // Action row
+  actionBtns: { flexDirection: "row", alignItems: "center" },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(7), borderRadius: ms(8) },
+  enrollActionBtn: { backgroundColor: C.greenBg },
+  editActionBtn: { backgroundColor: "#EEF3FB" },
+  actionBtnT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  actionDivider: { width: ms(8) },
+
+  empty: { alignItems: "center", paddingTop: ms(60), gap: ms(8), paddingHorizontal: ms(32) },
+  emptyTitle: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.placeholder, textAlign: "center" },
+  emptySubT: { fontSize: fs(12), color: C.placeholder, textAlign: "center" },
 });

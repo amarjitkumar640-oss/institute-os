@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
-  StatusBar, TouchableOpacity, Animated, ActivityIndicator, FlatList,
+  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated, ActivityIndicator, FlatList,
+  Modal, TextInput, Keyboard,
 } from "react-native";
 import { BottomSheet } from "../../components/ui/BottomSheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
@@ -16,6 +16,7 @@ import { createBatch, type BatchItem } from "../../api/batches";
 import { createSlot, DAY_LABELS, DAY_ORDER, type DayOfWeek } from "../../api/classSchedule";
 import { ms, fs } from "../../utils/responsive";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateBatch">;
 
@@ -83,6 +84,10 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
   const colors = useThemeColors();
   const dp = useThemedStyles(makeDpStyles);
 
+  const dayRef   = useRef<ScrollView>(null);
+  const monthRef = useRef<ScrollView>(null);
+  const yearRef  = useRef<ScrollView>(null);
+
   const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -90,15 +95,36 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
   // clamp day if month/year changed
   const safeDay = Math.min(day, daysInMonth);
 
+  // selectors container is ms(180); colLabel (fontSize 10 + mb 4) ~ms(16) reduces ScrollView height
+  const ITEM_H  = ms(42);
+  const CONT_H  = ms(164);
+  const PAD_TOP = ms(60);
+
+  function scrollToIndex(ref: React.RefObject<ScrollView | null>, idx: number) {
+    const offset = PAD_TOP + idx * ITEM_H + ITEM_H / 2 - CONT_H / 2;
+    ref.current?.scrollTo({ y: Math.max(0, offset), animated: false });
+  }
+
+  useEffect(() => {
+    if (!visible) return;
+    const t = setTimeout(() => {
+      scrollToIndex(dayRef,   safeDay - 1);
+      scrollToIndex(monthRef, month);
+      scrollToIndex(yearRef,  year - minYear);
+    }, 80);
+    return () => clearTimeout(t);
+  }, [visible]);
+
   function confirm() {
     onConfirm(new Date(year, month, safeDay));
   }
 
-  function Col<T>({ items, selected, onSelect, fmt }: {
+  function Col<T>({ items, selected, onSelect, fmt, scrollRef }: {
     items: T[]; selected: T; onSelect: (v: T) => void; fmt: (v: T) => string;
+    scrollRef?: React.RefObject<ScrollView | null>;
   }) {
     return (
-      <ScrollView style={dp.col} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+      <ScrollView ref={scrollRef} style={dp.col} showsVerticalScrollIndicator={false} nestedScrollEnabled>
         <View style={{ paddingVertical: ms(60) }}>
           {items.map((item) => {
             const active = item === selected;
@@ -122,15 +148,15 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
         <View style={dp.selectors}>
           <View style={dp.selector}>
             <Text style={dp.colLabel}>DAY</Text>
-            <Col items={days} selected={safeDay} onSelect={setDay} fmt={(v) => String(v)} />
+            <Col items={days} selected={safeDay} onSelect={setDay} fmt={(v) => String(v)} scrollRef={dayRef} />
           </View>
           <View style={[dp.selector, { flex: 1.4 }]}>
             <Text style={dp.colLabel}>MONTH</Text>
-            <Col items={MONTHS} selected={MONTHS[month]} onSelect={(v) => setMonth(MONTHS.indexOf(v))} fmt={(v) => v} />
+            <Col items={MONTHS} selected={MONTHS[month]} onSelect={(v) => setMonth(MONTHS.indexOf(v))} fmt={(v) => v} scrollRef={monthRef} />
           </View>
           <View style={dp.selector}>
             <Text style={dp.colLabel}>YEAR</Text>
-            <Col items={years} selected={year} onSelect={setYear} fmt={(v) => String(v)} />
+            <Col items={years} selected={year} onSelect={setYear} fmt={(v) => String(v)} scrollRef={yearRef} />
           </View>
         </View>
 
@@ -142,9 +168,7 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
             <Text style={dp.cancelT}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity style={dp.confirmBtn} onPress={confirm} activeOpacity={0.85}>
-            <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
-              <Text style={dp.confirmT}>Done</Text>
-            </LinearGradient>
+            <Text style={dp.confirmT}>Done</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -154,23 +178,22 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
 
 const makeDpStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
-  handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
-  title:       { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(8), textAlign: "center" },
+  handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
+  title:       { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(8), textAlign: "center" },
   selectors:   { flexDirection: "row", height: ms(180), gap: ms(4) },
   selector:    { flex: 1 },
-  colLabel:    { fontSize: fs(10), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
+  colLabel:    { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
   col:         { flex: 1 },
   item:        { alignItems: "center", paddingVertical: ms(10) },
-  itemActive:  { backgroundColor: "#FEF4F4", borderRadius: ms(8) },
-  itemT:       { fontSize: fs(15), color: "#8A7F82", fontWeight: "600" },
-  itemActiveT: { color: colors.primary, fontWeight: "800" },
-  highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 2, borderColor: colors.primary + "20", backgroundColor: "#FEF4F430" },
+  itemActive:  { backgroundColor: colors.primary + "12", borderRadius: ms(8) },
+  itemT:       { fontSize: fs(15), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  itemActiveT: { color: colors.primary, fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 2, borderColor: colors.primary + "20", backgroundColor: colors.primary + "06" },
   btnRow:      { flexDirection: "row", gap: ms(10), marginTop: ms(20) },
-  cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1.5, borderColor: "#E0D8D4" },
-  cancelT:     { fontSize: fs(14), fontWeight: "700", color: "#8A7F82" },
-  confirmBtn:  { flex: 1, borderRadius: ms(14), overflow: "hidden" },
-  confirmGrad: { alignItems: "center", paddingVertical: ms(14) },
-  confirmT:    { fontSize: fs(14), fontWeight: "800", color: "#fff" },
+  cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border },
+  cancelT:     { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  confirmBtn:  { flex: 1, borderRadius: ms(14), alignItems: "center", paddingVertical: ms(14), backgroundColor: colors.primary },
+  confirmT:    { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
 });
 
 // ── Time Picker Modal (Hour / Minute / AM-PM wheels) ──────────────────────────
@@ -244,9 +267,7 @@ function TimePickerModal({ visible, value, title, onConfirm, onClose }: {
             <Text style={dp.cancelT}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity style={dp.confirmBtn} onPress={() => onConfirm(to24h(hour, minute, meridiem))} activeOpacity={0.85}>
-            <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={dp.confirmGrad}>
-              <Text style={dp.confirmT}>Done</Text>
-            </LinearGradient>
+            <Text style={dp.confirmT}>Done</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -256,76 +277,143 @@ function TimePickerModal({ visible, value, title, onConfirm, onClose }: {
 
 // ── Course Picker Modal ───────────────────────────────────────────────────────
 
-function CoursePickerModal({ visible, courses, loading, onSelect, onClose }: {
-  visible: boolean;
-  courses: CourseItem[];
-  loading: boolean;
-  onSelect: (c: CourseItem) => void;
-  onClose: () => void;
+function CoursePickerModal({ visible, courses, loading, selectedId, onSelect, onClose }: {
+  visible:    boolean;
+  courses:    CourseItem[];
+  loading:    boolean;
+  selectedId: string | null;
+  onSelect:   (c: CourseItem) => void;
+  onClose:    () => void;
 }) {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const [search, setSearch] = useState("");
+
+  useEffect(() => { if (!visible) setSearch(""); }, [visible]);
+
+  const filtered = courses.filter((c) =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.examCategories.length ? c.examCategories.map((ec) => ec.label).join(", ") : "General").toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeight="75%">
-      <View style={pm.sheetPad}>
-        <View style={pm.handle} />
-        <Text style={pm.title}>Select Course</Text>
-        {loading ? (
-            <View style={{ alignItems: "center", paddingVertical: ms(40) }}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={{ color: "#8A7F82", marginTop: ms(12), fontSize: fs(13) }}>Loading courses…</Text>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+        <TouchableOpacity style={pm.backdrop} activeOpacity={1} onPress={onClose} />
+        <View style={[pm.panel, { paddingBottom: insets.bottom + ms(8) }]}>
+          <View style={pm.handle} />
+
+          <View style={pm.headerRow}>
+            <View style={[pm.headerIco, { backgroundColor: C.purple + "18" }]}>
+              <Ionicons name="book-outline" size={ms(18)} color={C.purple} />
             </View>
-          ) : (
-            <FlatList
-              data={courses}
-              keyExtractor={(c) => c.id}
-              contentContainerStyle={{ paddingBottom: ms(24) }}
-              ListEmptyComponent={
-                <View style={{ alignItems: "center", paddingVertical: ms(32) }}>
-                  <Ionicons name="book-outline" size={ms(40)} color="#D5CCC8" />
-                  <Text style={{ color: "#B0A9AC", fontSize: fs(13), marginTop: ms(10) }}>No courses found</Text>
-                  <Text style={{ color: "#C7BAB4", fontSize: fs(11), marginTop: ms(4) }}>Create a course first</Text>
-                </View>
-              }
-              renderItem={({ item: c }) => {
-                const color = c.examCategories[0]?.color ?? "#8A7F82";
-                const label = c.examCategories.length
-                  ? c.examCategories.map((ec) => ec.label).join(", ")
-                  : "General";
-                return (
-                  <TouchableOpacity style={pm.row} onPress={() => onSelect(c)} activeOpacity={0.75}>
-                    <View style={[pm.tag, { backgroundColor: color + "20" }]}>
-                      <Text style={[pm.tagT, { color }]}>{label}</Text>
-                    </View>
-                    <View style={pm.rowInfo}>
-                      <Text style={pm.rowName}>{c.name}</Text>
-                      <Text style={pm.rowSub}>{c.durationMonths} months · ₹{Number(c.defaultFee).toLocaleString("en-IN")}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={ms(16)} color="#C7BAB4" />
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          )}
-          <TouchableOpacity style={pm.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-            <Text style={pm.cancelT}>Cancel</Text>
-          </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={pm.headerTitle}>Select Course</Text>
+              <Text style={pm.headerSub}>{courses.length} course{courses.length !== 1 ? "s" : ""} available</Text>
+            </View>
+            <TouchableOpacity style={pm.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={ms(18)} color={C.muted} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={pm.searchWrap}>
+            <View style={pm.searchRow}>
+              <Ionicons name="search-outline" size={ms(15)} color={C.muted} />
+              <TextInput
+                style={pm.searchInput}
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search courses…"
+                placeholderTextColor={C.placeholder}
+                returnKeyType="search"
+                autoCorrect={false}
+              />
+              {!!search && (
+                <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                  <Ionicons name="close-circle" size={ms(15)} color={C.placeholder} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          <ScrollView style={pm.list} contentContainerStyle={pm.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {loading ? (
+              <View style={pm.empty}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={pm.emptyT}>Loading courses…</Text>
+              </View>
+            ) : filtered.length === 0 ? (
+              <View style={pm.empty}>
+                <Ionicons name="search-outline" size={ms(32)} color={C.placeholder} />
+                <Text style={pm.emptyT}>{search ? "No courses found" : "No courses yet"}</Text>
+                <Text style={pm.emptySub}>{search ? "Try a different search term" : "Create a course first"}</Text>
+              </View>
+            ) : (
+              <View style={pm.grid}>
+                {filtered.map((c) => {
+                  const color = c.examCategories[0]?.color ?? C.muted;
+                  const label = c.examCategories.length ? c.examCategories.map((ec) => ec.label).join(", ") : "General";
+                  const sel   = selectedId === c.id;
+                  return (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[pm.gridCard, { borderColor: sel ? color : C.border }, sel && { backgroundColor: color + "10" }]}
+                      onPress={() => onSelect(c)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={pm.gridTop}>
+                        <View style={[pm.gridCatPill, { backgroundColor: color + "16" }]}>
+                          <View style={[pm.gridDot, { backgroundColor: color }]} />
+                          <Text style={[pm.gridCat, { color }]}>{label}</Text>
+                        </View>
+                        {sel && <Ionicons name="checkmark-circle" size={ms(16)} color={color} />}
+                      </View>
+                      <Text style={[pm.gridName, sel && { color }]} numberOfLines={2}>{c.name}</Text>
+                      <View style={pm.gridMeta}>
+                        <Text style={pm.gridDur}>{c.durationMonths}mo</Text>
+                        {c.defaultFee > 0 && (
+                          <Text style={pm.gridFee}>₹{Number(c.defaultFee / 1000).toFixed(0)}k</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </ScrollView>
         </View>
-    </BottomSheet>
+      </View>
+    </Modal>
   );
 }
 
 const pm = StyleSheet.create({
-  sheetPad:  { paddingTop: ms(12), paddingHorizontal: ms(16) },
-  handle:    { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: "#E0D8D4", alignSelf: "center", marginBottom: ms(16) },
-  title:     { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(8) },
-  row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: "#F0EDE8", gap: ms(12) },
-  tag:       { borderRadius: ms(8), paddingHorizontal: ms(9), paddingVertical: ms(4), flexShrink: 0 },
-  tagT:      { fontSize: fs(11), fontWeight: "800" },
-  rowInfo:   { flex: 1 },
-  rowName:   { fontSize: fs(13.5), fontWeight: "700", color: "#2B1B1F" },
-  rowSub:    { fontSize: fs(11), color: "#8A7F82", marginTop: ms(2) },
-  cancelBtn: { marginTop: ms(8), marginBottom: ms(24), paddingVertical: ms(14), alignItems: "center", borderRadius: ms(14), borderWidth: 1.5, borderColor: "#E0D8D4" },
-  cancelT:   { fontSize: fs(14), fontWeight: "700", color: "#8A7F82" },
+  backdrop:    { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
+  panel:       { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), maxHeight: "92%", paddingTop: ms(10) },
+  handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(12) },
+  headerRow:   { flexDirection: "row", alignItems: "center", gap: ms(12), paddingHorizontal: ms(16), paddingBottom: ms(14), borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  headerIco:   { width: ms(40), height: ms(40), borderRadius: ms(13), alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  headerTitle: { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  headerSub:   { fontSize: fs(12), color: C.muted, marginTop: ms(2) },
+  closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
+  searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(4) },
+  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.inputBg, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), borderWidth: 1, borderColor: C.border },
+  searchInput: { flex: 1, fontSize: fs(14), color: C.text, includeFontPadding: false, padding: 0 },
+  list:        { flexGrow: 0 },
+  listContent: { paddingHorizontal: ms(16), paddingTop: ms(14), paddingBottom: ms(40) },
+  empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(32) },
+  emptyT:      { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  emptySub:    { fontSize: fs(12), color: C.placeholder },
+  grid:        { flexDirection: "row", flexWrap: "wrap", gap: ms(10) },
+  gridCard:    { width: "47%", backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
+  gridTop:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(10), paddingVertical: ms(8) },
+  gridCatPill: { flexDirection: "row", alignItems: "center", gap: ms(5), borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  gridDot:     { width: ms(6), height: ms(6), borderRadius: ms(3) },
+  gridCat:     { fontSize: fs(9.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  gridName:    { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(4), lineHeight: fs(18) },
+  gridMeta:    { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(10), paddingBottom: ms(10) },
+  gridDur:     { fontSize: fs(10.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  gridFee:     { fontSize: fs(10.5), color: C.green, fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
 // ── Date field button ─────────────────────────────────────────────────────────
@@ -351,12 +439,12 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
         <Ionicons
           name={readOnly ? "lock-closed-outline" : "calendar-outline"}
           size={ms(16)}
-          color={readOnly ? "#B0A9AC" : value ? colors.primary : "#C7BAB4"}
+          color={readOnly ? C.placeholder : value ? colors.primary : C.placeholder}
         />
-        <Text style={[s.dateFieldT, !value && s.dateFieldPlaceholder, readOnly && { color: "#8A7F82" }]} numberOfLines={1}>
+        <Text style={[s.dateFieldT, !value && s.dateFieldPlaceholder, readOnly && { color: C.muted }]} numberOfLines={1}>
           {value || placeholder}
         </Text>
-        {!readOnly && <Ionicons name="chevron-down" size={ms(14)} color="#B0A9AC" />}
+        {!readOnly && <Ionicons name="chevron-down" size={ms(14)} color={C.placeholder} />}
         {readOnly && (
           <View style={s.autoCalcBadge}>
             <Text style={s.autoCalcT}>Auto</Text>
@@ -373,6 +461,17 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
 export function CreateBatchScreen({ navigation }: Props) {
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // RN auto-scrolls to keep a focused field visible above the keyboard but
+  // never scrolls back on dismiss — undo that so the form returns to its
+  // original scroll position once the keyboard is fully gone.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return () => sub.remove();
+  }, []);
   const [courses, setCourses]           = useState<CourseItem[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [pickerOpen, setPickerOpen]     = useState(false);
@@ -475,18 +574,17 @@ export function CreateBatchScreen({ navigation }: Props) {
     }
   }
 
-  const examColor = selectedCourse?.examCategories[0]?.color ?? "#8A7F82";
+  const examColor = selectedCourse?.examCategories[0]?.color ?? C.muted;
   const examLabel = selectedCourse
     ? (selectedCourse.examCategories.length ? selectedCourse.examCategories.map((ec) => ec.label).join(", ") : "General")
     : "";
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader title="Create Batch" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Course */}
           <View style={s.card}>
@@ -498,38 +596,40 @@ export function CreateBatchScreen({ navigation }: Props) {
             </View>
 
             <View style={s.coursePickerWrap}>
-              <Text style={s.fieldLabel}>
-                SELECT COURSE
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: ms(8) }}>
+                <Text style={[s.fieldLabel, { marginBottom: 0 }, !!errors.course && { color: C.red }]}>SELECT COURSE</Text>
                 <Text style={s.asterisk}> *</Text>
-              </Text>
+              </View>
               <TouchableOpacity
-                style={[s.coursePicker, selectedCourse && { borderColor: examColor }]}
+                style={[s.courseSel, !!errors.course && s.courseSelErr]}
                 onPress={() => setPickerOpen(true)}
-                activeOpacity={0.8}
+                activeOpacity={0.75}
               >
-                {selectedCourse ? (
-                  <View style={s.coursePickerFilled}>
-                    <View style={[s.coursePickerTag, { backgroundColor: examColor + "20" }]}>
-                      <Text style={[s.coursePickerTagT, { color: examColor }]}>{examLabel}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.coursePickerName}>{selectedCourse.name}</Text>
-                      <Text style={s.coursePickerSub}>{selectedCourse.durationMonths} months · ₹{Number(selectedCourse.defaultFee).toLocaleString("en-IN")}</Text>
-                    </View>
-                    <Ionicons name="chevron-down" size={ms(16)} color="#8A7F82" />
-                  </View>
+                {coursesLoading ? (
+                  <>
+                    <ActivityIndicator size="small" color={C.muted} />
+                    <Text style={s.courseSelPlaceholder}>Loading courses…</Text>
+                  </>
+                ) : selectedCourse ? (
+                  <>
+                    <View style={[s.courseSelDot, { backgroundColor: examColor }]} />
+                    <Text style={s.courseSelValue} numberOfLines={1}>{selectedCourse.name}</Text>
+                    <Ionicons name="chevron-forward" size={ms(16)} color={C.muted} />
+                  </>
                 ) : (
-                  <View style={s.coursePickerEmpty}>
-                    {coursesLoading
-                      ? <ActivityIndicator size="small" color={colors.primary} />
-                      : <Ionicons name="add-circle-outline" size={ms(20)} color="#8A7F82" />}
-                    <Text style={s.coursePickerPlaceholder}>
-                      {coursesLoading ? "Loading courses…" : "Tap to select a course"}
-                    </Text>
-                  </View>
+                  <>
+                    <Ionicons name="book-outline" size={ms(16)} color={errors.course ? C.red : C.muted} />
+                    <Text style={[s.courseSelPlaceholder, !!errors.course && { color: C.red }]}>Tap to select a course</Text>
+                    <Ionicons name="chevron-forward" size={ms(16)} color={errors.course ? C.red : C.placeholder} />
+                  </>
                 )}
               </TouchableOpacity>
-              {errors.course ? <Text style={s.errT}>{errors.course}</Text> : null}
+              {!!errors.course && (
+                <View style={s.inlineError}>
+                  <Ionicons name="alert-circle-outline" size={ms(13)} color={C.red} />
+                  <Text style={s.inlineErrorT}>{errors.course}</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -624,20 +724,18 @@ export function CreateBatchScreen({ navigation }: Props) {
 
           {errors.submit ? (
             <View style={s.submitErr}>
-              <Ionicons name="alert-circle-outline" size={ms(16)} color="#DC2626" />
+              <Ionicons name="alert-circle-outline" size={ms(16)} color={C.red} />
               <Text style={s.submitErrT}>{errors.submit}</Text>
             </View>
           ) : null}
 
-          <TouchableOpacity style={s.submitWrap} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
-            <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.submitBtn}>
-              {loading
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <>
-                    <Ionicons name="checkmark-circle-outline" size={ms(20)} color="#fff" />
-                    <Text style={s.submitT}>Create Batch</Text>
-                  </>}
-            </LinearGradient>
+          <TouchableOpacity style={[s.submitWrap, s.submitBtn]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
+            {loading
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <>
+                  <Ionicons name="checkmark-circle-outline" size={ms(20)} color="#fff" />
+                  <Text style={s.submitT}>Create Batch</Text>
+                </>}
           </TouchableOpacity>
           <View style={{ height: ms(32) }} />
         </ScrollView>
@@ -648,6 +746,7 @@ export function CreateBatchScreen({ navigation }: Props) {
         visible={pickerOpen}
         courses={courses}
         loading={coursesLoading}
+        selectedId={selectedCourse?.id ?? null}
         onSelect={(c) => { setSelectedCourse(c); setPickerOpen(false); setErrors((p) => ({ ...p, course: "" })); }}
         onClose={() => setPickerOpen(false)}
       />
@@ -682,7 +781,7 @@ export function CreateBatchScreen({ navigation }: Props) {
           <ScrollView contentContainerStyle={s.successScroll} showsVerticalScrollIndicator={false}>
             <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
               <Animated.View style={{ transform: [{ scale: checkScale }], marginBottom: ms(20) }}>
-                <LinearGradient colors={["#1B9C63", "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
+                <LinearGradient colors={[C.green, "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
                   <Ionicons name="checkmark" size={ms(44)} color="#fff" />
                 </LinearGradient>
               </Animated.View>
@@ -692,10 +791,10 @@ export function CreateBatchScreen({ navigation }: Props) {
               <View style={s.detailBox}>
                 {[
                   { icon: "layers-outline",     label: "Batch Name", value: created.name,                           color: colors.primary },
-                  { icon: "book-outline",        label: "Course",     value: created.course.name,                    color: "#2563A8" },
-                  { icon: "people-outline",      label: "Capacity",   value: `${created.capacity} seats`,            color: "#1B9C63" },
-                  { icon: "play-circle-outline", label: "Starts",     value: new Date(created.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), color: "#E8752C" },
-                  { icon: "stop-circle-outline", label: "Ends",       value: new Date(created.endDate).toLocaleDateString("en-IN",   { day: "2-digit", month: "short", year: "numeric" }), color: "#E8752C" },
+                  { icon: "book-outline",        label: "Course",     value: created.course.name,                    color: C.blue },
+                  { icon: "people-outline",      label: "Capacity",   value: `${created.capacity} seats`,            color: C.green },
+                  { icon: "play-circle-outline", label: "Starts",     value: new Date(created.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), color: C.orange },
+                  { icon: "stop-circle-outline", label: "Ends",       value: new Date(created.endDate).toLocaleDateString("en-IN",   { day: "2-digit", month: "short", year: "numeric" }), color: C.orange },
                   ...(startTimeStr && endTimeStr && selectedDays.size > 0 ? [{
                     icon: "time-outline", label: "Class Timing",
                     value: `${DAY_ORDER.filter((d) => selectedDays.has(d)).map((d) => DAY_LABELS[d]).join(", ")} · ${fmt12h(startTimeStr)} to ${fmt12h(endTimeStr)}`,
@@ -715,10 +814,10 @@ export function CreateBatchScreen({ navigation }: Props) {
               </View>
 
               <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.viewAllBtn}>
-                <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.viewAllGrad}>
+                <View style={s.viewAllGrad}>
                   <Ionicons name="layers-outline" size={ms(16)} color="#fff" />
                   <Text style={s.viewAllT}>View All Batches</Text>
-                </LinearGradient>
+                </View>
               </TouchableOpacity>
             </Animated.View>
           </ScrollView>
@@ -729,64 +828,63 @@ export function CreateBatchScreen({ navigation }: Props) {
 }
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: colors.primary },
-  scroll: { flex: 1, backgroundColor: "#FFFBF0" },
+  safe:   { flex: 1, backgroundColor: colors.screenBg },
+  scroll: { flex: 1, backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
 
-  card:        { backgroundColor: "#FFFFFF", borderRadius: ms(18), paddingHorizontal: ms(14), paddingTop: ms(14), paddingBottom: ms(2), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
+  card:        { backgroundColor: C.card, borderRadius: ms(18), paddingHorizontal: ms(14), paddingTop: ms(14), paddingBottom: ms(2), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(12) },
   sectionIcon: { width: ms(32), height: ms(32), borderRadius: ms(9), justifyContent: "center", alignItems: "center" },
-  sectionLabel:{ fontSize: fs(12), fontWeight: "800", letterSpacing: 0.8 },
+  sectionLabel:{ fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.8 },
 
-  coursePickerWrap:   { marginBottom: ms(16) },
-  coursePicker:       { borderWidth: 1.5, borderColor: "#E0D8D4", borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(12), backgroundColor: "#FAFAFA" },
-  coursePickerFilled: { flexDirection: "row", alignItems: "center", gap: ms(12) },
-  coursePickerTag:    { borderRadius: ms(8), paddingHorizontal: ms(9), paddingVertical: ms(5) },
-  coursePickerTagT:   { fontSize: fs(11), fontWeight: "800" },
-  coursePickerName:   { fontSize: fs(13.5), fontWeight: "700", color: "#2B1B1F" },
-  coursePickerSub:    { fontSize: fs(11), color: "#8A7F82", marginTop: ms(2) },
-  coursePickerEmpty:  { flexDirection: "row", alignItems: "center", gap: ms(10) },
-  coursePickerPlaceholder: { fontSize: fs(13), color: "#B0A9AC", fontWeight: "600" },
+  coursePickerWrap:     { marginBottom: ms(16) },
+  courseSel:            { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(14) },
+  courseSelErr:         { borderColor: C.red, backgroundColor: C.red + "08" },
+  courseSelDot:         { width: ms(10), height: ms(10), borderRadius: ms(5), flexShrink: 0 },
+  courseSelValue:       { flex: 1, fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  courseSelPlaceholder: { flex: 1, fontSize: fs(14), color: C.placeholder },
+  inlineError:          { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(6) },
+  inlineErrorT:         { fontSize: fs(11.5), color: C.red, flex: 1 },
 
   dateFieldWrap:      { marginBottom: ms(16) },
-  fieldLabel:         { fontSize: fs(11), fontWeight: "800", color: "#2B1B1F", letterSpacing: 0.8, marginBottom: ms(8) },
-  asterisk:           { color: "#C0392B", fontWeight: "800" },
-  dateField:          { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: 1.5, borderColor: "#E0D8D4", borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: "#FAFAFA" },
-  dateFieldReadOnly:  { backgroundColor: "#F7F4F2", borderColor: "#EDE8E3" },
-  dateFieldError:     { borderColor: "#DC2626" },
-  dateFieldT:         { flex: 1, fontSize: fs(13.5), color: "#2B1B1F", fontWeight: "600" },
-  dateFieldPlaceholder: { color: "#C7BAB4", fontWeight: "400" },
-  autoCalcBadge:      { backgroundColor: "#E7F7EF", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  autoCalcT:          { fontSize: fs(10), fontWeight: "800", color: "#1B9C63" },
+  fieldLabel:         { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, letterSpacing: 0.8, marginBottom: ms(8) },
+  asterisk:           { color: C.red, fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  dateField:          { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: 1.5, borderColor: C.border, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: C.inputBg },
+  dateFieldReadOnly:  { backgroundColor: C.bg, borderColor: C.border },
+  dateFieldError:     { borderColor: C.red },
+  dateFieldT:         { flex: 1, fontSize: fs(13.5), color: C.text, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  dateFieldPlaceholder: { color: C.placeholder, fontFamily: "Inter_400Regular", fontWeight: "400" },
+  autoCalcBadge:      { backgroundColor: C.greenBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  autoCalcT:          { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
 
   dayRow:      { flexDirection: "row", gap: ms(6) },
-  dayChip:     { flex: 1, alignItems: "center", paddingVertical: ms(10), borderRadius: ms(10), backgroundColor: "#FAFAFA", borderWidth: 1.5, borderColor: "#E0D8D4" },
+  dayChip:     { flex: 1, alignItems: "center", paddingVertical: ms(10), borderRadius: ms(10), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
   dayChipOn:   { backgroundColor: colors.primary, borderColor: colors.primary },
-  dayChipT:    { fontSize: fs(12), fontWeight: "700", color: "#8A7F82" },
+  dayChipT:    { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
   dayChipTOn:  { color: "#fff" },
 
   timingRow:   { flexDirection: "row", gap: ms(10) },
 
-  errT:        { fontSize: fs(11.5), color: "#DC2626", marginTop: ms(4) },
+  errT:        { fontSize: fs(11.5), color: C.red, marginTop: ms(4) },
   submitWrap:  { marginTop: ms(4) },
-  submitBtn:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  submitT:     { fontSize: fs(15), fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
-  submitErr:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: "#FEE2E2", borderRadius: ms(10), padding: ms(12), marginBottom: ms(12) },
-  submitErrT:  { fontSize: fs(13), color: "#DC2626", flex: 1 },
+  submitBtn:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16), backgroundColor: colors.primary },
+  submitT:     { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+  submitErr:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.red + "18", borderRadius: ms(10), padding: ms(12), marginBottom: ms(12) },
+  submitErrT:  { fontSize: fs(13), color: C.red, flex: 1 },
 
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0" },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
   successScroll:  { flexGrow: 1, justifyContent: "center", paddingHorizontal: ms(20), paddingVertical: ms(32) },
-  successCard:    { backgroundColor: "#FFFFFF", borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
+  successCard:    { backgroundColor: C.card, borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
   checkCircle:    { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
-  successTitle:   { fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(6) },
-  successSub:     { fontSize: fs(13), color: "#8A7F82", marginBottom: ms(20), textAlign: "center" },
-  detailBox:      { width: "100%", backgroundColor: "#FAFAFA", borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(20), borderWidth: 1, borderColor: "#F0EDE8" },
+  successTitle:   { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(6) },
+  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(20), textAlign: "center" },
+  detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(20), borderWidth: 1, borderColor: C.border },
   detailRow:      { flexDirection: "row", alignItems: "center", paddingVertical: ms(12), gap: ms(12) },
-  detailRowBorder:{ borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
+  detailRowBorder:{ borderBottomWidth: 1, borderBottomColor: C.border },
   detailIcon:     { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
-  detailLabel:    { fontSize: fs(10.5), color: "#8A7F82", fontWeight: "600" },
-  detailValue:    { fontSize: fs(13.5), fontWeight: "700", color: "#1A1214" },
-  viewAllBtn:     { width: "100%", borderRadius: ms(16), overflow: "hidden" },
+  detailLabel:    { fontSize: fs(10.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  detailValue:    { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  viewAllBtn:     { width: "100%", borderRadius: ms(16), backgroundColor: colors.primary },
   viewAllGrad:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), paddingVertical: ms(16) },
-  viewAllT:       { fontSize: fs(15), fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+  viewAllT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
 });

@@ -7,6 +7,11 @@ interface ConfirmOpts {
   confirmLabel?: string;
   cancelLabel?:  string;
   destructive?:  boolean;
+  // Theme-colored (tenant colors.primary) instead of the fixed orange
+  // warning look — for confirmations that aren't destructive but still
+  // warrant more than a plain info dialog (e.g. logging out).
+  brand?:        boolean;
+  icon?:         string;
 }
 
 interface AlertContextValue {
@@ -41,7 +46,8 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     show({
       title,
       message,
-      type: opts?.destructive ? "warning" : "info",
+      type: opts?.brand ? "brand" : opts?.destructive ? "warning" : "info",
+      icon: opts?.icon,
       buttons: [
         { label: opts?.cancelLabel  ?? "Cancel",  style: "cancel"  },
         { label: opts?.confirmLabel ?? "Confirm", style: opts?.destructive ? "danger" : "primary", onPress: onConfirm },

@@ -6,6 +6,7 @@ import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/role";
 import { validateBody } from "../../middleware/validate";
 import { BatchFullError, createEnrollment } from "./enrollments.service";
+import { notifyEnrollmentEvents } from "../notifications/notification.service";
 
 export const enrollmentsRouter = Router();
 
@@ -63,6 +64,7 @@ enrollmentsRouter.post(
         (tx) => createEnrollment(tx, studentId, batchId, req.auth!.tenantId),
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
+      await notifyEnrollmentEvents(prisma, req.auth!.tenantId, batchId).catch(console.error);
       res.status(201).json(enrollment);
     } catch (err) {
       if (err instanceof BatchFullError) {

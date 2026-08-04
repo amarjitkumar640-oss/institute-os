@@ -4,14 +4,12 @@ import {
   Switch, Modal, StatusBar, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Circle, Path } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ms, fs, sw } from "../../utils/responsive";
+import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
-import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
+import { useThemeColors, useThemedStyles, contrastColor, type ThemeColors } from "../../context/ThemeContext";
 import { ROLE_META } from "../../constants/roleMeta";
 import { useAuth } from "../../context/AuthContext";
 import { useAppLock } from "../../context/AppLockContext";
@@ -20,92 +18,93 @@ import type { RootStackParamList } from "../../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const WAVE_H   = Math.round(ms(40));
-const BG       = "#FFFBF0";
+// ── Stat cell ──────────────────────────────────────────────────────────────────
 
-// ── Shared SVG decorations (same as ScreenHeader) ────────────────────────────
-
-function PolkaDots({ height }: { height: number }) {
-  const sp = ms(22);
-  const cols = Math.ceil(sw / sp) + 2;
-  const rows = Math.ceil(height / sp) + 1;
-  const dots: React.ReactNode[] = [];
-  for (let r = 0; r < rows; r++)
-    for (let c = 0; c < cols; c++)
-      dots.push(
-        <Circle
-          key={`${r}-${c}`}
-          cx={c * sp + (r % 2 ? sp / 2 : 0)}
-          cy={r * sp}
-          r={ms(1.5)}
-          fill="rgba(255,255,255,0.12)"
-        />
-      );
-  return <Svg width={sw} height={height} style={StyleSheet.absoluteFill}>{dots}</Svg>;
-}
-
-function Wave() {
+function StatCell({ value, label, accent }: { value: string; label: string; accent?: string }) {
   return (
-    <Svg width={sw} height={WAVE_H} viewBox={`0 0 ${sw} 34`} preserveAspectRatio="none">
-      <Path d={`M0 18 C${sw * 0.25} 36,${sw * 0.75} 2,${sw} 18 L${sw} 34 L0 34 Z`} fill={BG} />
-    </Svg>
+    <View style={ss.statCell}>
+      <Text style={[ss.statValue, accent ? { color: accent } : undefined]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      <Text style={ss.statLabel}>{label}</Text>
+    </View>
   );
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
+// ── Action row ─────────────────────────────────────────────────────────────────
 
-function SectionLabel({ label }: { label: string }) {
-  return <Text style={s.sectionLabel}>{label}</Text>;
-}
-
-// ── Settings row ──────────────────────────────────────────────────────────────
-
-interface RowProps {
-  icon:      string;
+interface ActionRowProps {
+  icon: string;
   iconColor: string;
-  label:     string;
-  sub?:      string;
-  right?:    React.ReactNode;
-  onPress?:  () => void;
-  danger?:   boolean;
-  last?:     boolean;
+  title: string;
+  subtitle: string;
+  badge?: string;
+  badgeColor?: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+  danger?: boolean;
+  last?: boolean;
 }
 
-function Row({ icon, iconColor, label, sub, right, onPress, danger, last }: RowProps) {
+function ActionRow({
+  icon, iconColor, title, subtitle, badge, badgeColor, right, onPress, danger, last,
+}: ActionRowProps) {
   const Wrap: React.ElementType = onPress ? TouchableOpacity : View;
+  const ic = danger ? C.red : iconColor;
   return (
-    <Wrap
-      style={[s.row, last && s.rowLast]}
-      onPress={onPress}
-      activeOpacity={0.65}
-    >
-      <View style={[s.rowIcon, { backgroundColor: iconColor + "18" }]}>
-        <Ionicons name={icon as any} size={ms(18)} color={iconColor} />
-      </View>
-      <View style={s.rowBody}>
-        <Text style={[s.rowLabel, danger && { color: C.red }]}>{label}</Text>
-        {sub ? <Text style={s.rowSub}>{sub}</Text> : null}
-      </View>
-      {right !== undefined
-        ? right
-        : onPress
-          ? <Ionicons name="chevron-forward" size={ms(15)} color={C.muted} />
-          : null}
-    </Wrap>
+    <>
+      <Wrap style={ss.row} onPress={onPress} activeOpacity={0.7}>
+        <View style={[ss.rowIcon, { backgroundColor: ic + "18" }]}>
+          <Ionicons name={icon as any} size={ms(22)} color={ic} />
+        </View>
+        <View style={ss.rowMid}>
+          <Text style={[ss.rowTitle, danger && { color: C.red }]} numberOfLines={1}>{title}</Text>
+          <Text style={ss.rowSub} numberOfLines={1}>{subtitle}</Text>
+        </View>
+        <View style={ss.rowRight}>
+          {right !== undefined ? right
+            : badge ? (
+              <View style={[ss.badge, { backgroundColor: (badgeColor ?? C.green) + "18" }]}>
+                <Text style={[ss.badgeT, { color: badgeColor ?? C.green }]}>{badge}</Text>
+              </View>
+            ) : onPress ? (
+              <Ionicons name="chevron-forward" size={ms(14)} color={C.placeholder} />
+            ) : null}
+        </View>
+      </Wrap>
+      {!last && <View style={ss.divider} />}
+    </>
   );
 }
 
-// ── PIN setup modal ───────────────────────────────────────────────────────────
+// ── Grouped card ───────────────────────────────────────────────────────────────
+
+function Card({ children }: { children: React.ReactNode }) {
+  return <View style={ss.card}>{children}</View>;
+}
+
+// ── PIN modal ──────────────────────────────────────────────────────────────────
 
 const PIN_LENGTH = 4;
 
+function PinDots({ filled, error }: { filled: number; error: boolean }) {
+  const pm = useThemedStyles(makePmStyles);
+  return (
+    <View style={pm.dots}>
+      {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+        <View key={i} style={[pm.dot, i < filled && pm.dotFilled, error && pm.dotError]} />
+      ))}
+    </View>
+  );
+}
+
 function PinPad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDelete: () => void }) {
   const pm = useThemedStyles(makePmStyles);
-  const rows = [["1","2","3"],["4","5","6"],["7","8","9"]];
+  const rows = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]];
   return (
     <View style={pm.pad}>
       {rows.map((row) => (
-        <View key={row[0]} style={pm.row}>
+        <View key={row[0]} style={pm.padRow}>
           {row.map((d) => (
             <TouchableOpacity key={d} style={pm.key} activeOpacity={0.6} onPress={() => onDigit(d)}>
               <Text style={pm.keyN}>{d}</Text>
@@ -113,7 +112,7 @@ function PinPad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDelete:
           ))}
         </View>
       ))}
-      <View style={pm.row}>
+      <View style={pm.padRow}>
         <View style={pm.keyGhost} />
         <TouchableOpacity style={pm.key} activeOpacity={0.6} onPress={() => onDigit("0")}>
           <Text style={pm.keyN}>0</Text>
@@ -126,36 +125,22 @@ function PinPad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDelete:
   );
 }
 
-function PinDots({ filled, error }: { filled: number; error: boolean }) {
-  const pm = useThemedStyles(makePmStyles);
-  return (
-    <View style={pm.dots}>
-      {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-        <View
-          key={i}
-          style={[pm.dot, i < filled && pm.dotFilled, error && pm.dotError]}
-        />
-      ))}
-    </View>
-  );
-}
-
 type PinStep = "enter" | "confirm";
 
 interface PinSetupModalProps {
-  visible:    boolean;
-  mode:       "setup" | "change";   // "change" = already has PIN, just overwrite
-  onDone:     (pin: string) => void;
-  onCancel:   () => void;
+  visible: boolean;
+  mode: "setup" | "change";
+  onDone: (pin: string) => void;
+  onCancel: () => void;
 }
 
 function PinSetupModal({ visible, mode, onDone, onCancel }: PinSetupModalProps) {
   const colors = useThemeColors();
   const pm = useThemedStyles(makePmStyles);
-  const [step,      setStep]    = useState<PinStep>("enter");
-  const [first,     setFirst]   = useState("");
-  const [pin,       setPin]     = useState("");
-  const [error,     setError]   = useState(false);
+  const [step, setStep] = useState<PinStep>("enter");
+  const [first, setFirst] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState(false);
 
   function reset() { setStep("enter"); setFirst(""); setPin(""); setError(false); }
 
@@ -164,50 +149,37 @@ function PinSetupModal({ visible, mode, onDone, onCancel }: PinSetupModalProps) 
     const next = pin + d;
     setPin(next);
     setError(false);
-    if (next.length === PIN_LENGTH) {
-      setTimeout(() => advance(next), 80);
-    }
+    if (next.length === PIN_LENGTH) setTimeout(() => advance(next), 80);
   }
 
   function advance(entered: string) {
     if (step === "enter") {
-      setFirst(entered);
-      setStep("confirm");
-      setPin("");
+      setFirst(entered); setStep("confirm"); setPin("");
     } else {
-      if (entered === first) {
-        onDone(entered);
-        reset();
-      } else {
-        setError(true);
-        setPin("");
+      if (entered === first) { onDone(entered); reset(); }
+      else {
+        setError(true); setPin("");
         setTimeout(() => { setStep("enter"); setFirst(""); setError(false); }, 700);
       }
     }
   }
 
   function handleDelete() { setPin((p) => p.slice(0, -1)); setError(false); }
-
   function handleCancel() { reset(); onCancel(); }
 
-  const title = step === "enter"
-    ? (mode === "setup" ? "Create PIN" : "New PIN")
-    : "Confirm PIN";
-  const sub   = step === "enter"
-    ? "Enter a 4-digit PIN"
-    : "Re-enter the same PIN";
+  const title = step === "enter" ? (mode === "setup" ? "Create PIN" : "New PIN") : "Confirm PIN";
+  const sub = step === "enter" ? "Enter a 4-digit PIN" : "Re-enter the same PIN";
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleCancel}>
-      <SafeAreaView style={pm.sheet} edges={["top", "bottom"]}>
+      <SafeAreaView style={[pm.sheet, { backgroundColor: colors.bg }]} edges={["top", "bottom"]}>
         <View style={pm.sheetHeader}>
           <TouchableOpacity onPress={handleCancel} style={pm.cancelBtn}>
-            <Text style={pm.cancelT}>Cancel</Text>
+            <Text style={[pm.cancelT, { color: colors.primary }]}>Cancel</Text>
           </TouchableOpacity>
           <Text style={pm.sheetTitle}>{mode === "setup" ? "Set Up PIN" : "Change PIN"}</Text>
           <View style={{ width: ms(60) }} />
         </View>
-
         <View style={pm.sheetBody}>
           <View style={[pm.stepIcon, { backgroundColor: colors.primary + "15" }]}>
             <Ionicons name="lock-closed-outline" size={ms(28)} color={colors.primary} />
@@ -217,7 +189,6 @@ function PinSetupModal({ visible, mode, onDone, onCancel }: PinSetupModalProps) 
           <PinDots filled={pin.length} error={error} />
           {error && <Text style={pm.errMsg}>PINs don't match — try again</Text>}
         </View>
-
         <PinPad onDigit={handleDigit} onDelete={handleDelete} />
       </SafeAreaView>
     </Modal>
@@ -228,26 +199,22 @@ function PinSetupModal({ visible, mode, onDone, onCancel }: PinSetupModalProps) 
 
 export function ProfileScreen() {
   const colors = useThemeColors();
+  const t = useThemedStyles(makeStyles);
   const navigation = useNavigation<Nav>();
-  const insets     = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const { staff, currentCenter, isAllCenters, logout, switchCenter } = useAuth();
-  const {
-    hasPin, isBiometricEnabled, biometricType,
-    setupPin, toggleBiometric, removePin,
-  } = useAppLock();
+  const { hasPin, isBiometricEnabled, biometricType, setupPin, toggleBiometric, removePin } = useAppLock();
   const { showConfirm, showAlert } = useAlert();
 
-  const [pinModal,    setPinModal]    = useState<"setup" | "change" | null>(null);
-  const [loggingOut,  setLoggingOut]  = useState(false);
+  const [pinModal, setPinModal] = useState<"setup" | "change" | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const name     = staff?.fullName ?? "";
+  const name = staff?.fullName ?? "";
   const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-  const role     = staff?.role ?? "admin";
+  const role = staff?.role ?? "admin";
   const roleMeta = ROLE_META[role];
-  const center   = isAllCenters ? "All Centers" : currentCenter?.name ?? "—";
-
+  const center = isAllCenters ? "All Centers" : currentCenter?.name ?? "—";
   const bioLabel = biometricType === "face" ? "Face ID" : biometricType === "fingerprint" ? "Fingerprint" : null;
-  const dotAreaH = Math.round(ms(190));
 
   async function handleSwitchCenter() {
     try { await switchCenter(); }
@@ -262,7 +229,7 @@ export function ProfileScreen() {
   async function handleRemovePin() {
     showConfirm(
       "Remove PIN Lock?",
-      "The app will no longer be locked when closed. You can set up a new PIN anytime.",
+      "The app will no longer be locked when closed.",
       async () => { await removePin(); },
       { confirmLabel: "Remove", destructive: true },
     );
@@ -272,199 +239,171 @@ export function ProfileScreen() {
     showConfirm(
       "Log out?",
       "You'll need to sign in again.",
-      async () => {
-        setLoggingOut(true);
-        await logout();
-      },
-      { confirmLabel: "Log out", destructive: true },
+      async () => { setLoggingOut(true); await logout(); },
+      { confirmLabel: "Log out", brand: true, icon: "log-out-outline" },
     );
   }
 
   return (
-    <SafeAreaView style={s.root} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+    <View style={[t.root, { backgroundColor: colors.screenBg }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* ── Hero header ─────────────────────────────────────────────────────── */}
-      <LinearGradient
-        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={s.hero}
-      >
-        <PolkaDots height={dotAreaH} />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: ms(40) }} showsVerticalScrollIndicator={false}>
 
-        {/* Back + title bar */}
-        <View style={[s.topBar, { paddingTop: insets.top + ms(10) }]}>
-          <TouchableOpacity
-            style={s.backBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="arrow-back" size={ms(20)} color="#fff" />
-          </TouchableOpacity>
-          <Text style={s.heroTitle}>Profile</Text>
-        </View>
-
-        {/* Avatar + name + chips */}
-        <View style={s.heroBody}>
-          <View style={[s.avatar, { borderColor: roleMeta.color }]}>
-            <Text style={s.avatarText}>{initials}</Text>
-          </View>
-          <Text style={s.heroName}>{name}</Text>
-          <View style={s.chipRow}>
-            <View style={[s.roleChip, { backgroundColor: roleMeta.color }]}>
-              <Ionicons name={roleMeta.icon as any} size={ms(11)} color="#fff" />
-              <Text style={s.roleChipT}>{roleMeta.label}</Text>
-            </View>
-            <View style={s.centerChip}>
-              <Ionicons name="business-outline" size={ms(11)} color="rgba(255,255,255,0.8)" />
-              <Text style={s.centerChipT}>{center}</Text>
-            </View>
+        {/* ── Header band ───────────────────────────────────────────────────── */}
+        <View style={[t.coloredBand, { backgroundColor: colors.bg, paddingTop: insets.top + ms(6) }]}>
+          <View style={t.heroNav}>
+            <TouchableOpacity
+              style={t.backBtn}
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="arrow-back" size={ms(20)} color={contrastColor(colors.bg)} />
+            </TouchableOpacity>
+            <Text style={t.heroNavTitle}>Profile</Text>
           </View>
         </View>
 
-        <Wave />
-      </LinearGradient>
+        {/* ── Identity — avatar straddles the seam ─────────────────────────── */}
+        <View style={t.identity}>
+          <View style={t.avatarRing}>
+            <View style={[t.avatarInner, { backgroundColor: colors.primary }]}>
+              <Text style={t.avatarText}>{initials}</Text>
+            </View>
+          </View>
 
-      {/* ── Body ─────────────────────────────────────────────────────────────── */}
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={s.body}
-        showsVerticalScrollIndicator={false}
-      >
+          <Text style={t.heroName}>{name}</Text>
 
-        {/* Account */}
-        <SectionLabel label="ACCOUNT" />
-        <View style={s.card}>
-          <Row
-            icon="shield-outline"
-            iconColor={roleMeta.color}
-            label="Role"
-            sub={roleMeta.desc}
-            right={
-              <View style={[s.pill, { backgroundColor: roleMeta.color + "18" }]}>
-                <Text style={[s.pillT, { color: roleMeta.color }]}>{roleMeta.label}</Text>
-              </View>
-            }
-          />
-          <Row
-            icon="business-outline"
-            iconColor={C.blue}
-            label="Center"
-            sub="Currently active"
-            right={
-              <View style={[s.pill, { backgroundColor: C.blue + "14" }]}>
-                <Text style={[s.pillT, { color: C.blue }]} numberOfLines={1}>{center}</Text>
-              </View>
-            }
-          />
-          <Row
-            icon="swap-horizontal-outline"
-            iconColor={colors.accent}
-            label="Switch Center"
-            sub="Change your active center"
-            onPress={handleSwitchCenter}
-            last
-          />
+          <View style={t.pillRow}>
+            <View style={[t.pill, { backgroundColor: roleMeta.color + "18" }]}>
+              <Ionicons name={roleMeta.icon as any} size={ms(11)} color={roleMeta.color} />
+              <Text style={[t.pillT, { color: roleMeta.color }]}>{roleMeta.label}</Text>
+            </View>
+            <View style={t.pillDot} />
+            <View style={[t.pill, { backgroundColor: colors.primary + "12" }]}>
+              <Ionicons name="business-outline" size={ms(11)} color={colors.primary} />
+              <Text style={[t.pillT, { color: colors.primary }]} numberOfLines={1}>{center}</Text>
+            </View>
+          </View>
+
+          {/* <View style={[t.statsStrip, { backgroundColor: colors.bg }]}>
+            <StatCell value={center} label="Center" accent={colors.primary} />
+            <View style={t.statDivider} />
+            <StatCell value={roleMeta.label} label="Role" />
+            <View style={t.statDivider} />
+            <StatCell value={hasPin ? "Protected" : "No PIN"} label="Security" accent={hasPin ? C.green : C.muted} />
+          </View> */}
         </View>
 
-        {/* Admin tools */}
-        {role === "admin" && (
-          <>
-            <SectionLabel label="ADMIN" />
-            <View style={s.card}>
-              <Row
-                icon="git-branch-outline"
-                iconColor={C.purple}
-                label="Center Management"
-                sub="Add, edit, or deactivate centers"
-                onPress={() => navigation.navigate("CenterManagement")}
+        {/* ── Body ──────────────────────────────────────────────────────────── */}
+        <View style={t.body}>
+
+          <Card>
+            <ActionRow
+              icon="shield-checkmark-outline"
+              iconColor={roleMeta.color}
+              title={roleMeta.label}
+              subtitle={roleMeta.desc}
+              badge="Verified"
+              badgeColor={roleMeta.color}
+            />
+            <ActionRow
+              icon="swap-horizontal-outline"
+              iconColor={colors.accent}
+              title="Switch Center"
+              subtitle={`Currently: ${center}`}
+              onPress={handleSwitchCenter}
+              last
+            />
+          </Card>
+
+          {role === "admin" && (
+            <>
+              <Card>
+                <ActionRow
+                  icon="git-branch-outline"
+                  iconColor={C.purple}
+                  title="Center Management"
+                  subtitle="Add and configure branch centers"
+                  onPress={() => navigation.navigate("CenterManagement")}
+                />
+                <ActionRow
+                  icon="people-outline"
+                  iconColor={C.orange}
+                  title="Staff Management"
+                  subtitle="Manage staff accounts and roles"
+                  onPress={() => navigation.navigate("StaffManagement")}
+                />
+                <ActionRow
+                  icon="color-palette-outline"
+                  iconColor={colors.primary}
+                  title="Organization Settings"
+                  subtitle="Branding, login method and more"
+                  onPress={() => navigation.navigate("OrganizationSettings")}
+                  last
+                />
+              </Card>
+            </>
+          )}
+
+          <Card>
+            <ActionRow
+              icon="keypad-outline"
+              iconColor={colors.primary}
+              title={hasPin ? "Change PIN" : "Set Up PIN Lock"}
+              subtitle={hasPin ? "Update your 4-digit app PIN" : "Secure the app with a 4-digit code"}
+              badge={hasPin ? "Active" : "Off"}
+              badgeColor={hasPin ? C.green : C.muted}
+              onPress={() => setPinModal(hasPin ? "change" : "setup")}
+              last={!hasPin && !bioLabel}
+            />
+            {hasPin && (
+              <ActionRow
+                icon="lock-open-outline"
+                iconColor={C.red}
+                title="Remove PIN Lock"
+                subtitle="Disable PIN protection for this app"
+                onPress={handleRemovePin}
+                danger
+                last={!bioLabel}
               />
-              <Row
-                icon="people-outline"
-                iconColor={C.orange}
-                label="Staff Management"
-                sub="Manage roles and access"
-                onPress={() => navigation.navigate("StaffManagement")}
-              />
-              <Row
-                icon="settings-outline"
-                iconColor={colors.primary}
-                label="Organization Settings"
-                sub="Branding and login method"
-                onPress={() => navigation.navigate("OrganizationSettings")}
+            )}
+            {bioLabel && (
+              <ActionRow
+                icon={biometricType === "face" ? "scan-outline" : "finger-print-outline"}
+                iconColor={hasPin ? C.green : C.muted}
+                title={`${bioLabel} Unlock`}
+                subtitle={hasPin ? "Use biometrics to unlock the app" : "Set a PIN first to enable this"}
+                right={
+                  <Switch
+                    value={isBiometricEnabled && hasPin}
+                    disabled={!hasPin}
+                    onValueChange={(v) => toggleBiometric(v)}
+                    trackColor={{ false: C.border, true: C.green + "66" }}
+                    thumbColor={isBiometricEnabled && hasPin ? C.green : "#bbb"}
+                  />
+                }
                 last
               />
-            </View>
-          </>
-        )}
+            )}
+          </Card>
 
-        {/* Security */}
-        <SectionLabel label="SECURITY" />
-        <View style={s.card}>
-          <Row
-            icon="keypad-outline"
-            iconColor={colors.primary}
-            label={hasPin ? "Change PIN" : "Set up PIN Lock"}
-            sub={hasPin ? "Update your 4-digit unlock PIN" : "Protect the app when closed"}
-            onPress={() => setPinModal(hasPin ? "change" : "setup")}
-          />
-          {hasPin && (
-            <Row
-              icon="lock-open-outline"
+          <Card>
+            <ActionRow
+              icon="log-out-outline"
               iconColor={C.red}
-              label="Remove PIN Lock"
-              sub="Disable app lock entirely"
-              onPress={handleRemovePin}
+              title="Sign Out"
+              subtitle="End your current session"
+              onPress={handleLogout}
               danger
-              last={!bioLabel}
-            />
-          )}
-          {bioLabel && hasPin && (
-            <Row
-              icon={biometricType === "face" ? "scan-outline" : "finger-print-outline"}
-              iconColor={C.green}
-              label={`${bioLabel} Unlock`}
-              sub={isBiometricEnabled ? "Tap to disable" : "Tap to enable"}
-              right={
-                <Switch
-                  value={isBiometricEnabled}
-                  onValueChange={(v) => toggleBiometric(v)}
-                  trackColor={{ false: C.border, true: C.green + "66" }}
-                  thumbColor={isBiometricEnabled ? C.green : "#bbb"}
-                />
-              }
               last
             />
-          )}
-          {bioLabel && !hasPin && (
-            <Row
-              icon={biometricType === "face" ? "scan-outline" : "finger-print-outline"}
-              iconColor={C.muted}
-              label={`${bioLabel} Unlock`}
-              sub="Set up a PIN first to enable"
-              right={<Switch value={false} disabled trackColor={{ false: C.border }} thumbColor="#bbb" />}
-              last
-            />
-          )}
-        </View>
+          </Card>
 
-        {/* Session */}
-        <SectionLabel label="SESSION" />
-        <View style={s.card}>
-          <Row
-            icon="log-out-outline"
-            iconColor={C.red}
-            label="Log out"
-            onPress={handleLogout}
-            danger
-            last
-          />
         </View>
-
-        <View style={{ height: ms(24) }} />
       </ScrollView>
 
-      {/* PIN setup modal */}
+      {/* PIN modal */}
       {pinModal && (
         <PinSetupModal
           visible
@@ -476,287 +415,329 @@ export function ProfileScreen() {
 
       {/* Logout overlay */}
       {loggingOut && (
-        <View style={s.logoutOverlay}>
-          <View style={s.logoutBox}>
+        <View style={ss.overlay}>
+          <View style={ss.overlayBox}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={s.logoutText}>Signing out…</Text>
+            <Text style={ss.overlayText}>Signing out…</Text>
           </View>
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ── Static styles (no color tokens) ───────────────────────────────────────────
 
-const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: BG },
-  scroll: { flex: 1 },
-  body:   { paddingHorizontal: ms(16), paddingTop: ms(20) },
+const ss = StyleSheet.create({
+  // Stats strip cells
+  statCell: { flex: 1, alignItems: "center", gap: ms(3) },
+  statValue: {
+    fontSize: fs(13),
+    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
+    color: C.text,
+    textAlign: "center",
+  },
+  statLabel: {
+    fontSize: fs(10.5),
+    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
+    color: C.muted,
+    textAlign: "center",
+  },
 
-  // Hero
-  hero: { overflow: "hidden" },
-  topBar: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    paddingHorizontal: ms(16),
-    paddingBottom:     ms(6),
-    gap:               ms(12),
-  },
-  backBtn: {
-    width:           ms(36),
-    height:          ms(36),
-    borderRadius:    ms(10),
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems:      "center",
-    justifyContent:  "center",
-  },
-  heroTitle: {
-    flex:          1,
-    fontSize:      fs(18),
-    fontWeight:    "700",
-    color:         "#fff",
-    letterSpacing: 0.3,
-    minWidth:      0,
-  },
-  heroBody: {
-    alignItems:    "center",
-    paddingBottom: ms(22),
-    gap:           ms(8),
-  },
-  avatar: {
-    width:           ms(80),
-    height:          ms(80),
-    borderRadius:    ms(40),
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderWidth:     3,
-    alignItems:      "center",
-    justifyContent:  "center",
-    marginBottom:    ms(2),
-  },
-  avatarText: {
-    fontSize:   fs(30),
-    fontWeight: "800",
-    color:      "#fff",
-    letterSpacing: 1,
-  },
-  heroName: {
-    fontSize:   fs(22),
-    fontWeight: "800",
-    color:      "#fff",
-    letterSpacing: 0.2,
-  },
-  chipRow: {
+  // Action row
+  row: {
     flexDirection: "row",
-    gap:           ms(8),
-    flexWrap:      "wrap",
+    alignItems: "center",
+    paddingHorizontal: ms(16),
+    paddingVertical: ms(10),
+    gap: ms(13),
+  },
+  rowIcon: {
+    width: ms(44),
+    height: ms(44),
+    borderRadius: ms(13),
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  rowMid: { flex: 1 },
+  rowTitle: {
+    fontSize: fs(14.5),
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
+    color: C.text,
+    marginBottom: ms(2),
+  },
+  rowSub: {
+    fontSize: fs(12),
+    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
+    color: C.muted,
+  },
+  rowRight: {
+    flexShrink: 0,
+    alignItems: "center",
     justifyContent: "center",
   },
-  roleChip: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    gap:               ms(4),
-    borderRadius:      ms(20),
-    paddingHorizontal: ms(12),
-    paddingVertical:   ms(5),
+  badge: {
+    borderRadius: ms(20),
+    paddingHorizontal: ms(9),
+    paddingVertical: ms(4),
   },
-  roleChipT: { fontSize: fs(12), fontWeight: "700", color: "#fff" },
-  centerChip: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    gap:               ms(4),
-    borderRadius:      ms(20),
-    paddingHorizontal: ms(12),
-    paddingVertical:   ms(5),
-    backgroundColor:   "rgba(255,255,255,0.18)",
-    borderWidth:       1,
-    borderColor:       "rgba(255,255,255,0.25)",
+  badgeT: {
+    fontSize: fs(11),
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
-  centerChipT: { fontSize: fs(12), fontWeight: "600", color: "rgba(255,255,255,0.9)" },
 
-  // Section
-  sectionLabel: {
-    fontSize:     fs(11),
-    fontWeight:   "700",
-    color:        C.muted,
-    letterSpacing: 1.1,
-    marginBottom:  ms(8),
-    marginTop:     ms(4),
-    paddingLeft:   ms(4),
+  // Hairline divider
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: C.border,
+    marginLeft: ms(73),
   },
+
+  // Grouped card
   card: {
     backgroundColor: C.card,
-    borderRadius:    ms(16),
-    marginBottom:    ms(20),
-    overflow:        "hidden",
-    borderWidth:     1,
-    borderColor:     C.border,
+    borderRadius: ms(18),
+    overflow: "hidden",
+    marginBottom: ms(10),
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: ms(2) },
+    shadowOpacity: 0.06,
+    shadowRadius: ms(10),
+    elevation: 3,
   },
-
-  // Row
-  row: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    paddingHorizontal: ms(14),
-    paddingVertical:   ms(13),
-    gap:               ms(12),
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-  },
-  rowLast: { borderBottomWidth: 0 },
-  rowIcon: {
-    width:           ms(38),
-    height:          ms(38),
-    borderRadius:    ms(11),
-    alignItems:      "center",
-    justifyContent:  "center",
-    flexShrink:      0,
-  },
-  rowBody:  { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: fs(14.5), fontWeight: "600", color: C.text },
-  rowSub:   { fontSize: fs(12), color: C.muted, marginTop: ms(1) },
 
   // Logout overlay
-  logoutOverlay: {
-    position:  "absolute",
+  overlay: {
+    position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(43,27,31,0.55)",
-    alignItems:      "center",
-    justifyContent:  "center",
-    zIndex:          999,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 999,
   },
-  logoutBox: {
+  overlayBox: {
     backgroundColor: C.card,
-    borderRadius:    ms(20),
-    paddingVertical:   ms(28),
+    borderRadius: ms(20),
+    paddingVertical: ms(28),
     paddingHorizontal: ms(36),
-    alignItems:      "center",
-    gap:             ms(14),
-    shadowColor:     "#000",
-    shadowOffset:    { width: 0, height: ms(8) },
-    shadowOpacity:   0.18,
-    shadowRadius:    ms(20),
-    elevation:       12,
+    alignItems: "center",
+    gap: ms(14),
   },
-  logoutText: {
-    fontSize:   fs(15),
+  overlayText: {
+    fontSize: fs(15),
+    fontFamily: "Inter_600SemiBold",
     fontWeight: "600",
+    color: C.text,
+  },
+});
+
+// ── Themed styles ──────────────────────────────────────────────────────────────
+
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  root: { flex: 1 },
+
+  // Header band (same bg as all other screen headers)
+  coloredBand: {
+    paddingHorizontal: ms(16),
+    paddingBottom: ms(52),
+  },
+  heroNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: ms(10),
+  },
+  // Theme-derived, matching ScreenHeader's back button — tint/icon come from
+  // the contrast color against this band's own background (colors.bg),
+  // instead of the fixed C.card/C.border/C.text used before.
+  backBtn: {
+    width: ms(40),
+    height: ms(40),
+    borderRadius: ms(13),
+    backgroundColor: contrastColor(colors.bg) + "18",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: contrastColor(colors.bg) + "20",
+  },
+  heroNavTitle: {
+    flex:       1,
+    marginLeft: ms(12),
+    fontSize:   fs(17),
+    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
     color:      C.text,
   },
 
-  // Pill badge
-  pill: {
-    borderRadius:      ms(20),
-    paddingHorizontal: ms(10),
-    paddingVertical:   ms(4),
-    maxWidth:          ms(120),
+  // Identity section (screenBg, avatar pulls up into band)
+  identity: {
+    backgroundColor: colors.screenBg,
+    alignItems: "center",
+    paddingBottom: ms(12),
   },
-  pillT: { fontSize: fs(12), fontWeight: "700", textAlign: "center" },
+  avatarRing: {
+    width: ms(96),
+    height: ms(96),
+    borderRadius: ms(48),
+    borderWidth: 4,
+    borderColor: colors.screenBg,
+    backgroundColor: colors.screenBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -ms(48),
+    marginBottom: ms(14),
+    zIndex: 10,
+  },
+  avatarInner: {
+    width: ms(84),
+    height: ms(84),
+    borderRadius: ms(42),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontSize: fs(32),
+    fontFamily: "Inter_800ExtraBold",
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 1,
+  },
+  heroName: {
+    fontSize: fs(24),
+    fontFamily: "Inter_800ExtraBold",
+    fontWeight: "800",
+    color: C.text,
+    letterSpacing: -0.4,
+    marginBottom: ms(8),
+    textAlign: "center",
+    paddingHorizontal: ms(24),
+  },
+  pillRow: {
+    flexDirection:  "row",
+    alignItems:     "center",
+    gap:            ms(6),
+    marginBottom:   ms(20),
+    paddingHorizontal: ms(16),
+  },
+  pill: {
+    flexDirection:     "row",
+    alignItems:        "center",
+    gap:               ms(5),
+    borderRadius:      ms(20),
+    paddingHorizontal: ms(11),
+    paddingVertical:   ms(5),
+    flexShrink:        1,
+  },
+  pillT: {
+    fontSize:   fs(12),
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
+    flexShrink: 1,
+  },
+  pillDot: {
+    width:           ms(4),
+    height:          ms(4),
+    borderRadius:    ms(2),
+    backgroundColor: C.muted,
+    flexShrink:      0,
+  },
+  // kept for TS compatibility — unused after refactor
+  rolePill: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rolePillT: {
+    fontSize: fs(12.5),
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
+  },
+
+  // Stats strip
+  statsStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: ms(16),
+    marginHorizontal: ms(20),
+    paddingVertical: ms(14),
+    paddingHorizontal: ms(8),
+  },
+  statDivider: {
+    width: 1,
+    height: ms(32),
+    backgroundColor: colors.primary + "28",
+  },
+
+  // Body
+  body: {
+    paddingHorizontal: ms(16),
+  },
 });
 
 // ── PIN modal styles ───────────────────────────────────────────────────────────
 
 const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
-  sheet: {
-    flex:            1,
-    backgroundColor: BG,
-  },
+  sheet: { flex: 1 },
   sheetHeader: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    justifyContent:    "space-between",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: ms(16),
-    paddingVertical:   ms(14),
-    borderBottomWidth: 1,
+    paddingVertical: ms(14),
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
   },
   cancelBtn: { width: ms(60) },
-  cancelT: { fontSize: fs(15), color: colors.primary, fontWeight: "600" },
-  sheetTitle: {
-    fontSize:   fs(16),
-    fontWeight: "700",
-    color:      C.text,
-  },
+  cancelT: { fontSize: fs(15), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  sheetTitle: { fontSize: fs(16), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   sheetBody: {
-    flex:       1,
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap:        ms(8),
+    gap: ms(8),
     paddingHorizontal: ms(32),
   },
   stepIcon: {
-    width:           ms(64),
-    height:          ms(64),
-    borderRadius:    ms(20),
-    alignItems:      "center",
-    justifyContent:  "center",
-    marginBottom:    ms(4),
+    width: ms(64),
+    height: ms(64),
+    borderRadius: ms(20),
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: ms(4),
   },
-  stepTitle: {
-    fontSize:   fs(20),
-    fontWeight: "800",
-    color:      C.text,
-  },
-  stepSub: {
-    fontSize:  fs(13.5),
-    color:     C.muted,
-    textAlign: "center",
-  },
-  dots: {
-    flexDirection: "row",
-    gap:           ms(18),
-    marginTop:     ms(20),
-    marginBottom:  ms(4),
-  },
+  stepTitle: { fontSize: fs(20), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  stepSub: { fontSize: fs(13.5), color: C.muted, textAlign: "center" },
+
+  dots: { flexDirection: "row", gap: ms(18), marginTop: ms(20), marginBottom: ms(4) },
   dot: {
-    width:           ms(16),
-    height:          ms(16),
-    borderRadius:    ms(8),
-    borderWidth:     2,
-    borderColor:     C.border,
+    width: ms(16),
+    height: ms(16),
+    borderRadius: ms(8),
+    borderWidth: 2,
+    borderColor: C.border,
     backgroundColor: "transparent",
   },
-  dotFilled: {
-    backgroundColor: colors.primary,
-    borderColor:     colors.primary,
-  },
-  dotError: {
-    backgroundColor: C.red,
-    borderColor:     C.red,
-  },
-  errMsg: {
-    fontSize: fs(12.5),
-    color:    C.red,
-    textAlign: "center",
-    marginTop: ms(6),
-  },
+  dotFilled: { backgroundColor: colors.primary, borderColor: colors.primary },
+  dotError: { backgroundColor: C.red, borderColor: C.red },
+  errMsg: { fontSize: fs(12.5), color: C.red, textAlign: "center", marginTop: ms(6) },
 
-  // Keypad
-  pad: {
-    paddingHorizontal: ms(24),
-    paddingBottom:     ms(16),
-    gap:               ms(8),
-  },
-  row: {
-    flexDirection:  "row",
-    justifyContent: "space-between",
-    gap:            ms(10),
-  },
+  pad: { paddingHorizontal: ms(24), paddingBottom: ms(16), gap: ms(8) },
+  padRow: { flexDirection: "row", justifyContent: "space-between", gap: ms(10) },
   key: {
-    flex:            1,
-    height:          ms(64),
-    borderRadius:    ms(14),
+    flex: 1,
+    height: ms(64),
+    borderRadius: ms(14),
     backgroundColor: C.inputBg,
-    alignItems:      "center",
-    justifyContent:  "center",
-    borderWidth:     1,
-    borderColor:     C.border,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
   },
   keyGhost: { flex: 1, height: ms(64) },
-  keyN: {
-    fontSize:   fs(22),
-    fontWeight: "400",
-    color:      C.text,
-  },
+  keyN: { fontSize: fs(22), fontFamily: "Inter_400Regular", fontWeight: "400", color: C.text },
 });

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
+import { C } from "../../theme";
 
 interface Props extends Pick<TextInputProps, "returnKeyType" | "onSubmitEditing" | "blurOnSubmit"> {
   label: string;
@@ -65,7 +66,7 @@ export function FormField({
           <Ionicons
             name={icon}
             size={16}
-            color={hasError ? "#C0392B" : "#8A7F82"}
+            color={hasError ? C.red : C.muted}
             style={s.icon}
           />
         )}
@@ -75,7 +76,7 @@ export function FormField({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor="#C7BAB4"
+          placeholderTextColor={C.placeholder}
           keyboardType={keyboardType}
           maxLength={maxLength}
           editable={editable}
@@ -85,7 +86,7 @@ export function FormField({
         />
         {clearable && !!value && editable && (
           <TouchableOpacity onPress={() => onChangeText("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={16} color="#B0A9AC" />
+            <Ionicons name="close-circle" size={16} color={C.placeholder} />
           </TouchableOpacity>
         )}
         {maxLength && editable && (
@@ -97,7 +98,7 @@ export function FormField({
 
       {hasError && (
         <View style={s.errorRow}>
-          <Ionicons name="alert-circle-outline" size={13} color="#C0392B" />
+          <Ionicons name="alert-circle-outline" size={13} color={C.red} />
           <Text style={s.errorT}>{error}</Text>
         </View>
       )}
@@ -110,25 +111,25 @@ export function FormField({
 
 const s = StyleSheet.create({
   wrap:             { marginBottom: ms(20) },
-  label:            { fontSize: fs(12.5), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(7), letterSpacing: 0.3 },
-  asterisk:         { color: "#C0392B", fontWeight: "800" },
+  label:            { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(7), letterSpacing: 0.3 },
+  asterisk:         { color: C.red, fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
   inputRow:         {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.card,
     borderRadius: ms(12),
     borderWidth: 1.5,
-    borderColor: "#E8E3DC",
+    borderColor: C.border,
     paddingHorizontal: ms(14),
     paddingVertical: ms(12),
     gap: ms(8),
   },
-  inputRowError:    { borderColor: "#C0392B", backgroundColor: "#FEF8F8" },
-  inputRowDisabled: { backgroundColor: "#F5F2EE", opacity: 0.7 },
+  inputRowError:    { borderColor: C.red, backgroundColor: C.red + "08" },
+  inputRowDisabled: { backgroundColor: C.bg, opacity: 0.7 },
   icon:             { flexShrink: 0 },
-  input:            { flex: 1, fontSize: fs(14), color: "#2B1B1F", includeFontPadding: false, padding: 0 },
-  counter:          { fontSize: fs(10.5), color: "#B0A9AC", flexShrink: 0 },
+  input:            { flex: 1, fontSize: fs(14), color: C.text, includeFontPadding: false, padding: 0 },
+  counter:          { fontSize: fs(10.5), color: C.placeholder, flexShrink: 0 },
   errorRow:         { flexDirection: "row", alignItems: "center", marginTop: ms(5), gap: ms(4) },
-  errorT:           { fontSize: fs(11.5), color: "#C0392B", flex: 1 },
-  hint:             { fontSize: fs(11.5), color: "#8A7F82", marginTop: ms(5) },
+  errorT:           { fontSize: fs(11.5), color: C.red, flex: 1 },
+  hint:             { fontSize: fs(11.5), color: C.muted, marginTop: ms(5) },
 });

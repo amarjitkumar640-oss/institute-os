@@ -9,6 +9,14 @@ services:
     expose:
       - "4000"
 
+  # One image serves every tenant — the tenant is resolved at runtime from
+  # the URL (/org/:slug), not baked in at build time. See apps/web/Dockerfile.
+  web-qa:
+    image: ghcr.io/amarjitkumar640-oss/institute-os-web:quality
+    restart: always
+    expose:
+      - "80"
+
   postgres-qa:
     image: postgres:16-alpine
     restart: always

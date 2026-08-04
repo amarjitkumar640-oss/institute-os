@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, ActivityIndicator, StatusBar,
+  TextInput, Modal, ActivityIndicator,
   RefreshControl, Animated, Easing, Platform,
   Keyboard, TouchableWithoutFeedback,
 } from "react-native";
@@ -33,7 +33,7 @@ function roleColors(colors: ThemeColors): Record<string, string> {
   return {
     admin:     colors.primary,
     teacher:   colors.accent,
-    frontdesk: "#E8752C",
+    frontdesk: C.orange,
   };
 }
 
@@ -566,13 +566,19 @@ export function CenterManagementScreen() {
           showAlert("Error", "Could not update center status.", "error");
         }
       },
-      { confirmLabel: action, destructive: center.isActive },
+      {
+        confirmLabel: action,
+        destructive:  center.isActive,
+        // Activating isn't a warning — give it the theme-colored treatment
+        // instead of the plain info-blue icon, same reasoning as logout.
+        brand:        !center.isActive,
+        icon:         !center.isActive ? "power-outline" : undefined,
+      },
     );
   }
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader
         title="Manage Centers"
         count={centers.filter((c) => c.isActive).length}
@@ -602,7 +608,7 @@ export function CenterManagementScreen() {
           {centers.length === 0 ? (
             <EmptyState
               scene="centers"
-              color="#1B9C63"
+              color={C.green}
               title="No centers yet"
               subtitle="Create your first branch or teaching center to get started"
               action={{ label: "Create Center", onPress: openCreate }}
@@ -618,7 +624,7 @@ export function CenterManagementScreen() {
                     onPress={() => setExpanded(isOpen ? null : center.id)}
                     activeOpacity={0.7}
                   >
-                    <View style={[s.cardIcon, !center.isActive && { backgroundColor: "#D0C8C4" }]}>
+                    <View style={[s.cardIcon, !center.isActive && { backgroundColor: C.border }]}>
                       <Ionicons name="business-outline" size={ms(18)} color="#fff" />
                     </View>
                     <View style={{ flex: 1, minWidth: 0, marginLeft: ms(12) }}>
@@ -676,74 +682,74 @@ export function CenterManagementScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: colors.primary },
+  safe:   { flex: 1, backgroundColor: colors.screenBg },
 
-  scroll: { flex: 1, backgroundColor: C.bg },
+  scroll: { flex: 1, backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
-  loader: { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: ms(12) },
+  loader: { flex: 1, backgroundColor: colors.screenBg, alignItems: "center", justifyContent: "center", gap: ms(12) },
   loaderT:{ fontSize: fs(13), color: C.muted },
 
   empty:     { alignItems: "center", paddingVertical: ms(64), gap: ms(8) },
-  emptyT:    { fontSize: fs(16), fontWeight: "700", color: "#B0A9AC", marginTop: ms(8) },
-  emptySub:  { fontSize: fs(12), color: "#C7BAB4", textAlign: "center", paddingHorizontal: ms(32) },
+  emptyT:    { fontSize: fs(16), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.placeholder, marginTop: ms(8) },
+  emptySub:  { fontSize: fs(12), color: C.placeholder, textAlign: "center", paddingHorizontal: ms(32) },
   emptyBtn:  { marginTop: ms(16), backgroundColor: colors.primary, borderRadius: ms(12), paddingHorizontal: ms(24), paddingVertical: ms(10) },
-  emptyBtnT: { fontSize: fs(14), fontWeight: "700", color: "#fff" },
+  emptyBtnT: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
 
   fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
 
-  card:         { backgroundColor: C.card, borderRadius: ms(18), marginBottom: ms(14), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(3) }, shadowOpacity: 0.1, shadowRadius: ms(8), elevation: 3, overflow: "hidden" },
+  card:         { backgroundColor: C.card, borderRadius: ms(18), marginBottom: ms(14), shadowColor: C.text, shadowOffset: { width: 0, height: ms(3) }, shadowOpacity: 0.1, shadowRadius: ms(8), elevation: 3, overflow: "hidden" },
   cardInactive: { opacity: 0.65 },
   cardHead:     { flexDirection: "row", alignItems: "center", padding: ms(14) },
   cardIcon:     { width: ms(40), height: ms(40), borderRadius: ms(12), backgroundColor: C.purple, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   nameRow:      { flexDirection: "row", alignItems: "center", gap: ms(6), flexWrap: "wrap" },
-  cardName:     { fontSize: fs(15), fontWeight: "700", color: C.text, flexShrink: 1 },
+  cardName:     { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, flexShrink: 1 },
   cardMeta:     { fontSize: fs(11.5), color: C.muted, marginTop: 2 },
-  inactiveBadge:  { backgroundColor: "#F0EDE8", borderRadius: ms(6), paddingHorizontal: ms(6), paddingVertical: 2 },
-  inactiveBadgeT: { fontSize: fs(10), color: C.muted, fontWeight: "600" },
+  inactiveBadge:  { backgroundColor: C.border, borderRadius: ms(6), paddingHorizontal: ms(6), paddingVertical: 2 },
+  inactiveBadgeT: { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 });
 
 const makeDStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap:      { borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: ms(14), paddingBottom: ms(14) },
   statsRow:  { flexDirection: "row", paddingVertical: ms(12) },
   stat:      { flex: 1, alignItems: "center" },
-  statN:     { fontSize: fs(18), fontWeight: "800", color: C.text },
+  statN:     { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   statL:     { fontSize: fs(10), color: C.muted, marginTop: 2 },
   statDiv:   { width: 1, backgroundColor: C.border, marginVertical: ms(4) },
   infoRow:   { flexDirection: "row", alignItems: "flex-start", gap: ms(6), marginBottom: ms(6) },
   infoT:     { fontSize: fs(12), color: C.muted, flex: 1 },
   actions:   { flexDirection: "row", gap: ms(10), marginTop: ms(8), marginBottom: ms(14) },
-  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: C.bg, borderWidth: 1, borderColor: C.border },
-  actionT:   { fontSize: fs(13), fontWeight: "700" },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: colors.bg, borderWidth: 1, borderColor: C.border },
+  actionT:   { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700" },
   staffHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: ms(8) },
-  staffTitle:  { fontSize: fs(13), fontWeight: "700", color: C.text },
-  addStaffBtn: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: "#F3EDFF", borderRadius: ms(8), paddingHorizontal: ms(10), paddingVertical: ms(5) },
-  addStaffT:   { fontSize: fs(12), fontWeight: "700", color: C.purple },
+  staffTitle:  { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  addStaffBtn: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(10), paddingVertical: ms(5) },
+  addStaffT:   { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.purple },
   noStaff:     { fontSize: fs(12), color: C.muted, textAlign: "center", paddingVertical: ms(12) },
   staffRow:    { flexDirection: "row", alignItems: "center", paddingVertical: ms(9), gap: ms(10) },
   staffDiv:    { borderBottomWidth: 1, borderBottomColor: C.border },
   staffAv:     { width: ms(32), height: ms(32), borderRadius: ms(16), backgroundColor: "#EDE5F8", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  staffAvL:    { fontSize: fs(13), fontWeight: "700", color: C.purple },
-  staffName:   { fontSize: fs(13), fontWeight: "600", color: C.text },
+  staffAvL:    { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.purple },
+  staffName:   { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
   staffEmail:  { fontSize: fs(11), color: C.muted, marginTop: 1 },
   roleChip:    { borderRadius: ms(6), paddingHorizontal: ms(7), paddingVertical: ms(3), marginRight: ms(6) },
-  roleChipT:   { fontSize: fs(10), fontWeight: "700" },
+  roleChipT:   { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
 const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   // ── Shared shell ────────────────────────────────────────────────────────────
   overlay:  { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(16,4,8,0.50)" },
-  sheet:    { backgroundColor: "#fff", borderTopLeftRadius: ms(28), borderTopRightRadius: ms(28) },
-  drag:     { width: ms(36), height: ms(4), backgroundColor: "#DDD5D0", borderRadius: ms(2), alignSelf: "center", marginTop: ms(10), marginBottom: ms(16) },
+  sheet:    { backgroundColor: C.card, borderTopLeftRadius: ms(28), borderTopRightRadius: ms(28) },
+  drag:     { width: ms(36), height: ms(4), backgroundColor: C.border, borderRadius: ms(2), alignSelf: "center", marginTop: ms(10), marginBottom: ms(16) },
   btnDim:   { opacity: 0.6 },
 
   // ── CenterFormModal header ───────────────────────────────────────────────────
   fHeader:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(20), paddingBottom: ms(14) },
   fHeaderLeft: { flexDirection: "row", alignItems: "center", gap: ms(12), flex: 1, minWidth: 0 },
   fHeaderIcon: { width: ms(44), height: ms(44), borderRadius: ms(14), backgroundColor: "rgba(139,30,63,0.09)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  fTitle:      { fontSize: fs(16), fontWeight: "800", color: C.text },
+  fTitle:      { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   fSubtitle:   { fontSize: fs(11.5), color: C.muted, marginTop: 1 },
-  closeBtn:    { width: ms(34), height: ms(34), borderRadius: ms(10), backgroundColor: C.bg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  closeBtn:    { width: ms(34), height: ms(34), borderRadius: ms(10), backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   fDivider:    { height: 1, backgroundColor: C.border, marginBottom: ms(8) },
 
   // ── CenterFormModal fields ───────────────────────────────────────────────────
@@ -751,9 +757,9 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   fields:         { paddingHorizontal: ms(20), gap: ms(14) },
   fieldWrap:      { gap: ms(7) },
   fieldLabelRow:  { flexDirection: "row", alignItems: "center", gap: ms(6) },
-  fieldLabelT:    { fontSize: fs(12.5), fontWeight: "700", color: C.text },
+  fieldLabelT:    { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   req:            { color: colors.primary },
-  inputBox:       { backgroundColor: "#FAF6F4", borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border },
+  inputBox:       { backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border },
   inputBoxFocused:{ borderColor: colors.primary, backgroundColor: "#FFF8FB" },
   input:          { paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(14), color: C.text },
   multiInput:     { minHeight: ms(72), textAlignVertical: "top" },
@@ -761,22 +767,22 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   // ── CenterFormModal button ───────────────────────────────────────────────────
   btn:     { marginHorizontal: ms(20), marginTop: ms(22), borderRadius: ms(16), overflow: "hidden" },
   btnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), paddingVertical: ms(15) },
-  btnT:    { fontSize: fs(15), fontWeight: "800", color: "#fff" },
+  btnT:    { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
 
   // ── AssignStaffModal ─────────────────────────────────────────────────────────
-  title:      { fontSize: fs(17), fontWeight: "800", color: C.text, marginBottom: ms(8), paddingHorizontal: ms(20) },
-  label:      { fontSize: fs(12), fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: ms(6), marginTop: ms(10), paddingHorizontal: ms(20) },
+  title:      { fontSize: fs(17), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(8), paddingHorizontal: ms(20) },
+  label:      { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: ms(6), marginTop: ms(10), paddingHorizontal: ms(20) },
   rolePicker: { flexDirection: "row", gap: ms(8), marginBottom: ms(4), paddingHorizontal: ms(20) },
-  roleChip:   { flex: 1, alignItems: "center", paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: C.bg, borderWidth: 1, borderColor: C.border },
-  roleChipT:  { fontSize: fs(12), fontWeight: "700", color: C.muted },
+  roleChip:   { flex: 1, alignItems: "center", paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: colors.bg, borderWidth: 1, borderColor: C.border },
+  roleChipT:  { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
   emptyT:     { fontSize: fs(13), color: C.muted, textAlign: "center", paddingVertical: ms(16) },
   staffRow:   { flexDirection: "row", alignItems: "center", paddingVertical: ms(10), paddingHorizontal: ms(20), gap: ms(10), borderBottomWidth: 1, borderBottomColor: C.border },
   staffAv:    { width: ms(36), height: ms(36), borderRadius: ms(18), backgroundColor: "#EDE5F8", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  staffAvL:   { fontSize: fs(14), fontWeight: "700", color: C.purple },
-  staffName:  { fontSize: fs(13), fontWeight: "600", color: C.text },
+  staffAvL:   { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.purple },
+  staffName:  { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
   staffEmail: { fontSize: fs(11), color: C.muted, marginTop: 1 },
   assignBtn:  { backgroundColor: C.purple, borderRadius: ms(8), paddingHorizontal: ms(12), paddingVertical: ms(6), minWidth: ms(44), alignItems: "center" },
-  assignBtnT: { fontSize: fs(12), fontWeight: "700", color: "#fff" },
+  assignBtnT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
   cancelBtn:  { alignItems: "center", marginTop: ms(12), paddingBottom: ms(4) },
-  cancelT:    { fontSize: fs(14), color: C.muted, fontWeight: "600" },
+  cancelT:    { fontSize: fs(14), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 });

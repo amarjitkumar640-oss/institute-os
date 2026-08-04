@@ -1,12 +1,54 @@
 import { Router } from "express";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
-import { centerFilter } from "../../lib/centerFilter";
+import { requireRole } from "../../middleware/role";
+import { assignedCenterIds } from "../../lib/centerFilter";
+import { listFacultySessions } from "../schedule/schedule.service";
 
 export const dashboardRouter = Router();
 
+// ── Teacher-scoped dashboard ────────────────────────────────────────────────
+// Separate route (not a branch of "/") so the existing admin/frontdesk
+// dashboard response is completely untouched.
+dashboardRouter.get("/teacher", requireAuth, requireRole("teacher"), async (req, res) => {
+  const facultyId = req.auth!.facultyId;
+  if (!facultyId) {
+    return res.json({ linked: false as const });
+  }
+
+  // Prefer the client-supplied date (device local date) so IST users don't see
+  // UTC yesterday's schedule before 05:30 AM. Falls back to UTC today.
+  const rawDate = typeof req.query.date === "string" ? req.query.date : "";
+  const todayStr = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+    ? rawDate
+    : new Date().toISOString().slice(0, 10);
+
+  const [todaySessions, activeSlots] = await Promise.all([
+    listFacultySessions(prisma, facultyId, req.auth!.tenantId, { from: todayStr, to: todayStr }),
+    prisma.classSlot.findMany({
+      where: { facultyId, isActive: true, batch: { tenantId: req.auth!.tenantId } },
+      select: { batchId: true, batch: { select: { id: true, name: true } } },
+      distinct: ["batchId"],
+    }),
+  ]);
+
+  const batchIds = activeSlots.map((s) => s.batchId);
+  const totalStudents = batchIds.length
+    ? await prisma.enrollment.count({ where: { status: "active", batchId: { in: batchIds } } })
+    : 0;
+
+  res.json({
+    linked: true as const,
+    classesToday: todaySessions,
+    myBatches: activeSlots.map((s) => s.batch),
+    totalBatches: activeSlots.length,
+    totalStudents,
+  });
+});
+
 dashboardRouter.get("/", requireAuth, async (req, res) => {
-  const cFilter = centerFilter(req);
+  const ids = await assignedCenterIds(req);
+  const cFilter = { tenantId: req.auth!.tenantId, centerId: { in: ids } };
   const now = new Date();
   const eightMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 7, 1);
 
@@ -32,7 +74,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
     prisma.enrollment.count({
       where: {
         status: "active",
-        batch: { tenantId: cFilter.tenantId, ...(cFilter.centerId ? { centerId: cFilter.centerId } : {}) },
+        batch: { tenantId: cFilter.tenantId, centerId: cFilter.centerId },
       },
     }),
     prisma.paymentTransaction.aggregate({
@@ -40,7 +82,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
         type: "payment",
         schedule: {
           enrollment: {
-            batch: { tenantId: cFilter.tenantId, ...(cFilter.centerId ? { centerId: cFilter.centerId } : {}) },
+            batch: { tenantId: cFilter.tenantId, centerId: cFilter.centerId },
           },
         },
       },
@@ -50,7 +92,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
     prisma.enrollment.findMany({
       where: {
         status: "active",
-        batch: { tenantId: cFilter.tenantId, ...(cFilter.centerId ? { centerId: cFilter.centerId } : {}) },
+        batch: { tenantId: cFilter.tenantId, centerId: cFilter.centerId },
       },
       orderBy: { enrolledOn: "desc" },
       take: 5,
@@ -77,7 +119,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
     prisma.enrollment.findMany({
       where: {
         enrolledOn: { gte: eightMonthsAgo },
-        batch: { tenantId: cFilter.tenantId, ...(cFilter.centerId ? { centerId: cFilter.centerId } : {}) },
+        batch: { tenantId: cFilter.tenantId, centerId: cFilter.centerId },
       },
       select: { enrolledOn: true },
     }),
@@ -119,8 +161,11 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
 
   // ── Per-center breakdown (only in all-centers mode) ───────────────────────
   let perCenter: Array<{ id: string; name: string; students: number; batches: number; enrollments: number }> | undefined;
-  if (!cFilter.centerId) {
-    const centers = await prisma.center.findMany({ where: { tenantId: cFilter.tenantId, isActive: true }, orderBy: { name: "asc" } });
+  if (!req.auth?.centerId) {
+    // Scoped to this staff's own assigned centers (`ids`), not every center
+    // in the tenant — otherwise this breakdown would leak centers they were
+    // never assigned to even though the totals above are correctly scoped.
+    const centers = await prisma.center.findMany({ where: { id: { in: ids }, isActive: true }, orderBy: { name: "asc" } });
     perCenter = await Promise.all(
       centers.map(async (c) => {
         const [students, batches, enrollments] = await Promise.all([

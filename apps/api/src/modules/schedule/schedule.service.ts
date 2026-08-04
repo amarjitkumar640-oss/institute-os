@@ -29,9 +29,19 @@ const SESSION_INCLUDE = {
 
 // ── Slots ─────────────────────────────────────────────────────────────────────
 
-export async function listSlots(prisma: PrismaClient, batchId: string, tenantId: string) {
+export async function listSlots(
+  prisma: PrismaClient,
+  batchId: string,
+  tenantId: string,
+  facultyId?: string,
+) {
   return prisma.classSlot.findMany({
-    where:   { batchId, isActive: true, batch: { tenantId } },
+    where: {
+      batchId,
+      isActive: true,
+      batch: { tenantId },
+      ...(facultyId ? { facultyId } : {}),
+    },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
     include: SLOT_INCLUDE,
   });
@@ -105,7 +115,7 @@ export async function listSessions(
   prisma: PrismaClient,
   batchId: string,
   tenantId: string,
-  params: { from: string; to: string; status?: string },
+  params: { from: string; to: string; status?: string; facultyId?: string },
 ) {
   return prisma.classSession.findMany({
     where: {
@@ -115,7 +125,8 @@ export async function listSessions(
         gte: new Date(params.from + "T00:00:00.000Z"),
         lte: new Date(params.to   + "T23:59:59.999Z"),
       },
-      ...(params.status ? { status: params.status as any } : {}),
+      ...(params.status    ? { status:    params.status    as any } : {}),
+      ...(params.facultyId ? { facultyId: params.facultyId }       : {}),
     },
     orderBy: [{ scheduledDate: "asc" }, { startTime: "asc" }],
     include: SESSION_INCLUDE,
@@ -172,6 +183,32 @@ export async function patchSession(
     },
     include: SESSION_INCLUDE,
   });
+}
+
+// ── Auto-generate sessions on slot create/update ─────────────────────────────
+// Called fire-and-forget after a slot is created or its faculty/subject changes.
+// Generates from today (or validFrom if later) through min(batch.endDate, +90 days).
+
+export async function autoGenerateSessions(
+  prisma: PrismaClient,
+  batchId: string,
+  tenantId: string,
+  validFrom: string | null,
+): Promise<void> {
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, tenantId } });
+  if (!batch) return;
+
+  const todayStr  = new Date().toISOString().slice(0, 10);
+  const fromStr   = validFrom && validFrom > todayStr ? validFrom : todayStr;
+  const batchEnd  = batch.endDate.toISOString().slice(0, 10);
+  const cap       = new Date();
+  cap.setDate(cap.getDate() + 90);
+  const capStr    = cap.toISOString().slice(0, 10);
+  const toStr     = batchEnd < capStr ? batchEnd : capStr;
+
+  if (fromStr <= toStr) {
+    await generateSessions(prisma, batchId, tenantId, { from: fromStr, to: toStr });
+  }
 }
 
 // ── Generate sessions from slots ──────────────────────────────────────────────
@@ -274,7 +311,7 @@ export async function listFacultySessions(
 export async function listTodaySessions(
   prisma: PrismaClient,
   tenantId: string,
-  centerId?: string,
+  centerIds: string[],
 ) {
   const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
 
@@ -285,7 +322,7 @@ export async function listTodaySessions(
         lte: new Date(todayStr + "T23:59:59.999Z"),
       },
       status: "scheduled",
-      batch: { tenantId, ...(centerId ? { centerId } : {}) },
+      batch: { tenantId, centerId: { in: centerIds } },
     },
     orderBy: { startTime: "asc" },
     include: SESSION_INCLUDE,

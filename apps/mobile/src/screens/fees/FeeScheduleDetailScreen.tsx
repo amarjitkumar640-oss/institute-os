@@ -1,20 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, ActivityIndicator, TextInput, Modal,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal,
   KeyboardAvoidingView, Platform, RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import Svg, { Circle, Path } from "react-native-svg";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { useAuth } from "../../context/AuthContext";
 import { useAlert } from "../../context/AlertContext";
-import { ms, fs, sw } from "../../utils/responsive";
+import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
-import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import {
   getScheduleDetail, recordPayment,
   installmentOutstanding, scheduleTotalPaid, scheduleTotalOutstanding,
@@ -36,11 +34,11 @@ const PAYMENT_MODES: { key: TxnMode; label: string; icon: string }[] = [
 type InstallmentStatus = ScheduleInstallment["status"];
 
 const INST_META: Record<InstallmentStatus, { label: string; color: string; bg: string; icon: string }> = {
-  pending:  { label: "Pending",  color: "#2563A8", bg: "#EBF3FD", icon: "calendar-outline"          },
+  pending:  { label: "Pending",  color: C.blue,    bg: "#EBF3FD", icon: "calendar-outline"          },
   partial:  { label: "Partial",  color: "#946200", bg: "#FFF3D6", icon: "time-outline"              },
-  overdue:  { label: "Overdue",  color: "#C0392B", bg: "#FBE9E7", icon: "warning-outline"           },
-  paid:     { label: "Paid",     color: "#1B9C63", bg: "#E7F7EF", icon: "checkmark-circle-outline"  },
-  waived:   { label: "Waived",   color: "#8A7F82", bg: "#F5F1EE", icon: "shield-checkmark-outline"  },
+  overdue:  { label: "Overdue",  color: C.red,     bg: "#FBE9E7", icon: "warning-outline"           },
+  paid:     { label: "Paid",     color: C.green,   bg: C.greenBg, icon: "checkmark-circle-outline"  },
+  waived:   { label: "Waived",   color: C.muted,   bg: C.bg, icon: "shield-checkmark-outline"  },
   deferred: { label: "Deferred", color: "#946200", bg: "#FFF3D6", icon: "arrow-forward-circle-outline" },
 };
 
@@ -75,19 +73,6 @@ const MODE_LABEL: Record<string, string> = {
 };
 
 // ── Wave ──────────────────────────────────────────────────────────────────────
-
-const WAVE_H = Math.round(ms(34));
-
-function Wave() {
-  return (
-    <Svg width={sw} height={WAVE_H} viewBox={`0 0 ${sw} 34`} preserveAspectRatio="none">
-      <Path
-        d={`M0 18 C${sw * 0.25} 36,${sw * 0.75} 2,${sw} 18 L${sw} 34 L0 34 Z`}
-        fill="#FFFBF0"
-      />
-    </Svg>
-  );
-}
 
 // ── Record Payment Modal ──────────────────────────────────────────────────────
 
@@ -138,7 +123,7 @@ function RecordPaymentModal({
     if (entered <= 0) return null;
     let remaining = entered;
     const rows: { label: string; amount: number }[] = [];
-    const pending = [...schedule.installments]
+    const pending = [...(schedule.installments ?? [])]
       .filter((i) => ["pending", "partial", "overdue"].includes(i.status))
       .sort((a, b) => a.sortOrder - b.sortOrder);
     for (const inst of pending) {
@@ -239,7 +224,7 @@ function RecordPaymentModal({
           {isGeneral && allocation && allocation.rows.length > 0 && (
             <View style={pm.allocBox}>
               <View style={pm.allocHeader}>
-                <Ionicons name="git-branch-outline" size={ms(12)} color="#2563A8" />
+                <Ionicons name="git-branch-outline" size={ms(12)} color={C.blue} />
                 <Text style={pm.allocTitle}>Will be applied to</Text>
               </View>
               {allocation.rows.map((row, i) => (
@@ -251,9 +236,9 @@ function RecordPaymentModal({
               ))}
               {allocation.leftover > 0 && (
                 <View style={pm.allocRow}>
-                  <View style={[pm.allocDot, { backgroundColor: "#1B9C63" }]} />
-                  <Text style={[pm.allocLabel, { color: "#1B9C63" }]}>Credit balance</Text>
-                  <Text style={[pm.allocAmt, { color: "#1B9C63" }]}>
+                  <View style={[pm.allocDot, { backgroundColor: C.green }]} />
+                  <Text style={[pm.allocLabel, { color: C.green }]}>Credit balance</Text>
+                  <Text style={[pm.allocAmt, { color: C.green }]}>
                     +₹{allocation.leftover.toLocaleString("en-IN")}
                   </Text>
                 </View>
@@ -273,7 +258,7 @@ function RecordPaymentModal({
                   onPress={() => setMode(m.key)}
                   activeOpacity={0.75}
                 >
-                  <Ionicons name={m.icon as any} size={ms(14)} color={active ? colors.primary : "#8A7F82"} />
+                  <Ionicons name={m.icon as any} size={ms(14)} color={active ? colors.primary : C.muted} />
                   <Text style={[pm.modeChipT, active && pm.modeChipTOn]}>{m.label}</Text>
                 </TouchableOpacity>
               );
@@ -316,25 +301,18 @@ function RecordPaymentModal({
           />
 
           <TouchableOpacity
-            style={[pm.submitBtn, saving && { opacity: 0.65 }]}
+            style={[pm.submitBtn, { backgroundColor: colors.primary }, saving && { opacity: 0.65 }]}
             onPress={submit}
             disabled={saving}
             activeOpacity={0.88}
           >
-            <LinearGradient
-              colors={[colors.primary, lighten(colors.primary, 0.12), lighten(colors.primary, 0.3)]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={pm.submitGrad}
-            >
-              {saving
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <>
-                    <Ionicons name="checkmark-circle-outline" size={ms(18)} color="#fff" />
-                    <Text style={pm.submitT}>Confirm Payment</Text>
-                  </>
-              }
-            </LinearGradient>
+            {saving
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <>
+                  <Ionicons name="checkmark-circle-outline" size={ms(18)} color="#fff" />
+                  <Text style={pm.submitT}>Confirm Payment</Text>
+                </>
+            }
           </TouchableOpacity>
           <View style={{ height: ms(12) }} />
         </View>
@@ -368,8 +346,6 @@ function InstallmentRow({
       onPress={canCollect ? onCollect : undefined}
       activeOpacity={canCollect ? 0.76 : 1}
     >
-      <View style={[ir.stripe, { backgroundColor: meta.color }]} />
-
       <View style={ir.row}>
         {/* Left: label + date */}
         <View style={ir.info}>
@@ -385,7 +361,7 @@ function InstallmentRow({
 
         {/* Right: amount + badge + collect hint */}
         <View style={ir.right}>
-          <Text style={[ir.amount, { color: outstanding > 0 ? meta.color : "#8A7F82" }]}>
+          <Text style={[ir.amount, { color: outstanding > 0 ? meta.color : C.muted }]}>
             {outstanding > 0 ? fmtAmountFull(outstanding) : fmtAmountFull(planned)}
           </Text>
           <View style={[ir.badge, { backgroundColor: meta.bg }]}>
@@ -459,113 +435,84 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
   const canRecord = staff?.role === "admin" || staff?.role === "frontdesk";
 
   // Separate pending/partial/overdue from done
-  const pendingInst  = schedule?.installments.filter((i) => i.status !== "paid" && i.status !== "waived") ?? [];
-  const completedInst = schedule?.installments.filter((i) => i.status === "paid" || i.status === "waived") ?? [];
+  const pendingInst  = (schedule?.installments ?? []).filter((i) => i.status !== "paid" && i.status !== "waived");
+  const completedInst = (schedule?.installments ?? []).filter((i) => i.status === "paid" || i.status === "waived");
 
   const txnHistory = schedule?.transactions ?? [];
 
   return (
     <SafeAreaView style={sc.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* ── Gradient header ── */}
-      <LinearGradient
-        colors={[darken(colors.primary, 0.1), colors.primary, lighten(colors.primary, 0.22)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={sc.header}
-      >
-        <Svg width={sw} height={ms(220)} style={StyleSheet.absoluteFill}>
-          {Array.from({ length: 10 }).map((_, row) =>
-            Array.from({ length: 20 }).map((_, col) => (
-              <Circle
-                key={`${row}-${col}`}
-                cx={col * ms(22) + (row % 2 ? ms(11) : 0)}
-                cy={row * ms(22) + ms(8)}
-                r={ms(1.5)}
-                fill="rgba(255,255,255,0.10)"
-              />
-            ))
-          )}
-        </Svg>
+      <ScreenHeader
+        title="Payment Schedule"
+        onBack={() => navigation.goBack()}
+        right={canRecord && schedule
+          ? (
+              <TouchableOpacity style={sc.payFab} onPress={() => openPayModal(null)} activeOpacity={0.85}>
+                <Ionicons name="add" size={ms(14)} color={colors.primary} />
+                <Text style={[sc.payFabT, { color: colors.primary }]}>Record</Text>
+              </TouchableOpacity>
+            )
+          : undefined
+        }
+      />
 
-        {/* Top bar: back + title + record */}
-        <View style={[sc.hTop, { paddingTop: insets.top + ms(10) }]}>
-          <TouchableOpacity
-            style={sc.backBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="arrow-back" size={ms(20)} color="#fff" />
-          </TouchableOpacity>
-          <Text style={sc.hTitle}>Payment Schedule</Text>
-          {canRecord && schedule && (
-            <TouchableOpacity style={sc.payFab} onPress={() => openPayModal(null)} activeOpacity={0.85}>
-              <Ionicons name="add" size={ms(16)} color="#fff" />
-              <Text style={sc.payFabT}>Record</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Student identity */}
-        <View style={sc.studentRow}>
-          <View style={sc.avatar}>
-            <Text style={sc.avatarT}>{initials(studentName)}</Text>
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={sc.studentName} numberOfLines={1}>{studentName}</Text>
-            {batch?.name && (
-              <View style={sc.batchPill}>
-                <Ionicons name="layers-outline" size={ms(11)} color="rgba(255,255,255,0.80)" />
-                <Text style={sc.batchPillT} numberOfLines={1}>{batch.name}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* 3-stat strip */}
-        {schedule && (
-          <>
-            <View style={sc.feeStrip}>
-              <View style={sc.stripItem}>
-                <Text style={sc.stripLbl}>Total Fee</Text>
-                <Text style={sc.stripVal}>{fmtAmountFull(totalFee)}</Text>
-              </View>
-              <View style={sc.stripDivider} />
-              <View style={sc.stripItem}>
-                <Text style={sc.stripLbl}>Collected</Text>
-                <Text style={[sc.stripVal, { color: "#A8F0CE" }]}>{fmtAmountFull(totalPaid)}</Text>
-              </View>
-              <View style={sc.stripDivider} />
-              <View style={sc.stripItem}>
-                <Text style={sc.stripLbl}>Outstanding</Text>
-                <Text style={[sc.stripVal, outstanding > 0 && { color: "#FFD0CC" }]}>
-                  {fmtAmountFull(outstanding)}
-                </Text>
-              </View>
+      {/* Student identity + fee stats card */}
+      {schedule && (
+        <View style={sc.summaryCard}>
+          <View style={sc.studentRow}>
+            <View style={[sc.avatar, { backgroundColor: colors.primary + "18" }]}>
+              <Text style={[sc.avatarT, { color: colors.primary }]}>{initials(studentName)}</Text>
             </View>
-
-            {/* Progress bar */}
-            {totalFee > 0 && (
-              <View style={sc.progressWrap}>
-                <View style={sc.progressTrack}>
-                  <View
-                    style={[
-                      sc.progressFill,
-                      { width: `${Math.min(100, Math.round((totalPaid / totalFee) * 100))}%` as any },
-                    ]}
-                  />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={sc.studentName} numberOfLines={1}>{studentName}</Text>
+              {batch?.name && (
+                <View style={sc.batchPill}>
+                  <Ionicons name="layers-outline" size={ms(11)} color={C.muted} />
+                  <Text style={sc.batchPillT} numberOfLines={1}>{batch.name}</Text>
                 </View>
-                <Text style={sc.progressLbl}>
-                  {Math.min(100, Math.round((totalPaid / totalFee) * 100))}% collected
-                </Text>
-              </View>
-            )}
-          </>
-        )}
+              )}
+            </View>
+          </View>
 
-        <Wave />
-      </LinearGradient>
+          <View style={sc.divider} />
+
+          <View style={sc.feeStrip}>
+            <View style={sc.stripItem}>
+              <Text style={sc.stripLbl}>Total Fee</Text>
+              <Text style={sc.stripVal}>{fmtAmountFull(totalFee)}</Text>
+            </View>
+            <View style={sc.stripDivider} />
+            <View style={sc.stripItem}>
+              <Text style={sc.stripLbl}>Collected</Text>
+              <Text style={[sc.stripVal, { color: C.green }]}>{fmtAmountFull(totalPaid)}</Text>
+            </View>
+            <View style={sc.stripDivider} />
+            <View style={sc.stripItem}>
+              <Text style={sc.stripLbl}>Outstanding</Text>
+              <Text style={[sc.stripVal, outstanding > 0 && { color: C.red }]}>
+                {fmtAmountFull(outstanding)}
+              </Text>
+            </View>
+          </View>
+
+          {totalFee > 0 && (
+            <View style={sc.progressWrap}>
+              <View style={sc.progressTrack}>
+                <View
+                  style={[
+                    sc.progressFill,
+                    { width: `${Math.min(100, Math.round((totalPaid / totalFee) * 100))}%` as any, backgroundColor: C.green },
+                  ]}
+                />
+              </View>
+              <Text style={sc.progressLbl}>
+                {Math.min(100, Math.round((totalPaid / totalFee) * 100))}% collected
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* ── Body ── */}
       <View style={sc.body}>
@@ -609,9 +556,9 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
                   </View>
                 )}
                 {credit > 0 && (
-                  <View style={[sc.infoChip, { backgroundColor: "#E7F7EF" }]}>
-                    <Ionicons name="wallet-outline" size={ms(11)} color="#1B9C63" />
-                    <Text style={[sc.infoChipT, { color: "#1B9C63" }]}>
+                  <View style={[sc.infoChip, { backgroundColor: C.greenBg }]}>
+                    <Ionicons name="wallet-outline" size={ms(11)} color={C.green} />
+                    <Text style={[sc.infoChipT, { color: C.green }]}>
                       {fmtAmountFull(credit)} credit balance
                     </Text>
                   </View>
@@ -656,11 +603,11 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
                     <React.Fragment key={txn.id}>
                       {i > 0 && <View style={sc.histDivider} />}
                       <View style={sc.histRow}>
-                        <View style={[sc.histIcon, { backgroundColor: txn.type === "refund" ? "#FBE9E7" : "#E7F7EF" }]}>
+                        <View style={[sc.histIcon, { backgroundColor: txn.type === "refund" ? "#FBE9E7" : C.greenBg }]}>
                           <Ionicons
                             name={txn.type === "refund" ? "arrow-undo-outline" : "checkmark-outline"}
                             size={ms(15)}
-                            color={txn.type === "refund" ? "#C0392B" : "#1B9C63"}
+                            color={txn.type === "refund" ? C.red : C.green}
                           />
                         </View>
                         <View style={sc.histBody}>
@@ -675,7 +622,7 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
                             <Text style={sc.histReceipt}>#{txn.receiptNo}</Text>
                           )}
                         </View>
-                        <Text style={[sc.histAmt, txn.type === "refund" && { color: "#C0392B" }]}>
+                        <Text style={[sc.histAmt, txn.type === "refund" && { color: C.red }]}>
                           {txn.type === "refund" ? "−" : "+"}{fmtAmountFull(Number(txn.amount))}
                         </Text>
                       </View>
@@ -687,7 +634,7 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
 
             {pendingInst.length === 0 && completedInst.length === 0 && (
               <View style={sc.centered}>
-                <Ionicons name="document-outline" size={ms(40)} color="#C9BDB8" />
+                <Ionicons name="document-outline" size={ms(40)} color={C.placeholder} />
                 <Text style={sc.emptyT}>No installments found</Text>
               </View>
             )}
@@ -711,19 +658,18 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
 
 const ir = StyleSheet.create({
   card: {
-    backgroundColor:  "#FFF",
+    backgroundColor:  C.card,
     borderRadius:     ms(12),
     marginHorizontal: ms(16),
     marginBottom:     ms(7),
     overflow:         "hidden",
-    shadowColor:      "#2B1B1F",
+    shadowColor:      C.text,
     shadowOffset:     { width: 0, height: ms(2) },
     shadowOpacity:    0.07,
     shadowRadius:     ms(6),
     elevation:        2,
   },
   cardOverdue: { backgroundColor: "#FFF8F7" },
-  stripe: { position: "absolute", left: 0, top: 0, bottom: 0, width: ms(3) },
   row: {
     flexDirection:  "row",
     alignItems:     "center",
@@ -733,12 +679,12 @@ const ir = StyleSheet.create({
     gap:            ms(10),
   },
   info:     { flex: 1, minWidth: 0, gap: ms(3) },
-  label:    { fontSize: fs(13.5), fontWeight: "600", color: "#2B1B1F" },
-  sub:      { fontSize: fs(11), color: "#8A7F82" },
-  lateFeeT: { fontSize: fs(10.5), color: "#946200", fontWeight: "600" },
-  waivedT:  { fontSize: fs(10.5), color: "#1B9C63", fontWeight: "600" },
+  label:    { fontSize: fs(13.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
+  sub:      { fontSize: fs(11), color: C.muted },
+  lateFeeT: { fontSize: fs(10.5), color: "#946200", fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  waivedT:  { fontSize: fs(10.5), color: C.green, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
   right:    { alignItems: "flex-end", flexShrink: 0, gap: ms(4) },
-  amount:   { fontSize: fs(14), fontWeight: "700" },
+  amount:   { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700" },
   badge: {
     flexDirection:     "row",
     alignItems:        "center",
@@ -747,127 +693,124 @@ const ir = StyleSheet.create({
     paddingHorizontal: ms(7),
     paddingVertical:   ms(2),
   },
-  badgeT:      { fontSize: fs(9.5), fontWeight: "700", letterSpacing: 0.2 },
+  badgeT:      { fontSize: fs(9.5), fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.2 },
   collectHint: { flexDirection: "row", alignItems: "center", gap: ms(2) },
-  collectHintT: { fontSize: fs(10.5), fontWeight: "700" },
+  collectHintT: { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
 const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: colors.primary },
-  header: { overflow: "hidden" },
-  body:   { flex: 1, backgroundColor: "#FFFBF0" },
+  safe:   { flex: 1, backgroundColor: colors.screenBg },
+  body:   { flex: 1, backgroundColor: colors.screenBg },
 
-  // ── Top bar ──
-  hTop: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    gap:               ms(12),
-    paddingHorizontal: ms(16),
-    paddingBottom:     ms(10),
-  },
-  backBtn: {
-    width:           ms(36),
-    height:          ms(36),
-    borderRadius:    ms(10),
-    backgroundColor: "rgba(255,255,255,0.16)",
-    justifyContent:  "center",
-    alignItems:      "center",
-    flexShrink:      0,
-  },
-  hTitle:  { flex: 1, fontSize: fs(16), fontWeight: "700", color: "#fff" },
+  // ── Record button in header ──
   payFab: {
     flexDirection:     "row",
     alignItems:        "center",
     gap:               ms(4),
-    backgroundColor:   "rgba(255,255,255,0.20)",
+    backgroundColor:   colors.primary + "14",
     borderRadius:      ms(20),
-    paddingHorizontal: ms(12),
-    paddingVertical:   ms(7),
+    paddingHorizontal: ms(10),
+    paddingVertical:   ms(6),
     borderWidth:       1,
-    borderColor:       "rgba(255,255,255,0.30)",
+    borderColor:       colors.primary + "30",
   },
-  payFabT: { fontSize: fs(12.5), fontWeight: "700", color: "#fff" },
+  payFabT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700" },
+
+  // ── Summary card ──
+  summaryCard: {
+    marginHorizontal: ms(16),
+    marginTop:        ms(10),
+    marginBottom:     ms(4),
+    backgroundColor:  C.card,
+    borderRadius:     ms(18),
+    overflow:         "hidden",
+    shadowColor:      C.text,
+    shadowOffset:     { width: 0, height: 3 },
+    shadowOpacity:    0.07,
+    shadowRadius:     ms(10),
+    elevation:        3,
+  },
 
   // ── Student identity ──
   studentRow: {
     flexDirection:     "row",
     alignItems:        "center",
     gap:               ms(12),
-    paddingHorizontal: ms(16),
-    paddingBottom:     ms(12),
+    paddingHorizontal: ms(14),
+    paddingVertical:   ms(12),
   },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginHorizontal: ms(14) },
   avatar: {
-    width:           ms(48),
-    height:          ms(48),
-    borderRadius:    ms(14),
-    backgroundColor: "rgba(255,255,255,0.22)",
+    width:           ms(44),
+    height:          ms(44),
+    borderRadius:    ms(13),
     justifyContent:  "center",
     alignItems:      "center",
     flexShrink:      0,
-    borderWidth:     1.5,
-    borderColor:     "rgba(255,255,255,0.35)",
   },
-  avatarT:     { fontSize: fs(17), fontWeight: "800", color: "#fff", includeFontPadding: false },
-  studentName: { fontSize: fs(17), fontWeight: "700", color: "#fff", marginBottom: ms(5) },
+  avatarT:     { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", includeFontPadding: false },
+  studentName: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(4) },
   batchPill: {
     flexDirection:     "row",
     alignItems:        "center",
     gap:               ms(4),
-    backgroundColor:   "rgba(255,255,255,0.16)",
+    backgroundColor:   C.inputBg,
     borderRadius:      ms(6),
-    paddingHorizontal: ms(8),
+    paddingHorizontal: ms(7),
     paddingVertical:   ms(3),
     alignSelf:         "flex-start",
+    borderWidth:       1,
+    borderColor:       C.border,
   },
-  batchPillT: { fontSize: fs(11.5), color: "rgba(255,255,255,0.90)", fontWeight: "600" },
+  batchPillT: { fontSize: fs(11), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 
   // ── 3-stat strip ──
   feeStrip: {
     flexDirection:     "row",
     alignItems:        "center",
-    paddingHorizontal: ms(16),
-    paddingBottom:     ms(10),
+    paddingHorizontal: ms(14),
+    paddingVertical:   ms(12),
   },
   stripItem:    { flex: 1, alignItems: "center" },
   stripLbl:     {
-    fontSize:      fs(9.5),
-    color:         "rgba(255,255,255,0.65)",
+    fontSize:      fs(9),
+    color:         C.muted,
+    fontFamily:    "Inter_700Bold",
     fontWeight:    "700",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom:  ms(5),
+    marginBottom:  ms(4),
   },
-  stripVal:     { fontSize: fs(15), fontWeight: "800", color: "#fff" },
-  stripDivider: { width: 1, height: ms(34), backgroundColor: "rgba(255,255,255,0.22)", marginHorizontal: ms(4) },
+  stripVal:     { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  stripDivider: { width: 1, height: ms(32), backgroundColor: C.border, marginHorizontal: ms(4) },
 
   // ── Progress bar ──
   progressWrap: {
     flexDirection:     "row",
     alignItems:        "center",
     gap:               ms(10),
-    paddingHorizontal: ms(16),
-    paddingBottom:     ms(14),
+    paddingHorizontal: ms(14),
+    paddingBottom:     ms(12),
   },
   progressTrack: {
     flex:            1,
     height:          ms(5),
-    backgroundColor: "rgba(255,255,255,0.22)",
+    backgroundColor: C.inputBg,
     borderRadius:    ms(4),
     overflow:        "hidden",
   },
   progressFill: {
-    height:          ms(5),
-    backgroundColor: "#A8F0CE",
-    borderRadius:    ms(4),
+    height:       ms(5),
+    borderRadius: ms(4),
   },
-  progressLbl: { fontSize: fs(11), color: "rgba(255,255,255,0.80)", fontWeight: "700", flexShrink: 0 },
+  progressLbl: { fontSize: fs(11), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", flexShrink: 0 },
 
   // ── Body ──
   scroll:       { paddingTop: ms(8), paddingBottom: ms(60) },
   sectionTitle: {
     fontSize:         fs(12),
-    fontWeight:       "700",
-    color:            "#8A7F82",
+    fontFamily: "Inter_700Bold", fontWeight: "700",
+    color:            C.muted,
     textTransform:    "uppercase",
     letterSpacing:    0.7,
     marginHorizontal: ms(16),
@@ -891,15 +834,15 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: ms(10),
     paddingVertical:   ms(5),
   },
-  infoChipT: { fontSize: fs(11), fontWeight: "600" },
+  infoChipT: { fontSize: fs(11), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 
   // ── Payment history ──
   historyCard: {
-    backgroundColor:  "#FFF",
+    backgroundColor:  C.card,
     borderRadius:     ms(16),
     marginHorizontal: ms(16),
     overflow:         "hidden",
-    shadowColor:      "#2B1B1F",
+    shadowColor:      C.text,
     shadowOffset:     { width: 0, height: ms(3) },
     shadowOpacity:    0.08,
     shadowRadius:     ms(8),
@@ -920,15 +863,15 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     flexShrink:     0,
   },
   histBody:    { flex: 1, minWidth: 0 },
-  histLabel:   { fontSize: fs(13), fontWeight: "600", color: "#2B1B1F" },
-  histMeta:    { fontSize: fs(10.5), color: "#8A7F82", marginTop: ms(2) },
-  histReceipt: { fontSize: fs(10), color: "#B8B0AA", marginTop: ms(2) },
-  histAmt:     { fontSize: fs(14), fontWeight: "800", color: "#1B9C63", flexShrink: 0 },
-  histDivider: { height: 1, backgroundColor: "#F5F1EE", marginHorizontal: ms(14) },
+  histLabel:   { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
+  histMeta:    { fontSize: fs(10.5), color: C.muted, marginTop: ms(2) },
+  histReceipt: { fontSize: fs(10), color: C.placeholder, marginTop: ms(2) },
+  histAmt:     { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green, flexShrink: 0 },
+  histDivider: { height: 1, backgroundColor: C.bg, marginHorizontal: ms(14) },
 
   centered:  { flex: 1, justifyContent: "center", alignItems: "center", paddingTop: ms(60) },
-  emptyT:    { fontSize: fs(14), color: "#8A7F82", marginTop: ms(12) },
-  errorT:    { fontSize: fs(14), color: "#C0392B", textAlign: "center", paddingHorizontal: ms(24) },
+  emptyT:    { fontSize: fs(14), color: C.muted, marginTop: ms(12) },
+  errorT:    { fontSize: fs(14), color: C.red, textAlign: "center", paddingHorizontal: ms(24) },
   retryBtn:  {
     marginTop:         ms(16),
     paddingHorizontal: ms(20),
@@ -936,14 +879,14 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor:   colors.primary,
     borderRadius:      ms(10),
   },
-  retryBtnT: { color: "#fff", fontWeight: "700", fontSize: fs(14) },
+  retryBtnT: { color: "#fff", fontFamily: "Inter_700Bold", fontWeight: "700", fontSize: fs(14) },
 });
 
 const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay:  { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: {
-    backgroundColor:      "#fff",
+    backgroundColor:      C.card,
     borderTopLeftRadius:  ms(24),
     borderTopRightRadius: ms(24),
     paddingHorizontal:    ms(20),
@@ -953,7 +896,7 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     width:           ms(36),
     height:          ms(4),
     borderRadius:    ms(2),
-    backgroundColor: "#DDD6D0",
+    backgroundColor: C.border,
     alignSelf:       "center",
     marginBottom:    ms(16),
   },
@@ -967,40 +910,40 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems:      "center",
     flexShrink:      0,
   },
-  headTitle: { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F" },
-  headSub:   { fontSize: fs(12), color: "#8A7F82", marginTop: ms(2) },
+  headTitle: { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  headSub:   { fontSize: fs(12), color: C.muted, marginTop: ms(2) },
   closeBtn: {
     width:           ms(32),
     height:          ms(32),
     borderRadius:    ms(10),
-    backgroundColor: "#F5F1EE",
+    backgroundColor: C.bg,
     justifyContent:  "center",
     alignItems:      "center",
     flexShrink:      0,
   },
-  divider: { height: 1, backgroundColor: "#F0EDE8", marginBottom: ms(8) },
+  divider: { height: 1, backgroundColor: C.border, marginBottom: ms(8) },
 
-  label:    { fontSize: fs(12), fontWeight: "700", color: "#8A7F82", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: ms(8) },
-  optional: { fontWeight: "400", textTransform: "none" },
+  label:    { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: ms(8) },
+  optional: { fontFamily: "Inter_400Regular", fontWeight: "400", textTransform: "none" },
 
   amtField: {
     flexDirection:     "row",
     alignItems:        "center",
-    backgroundColor:   "#FAF6F3",
+    backgroundColor:   C.inputBg,
     borderRadius:      ms(12),
     paddingHorizontal: ms(14),
     marginBottom:      ms(16),
     gap:               ms(6),
   },
-  amtPrefix: { fontSize: fs(18), fontWeight: "700", color: "#2B1B1F" },
-  amtInput:  { flex: 1, fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", padding: ms(12), includeFontPadding: false },
+  amtPrefix: { fontSize: fs(18), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  amtInput:  { flex: 1, fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, padding: ms(12), includeFontPadding: false },
   fullBtn: {
     backgroundColor:   colors.primary,
     borderRadius:      ms(8),
     paddingHorizontal: ms(10),
     paddingVertical:   ms(5),
   },
-  fullBtnT: { fontSize: fs(11), fontWeight: "700", color: "#fff" },
+  fullBtnT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
 
   modeRow: { flexDirection: "row", gap: ms(8), marginBottom: ms(16), paddingBottom: ms(2) },
   modeChip: {
@@ -1010,20 +953,20 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: ms(12),
     paddingVertical:   ms(9),
     borderRadius:      ms(10),
-    backgroundColor:   "#FAF6F3",
+    backgroundColor:   C.inputBg,
     borderWidth:       1.5,
     borderColor:       "transparent",
   },
   modeChipOn:  { backgroundColor: colors.primary + "0D", borderColor: colors.primary + "50" },
-  modeChipT:   { fontSize: fs(13), fontWeight: "600", color: "#8A7F82" },
-  modeChipTOn: { color: colors.primary, fontWeight: "700" },
+  modeChipT:   { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
+  modeChipTOn: { color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
 
   textField: {
-    backgroundColor:   "#FAF6F3",
+    backgroundColor:   C.inputBg,
     borderRadius:      ms(12),
     padding:           ms(12),
     fontSize:          fs(13.5),
-    color:             "#2B1B1F",
+    color:             C.text,
     marginBottom:      ms(16),
   },
 
@@ -1036,19 +979,20 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     gap:               ms(6),
   },
   allocHeader: { flexDirection: "row", alignItems: "center", gap: ms(5), marginBottom: ms(4) },
-  allocTitle:  { fontSize: fs(11), fontWeight: "700", color: "#2563A8", textTransform: "uppercase", letterSpacing: 0.4 },
+  allocTitle:  { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.blue, textTransform: "uppercase", letterSpacing: 0.4 },
   allocRow:    { flexDirection: "row", alignItems: "center", gap: ms(8) },
-  allocDot:    { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: "#2563A8", flexShrink: 0 },
-  allocLabel:  { flex: 1, fontSize: fs(12), color: "#2B1B1F", fontWeight: "500" },
-  allocAmt:    { fontSize: fs(12), fontWeight: "700", color: "#2563A8" },
+  allocDot:    { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: C.blue, flexShrink: 0 },
+  allocLabel:  { flex: 1, fontSize: fs(12), color: C.text, fontFamily: "Inter_500Medium", fontWeight: "500" },
+  allocAmt:    { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.blue },
 
-  submitBtn:  { borderRadius: ms(14), overflow: "hidden", marginBottom: ms(8) },
-  submitGrad: {
+  submitBtn: {
     flexDirection:   "row",
     alignItems:      "center",
     justifyContent:  "center",
     gap:             ms(8),
+    borderRadius:    ms(14),
     paddingVertical: ms(15),
+    marginBottom:    ms(8),
   },
-  submitT: { fontSize: fs(15), fontWeight: "700", color: "#fff" },
+  submitT: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
 });

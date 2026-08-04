@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
 import { ListErrorIllustration } from "./ListErrorIllustration";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
 
 interface Props {
   title?:    string;
@@ -32,8 +33,8 @@ export function ListErrorState({
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap:  { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: ms(40), paddingHorizontal: ms(24), gap: ms(6) },
-  title: { fontSize: fs(15), fontWeight: "700", color: "#B0A9AC", textAlign: "center", marginTop: ms(4) },
-  sub:   { fontSize: fs(12), color: "#C7BAB4", textAlign: "center" },
+  title: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.placeholder, textAlign: "center", marginTop: ms(4) },
+  sub:   { fontSize: fs(12), color: C.placeholder, textAlign: "center" },
   btn:   { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: colors.primary, borderRadius: ms(12), paddingHorizontal: ms(20), paddingVertical: ms(10), marginTop: ms(8) },
-  btnT:  { fontSize: fs(13), fontWeight: "700", color: "#fff" },
+  btnT:  { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
 });

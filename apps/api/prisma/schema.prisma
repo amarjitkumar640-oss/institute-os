@@ -112,6 +112,18 @@ enum SessionType {
   makeup
 }
 
+// ── Notification enums ──────────────────────────────────────────────────────────
+
+enum NotificationType {
+  session_cancelled
+  session_rescheduled
+  session_assigned
+  class_reminder
+  new_enrollment
+  installment_overdue
+  batch_capacity
+}
+
 // ── Tenant (top-level SaaS boundary — one row per institute) ──────────────────
 
 model Tenant {
@@ -122,13 +134,19 @@ model Tenant {
   createdAt DateTime @default(now())
 
   // Branding — nullable; null means "use the default Institute-OS brand" in clients.
-  brandPrimary   String?
-  brandSecondary String?
-  brandAccent    String?
-  logoUrl        String?
+  brandPrimary     String?
+  brandSecondary   String?
+  brandAccent      String?
+  brandBackground  String?
+  brandHeaderBg    String?
+  logoUrl          String?
 
   // Which identifier staff of this org log in with — admin-configurable.
   loginMethod StaffLoginMethod @default(email_username)
+
+  // Notification tuning — admin-configurable, defaults work out of the box.
+  classReminderMinutes Int @default(15)
+  overdueGraceDays     Int @default(0)
 
   centers        Center[]
   staff          Staff[]
@@ -141,6 +159,8 @@ model Tenant {
   faculty        Faculty[]
   leads          Lead[]
   payments       PaymentTransaction[]
+  notifications  Notification[]
+  notificationRoutingRules NotificationRoutingRule[]
 
   @@map("tenants")
 }
@@ -196,6 +216,9 @@ model Staff {
   assignedLeads     Lead[]               @relation("LeadAssignedTo")
   centerAssignments CenterStaff[]
   collectedPayments PaymentTransaction[]
+  linkedFaculty     Faculty?
+  notifications     Notification[]
+  pushTokens        PushToken[]
 
   @@unique([tenantId, phone])
   @@unique([tenantId, username])
@@ -245,6 +268,8 @@ model Faculty {
   updatedAt       DateTime @updatedAt
   centerId        String?
   center          Center?  @relation(fields: [centerId], references: [id])
+  staffId         String?  @unique
+  staff           Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
 
   teachingSubjects FacultySubject[]
   classSlots       ClassSlot[]
@@ -277,6 +302,7 @@ model Course {
   examCategories CourseExamCategory[]
   batches        Batch[]
   feeTemplate    CourseFeeTemplate?
+  students       Student[]
 
   @@unique([tenantId, name])
   @@map("courses")
@@ -339,6 +365,8 @@ model Student {
   passYear           String?
   board              String?
   whatsapp           String?
+  courseId           String?
+  course             Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
   coursePreference   String?
   durationPreference String?
   preferredTiming    String?
@@ -506,6 +534,7 @@ model ScheduleInstallment {
   status        InstallmentStatus  @default(pending)
   waivedReason  String?
   notes         String?
+  overdueNotifiedAt DateTime?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
@@ -584,6 +613,7 @@ model ClassSession {
   type          SessionType   @default(regular)
   cancelReason  String?
   notes         String?
+  reminderSentAt DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -591,4 +621,48 @@ model ClassSession {
   // NULL slotId (ad-hoc) is exempt: PostgreSQL treats NULLs as distinct in unique indexes.
   @@unique([slotId, scheduledDate])
   @@map("class_sessions")
+}
+
+// ── Notifications ──────────────────────────────────────────────────────────────
+
+model Notification {
+  id          String           @id @default(uuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id])
+  recipientId String
+  recipient   Staff            @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  title       String
+  body        String
+  data        Json?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([recipientId, readAt])
+  @@map("notifications")
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("push_tokens")
+}
+
+// Which roles receive a given notification type, per tenant — admin-configurable.
+// No row for a (tenantId, type) pair means "use the built-in default" (see
+// DEFAULT_ROUTING in notification.service.ts). An empty roles[] mutes it.
+model NotificationRoutingRule {
+  id       String           @id @default(uuid())
+  tenantId String
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  type     NotificationType
+  roles    StaffRole[]
+
+  @@unique([tenantId, type])
+  @@map("notification_routing_rules")
 }

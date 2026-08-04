@@ -4,8 +4,19 @@
 # switch to HTTPS with a free auto-renewing certificate — no other change needed.
 
 :80 {
-	handle_path /qa/* {
+	# /qa/api/* and /qa/health go to the QA API; everything else under /qa/*
+	# is the QA web portal (one image, every tenant — see apps/web/Dockerfile).
+	# GET /health lives outside the /api/* prefix (apps/api/src/app.ts), so
+	# it needs to be matched explicitly here too.
+	@qa_api path /qa/api/* /qa/health
+	handle @qa_api {
+		uri strip_prefix /qa
 		reverse_proxy api-qa:4000
 	}
+
+	handle_path /qa/* {
+		reverse_proxy web-qa:80
+	}
+
 	reverse_proxy api:4000
 }

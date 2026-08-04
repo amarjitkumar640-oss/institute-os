@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, StatusBar, ScrollView, ActivityIndicator,
+  TextInput, ScrollView, ActivityIndicator, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -23,7 +23,7 @@ import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Props = NativeStackScreenProps<RootStackParamList, "CourseList">;
 
-const GENERAL_META = { label: "General", code: "ALL", color: "#8A7F82" };
+const GENERAL_META = { label: "General", code: "ALL", color: C.muted };
 
 function courseMeta(course: CourseItem): { label: string; code: string; color: string } {
   if (course.examCategories.length === 0) return GENERAL_META;
@@ -85,9 +85,9 @@ function CourseCard({
           <Text style={cs.courseName} numberOfLines={2}>{course.name}</Text>
           <Text style={cs.categoryT}>{meta.label} · {course.durationMonths} months</Text>
         </View>
-        <View style={[cs.statusBadge, { backgroundColor: isActive ? "#E7F7EF" : "#F4F4F4" }]}>
-          <View style={[cs.statusDot, { backgroundColor: isActive ? "#1B9C63" : "#B0A9AC" }]} />
-          <Text style={[cs.statusT, { color: isActive ? "#1B9C63" : "#8A7F82" }]}>
+        <View style={[cs.statusBadge, { backgroundColor: isActive ? C.greenBg : C.inputBg }]}>
+          <View style={[cs.statusDot, { backgroundColor: isActive ? C.green : C.placeholder }]} />
+          <Text style={[cs.statusT, { color: isActive ? C.green : C.muted }]}>
             {isActive ? "Active" : "No batch"}
           </Text>
         </View>
@@ -116,7 +116,7 @@ function CourseCard({
       <View style={cs.divider} />
       {locked && (
         <View style={cs.lockHint}>
-          <Ionicons name="lock-closed-outline" size={ms(11)} color="#B0A9AC" />
+          <Ionicons name="lock-closed-outline" size={ms(11)} color={C.placeholder} />
           <Text style={cs.lockHintT}>{course.batchCount} batch{course.batchCount > 1 ? "es" : ""} linked — edit/delete disabled</Text>
         </View>
       )}
@@ -128,8 +128,8 @@ function CourseCard({
             onPress={onFeeStructure}
             activeOpacity={0.75}
           >
-            <Ionicons name="cash-outline" size={ms(13)} color="#1B9C63" />
-            <Text style={[cs.actionBtnT, { color: "#1B9C63" }]}>Fee Structure</Text>
+            <Ionicons name="cash-outline" size={ms(13)} color={C.green} />
+            <Text style={[cs.actionBtnT, { color: C.green }]}>Fee Structure</Text>
           </TouchableOpacity>
 
           <View style={cs.actionDivider} />
@@ -143,9 +143,9 @@ function CourseCard({
             <Ionicons
               name="pencil-outline"
               size={ms(13)}
-              color={locked ? "#B0A9AC" : "#2563A8"}
+              color={locked ? C.placeholder : C.blue}
             />
-            <Text style={[cs.actionBtnT, { color: locked ? "#B0A9AC" : "#2563A8" }]}>Edit</Text>
+            <Text style={[cs.actionBtnT, { color: locked ? C.placeholder : C.blue }]}>Edit</Text>
           </TouchableOpacity>
 
           <View style={cs.actionDivider} />
@@ -158,15 +158,15 @@ function CourseCard({
             disabled={deleting}
           >
             {deleting ? (
-              <ActivityIndicator size="small" color="#C0392B" />
+              <ActivityIndicator size="small" color={C.red} />
             ) : (
               <>
                 <Ionicons
                   name="trash-outline"
                   size={ms(13)}
-                  color={locked ? "#B0A9AC" : "#C0392B"}
+                  color={locked ? C.placeholder : C.red}
                 />
-                <Text style={[cs.actionBtnT, { color: locked ? "#B0A9AC" : "#C0392B" }]}>Delete</Text>
+                <Text style={[cs.actionBtnT, { color: locked ? C.placeholder : C.red }]}>Delete</Text>
               </>
             )}
           </TouchableOpacity>
@@ -312,7 +312,7 @@ export function CourseListScreen({ navigation }: Props) {
           <TextInput
             style={cs.searchInput}
             placeholder="Search courses…"
-            placeholderTextColor="#C7BAB4"
+            placeholderTextColor={C.placeholder}
             value={search}
             onChangeText={setSearch}
           />
@@ -335,15 +335,11 @@ export function CourseListScreen({ navigation }: Props) {
         ))}
       </ScrollView>
 
-      {!loading && !error && (
-        <Text style={cs.resultT}>Showing {courses.length} of {total} courses</Text>
-      )}
     </View>
   );
 
   return (
     <SafeAreaView style={cs.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader
         title="Courses"
         count={total}
@@ -370,8 +366,7 @@ export function CourseListScreen({ navigation }: Props) {
           ListHeaderComponent={ListHeader}
           contentContainerStyle={cs.listContent}
           showsVerticalScrollIndicator={false}
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
           ListEmptyComponent={!loading && !error ? <CourseEmpty search={search} /> : null}
         />
 
@@ -403,25 +398,24 @@ export function CourseListScreen({ navigation }: Props) {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.primary },
-  content: { flex: 1, backgroundColor: "#FFFBF0" },
-  banner: { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
+  safe: { flex: 1, backgroundColor: colors.screenBg },
+  content: { flex: 1, backgroundColor: colors.screenBg },
+  banner: { flexDirection: "row", backgroundColor: C.card, marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
-  bannerNum: { fontSize: fs(18), fontWeight: "800", color: colors.primary },
-  bannerLbl: { fontSize: fs(10), color: "#8A7F82", fontWeight: "600", marginTop: ms(1) },
-  bannerDiv: { width: 1, backgroundColor: "#F0EDE8", marginHorizontal: ms(6) },
+  bannerNum: { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary },
+  bannerLbl: { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600", marginTop: ms(1) },
+  bannerDiv: { width: 1, backgroundColor: C.border, marginHorizontal: ms(6) },
   searchWrap: { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
-  searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
-  searchInput: { flex: 1, fontSize: fs(13.5), color: "#2B1B1F", padding: 0, includeFontPadding: false },
-  filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
+  searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
+  searchInput: { flex: 1, fontSize: fs(13.5), color: C.text, padding: 0, includeFontPadding: false },
+  filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0, marginBottom: ms(12) },
   filterRow: { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
-  chip: { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  chip: { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipT: { fontSize: fs(12), fontWeight: "600", color: "#8A7F82", includeFontPadding: false, lineHeight: fs(16) },
+  chipT: { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, includeFontPadding: false, lineHeight: fs(16) },
   chipTOn: { color: "#FFFFFF" },
-  resultT: { paddingHorizontal: ms(16), paddingBottom: ms(4), fontSize: fs(11.5), color: "#8A7F82" },
   listContent: { paddingBottom: ms(96) },
-  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(12), backgroundColor: "rgba(255,251,240,0.92)" },
+  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(12), backgroundColor: colors.bg + "EE" },
 
   fab: {
     position: "absolute", bottom: ms(24), right: ms(20),
@@ -433,36 +427,36 @@ const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
   },
 
   // Card
-  card: { backgroundColor: "#FFFFFF", borderRadius: ms(16), padding: ms(14), marginHorizontal: ms(16), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
+  card: { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginHorizontal: ms(16), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: ms(10), marginBottom: ms(10) },
   iconBox: { width: ms(46), height: ms(46), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  iconCode: { fontSize: fs(10), fontWeight: "800", color: "#fff", letterSpacing: 0.5, includeFontPadding: false },
+  iconCode: { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.5, includeFontPadding: false },
   cardInfo: { flex: 1, minWidth: 0 },
-  courseName: { fontSize: fs(14), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(3) },
-  categoryT: { fontSize: fs(11), color: "#8A7F82" },
+  courseName: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(3) },
+  categoryT: { fontSize: fs(11), color: C.muted },
   statusBadge: { flexDirection: "row", alignItems: "center", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(4), gap: ms(4), flexShrink: 0 },
   statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  statusT: { fontSize: fs(10.5), fontWeight: "700" },
-  divider: { height: 1, backgroundColor: "#F0EDE8", marginBottom: ms(10) },
+  statusT: { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  divider: { height: 1, backgroundColor: C.border, marginBottom: ms(10) },
   statsRow: { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
   statItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(4) },
-  statLabel: { fontSize: fs(11), color: "#2B1B1F", fontWeight: "600" },
-  statDivider: { width: 1, height: ms(16), backgroundColor: "#F0EDE8" },
+  statLabel: { fontSize: fs(11), color: C.text, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  statDivider: { width: 1, height: ms(16), backgroundColor: C.border },
 
   // Action row
   lockHint:   { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(2), paddingBottom: ms(8) },
-  lockHintT:  { fontSize: fs(10.5), color: "#B0A9AC", fontWeight: "600" },
+  lockHintT:  { fontSize: fs(10.5), color: C.placeholder, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
   actionRow:  { flexDirection: "row", alignItems: "center" },
   actionBtns: { flexDirection: "row", alignItems: "center", flex: 1 },
   actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(7), borderRadius: ms(8) },
-  feeBtn:   { backgroundColor: "#E7F7EF" },
+  feeBtn:   { backgroundColor: C.greenBg },
   editBtn:  { backgroundColor: "#EEF3FB" },
   deleteBtn:{ backgroundColor: "#FEF0EE" },
-  actionBtnLocked: { backgroundColor: "#F5F5F5", opacity: 0.7 },
-  actionBtnT: { fontSize: fs(12), fontWeight: "700" },
+  actionBtnLocked: { backgroundColor: C.inputBg, opacity: 0.7 },
+  actionBtnT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700" },
   actionDivider: { width: ms(8) },
 
   // Empty / error
   empty: { alignItems: "center", paddingTop: ms(60), paddingHorizontal: ms(16), gap: ms(12) },
-  emptyT: { fontSize: fs(14), color: "#B0A9AC", textAlign: "center" },
+  emptyT: { fontSize: fs(14), color: C.placeholder, textAlign: "center" },
 });

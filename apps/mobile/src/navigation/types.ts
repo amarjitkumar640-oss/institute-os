@@ -34,4 +34,5 @@ export type RootStackParamList = {
   Students: undefined;
   BatchSchedule: { batchId: string; batchName: string };
   SessionDetail: { sessionId: string; batchId: string; batchName: string };
+  Notifications: undefined;
 };

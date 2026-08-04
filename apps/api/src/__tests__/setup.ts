@@ -11,6 +11,8 @@ export async function resetDb() {
   await prisma.student.deleteMany();
   await prisma.batch.deleteMany();
   await prisma.course.deleteMany();
+  await prisma.faculty.deleteMany();
+  await prisma.notificationRoutingRule.deleteMany();
   await prisma.staff.deleteMany();
   await prisma.subject.deleteMany();
 }

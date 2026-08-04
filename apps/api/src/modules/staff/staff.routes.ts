@@ -23,6 +23,7 @@ staffRouter.get("/", requireAuth, requireRole("admin"), async (req, res) => {
       role:      true,
       isActive:  true,
       createdAt: true,
+      linkedFaculty: { select: { id: true } },
       centerAssignments: {
         select: {
           role:   true,

@@ -9,6 +9,7 @@ import { ms, fs } from "../../utils/responsive";
 import { useThemeColors, useThemedStyles, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
 import { useAppLock } from "../../context/AppLockContext";
 import { useAuth } from "../../context/AuthContext";
+import { C } from "../../theme"
 
 const PIN_LENGTH = 4;
 
@@ -394,7 +395,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   appName: {
     fontSize:   fs(16),
-    fontWeight: "700",
+    fontFamily: "Inter_700Bold", fontWeight: "700",
     color:      "#fff",
     letterSpacing: 0.4,
   },
@@ -416,7 +417,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   title: {
     fontSize:   fs(20),
-    fontWeight: "700",
+    fontFamily: "Inter_700Bold", fontWeight: "700",
     color:      "#fff",
   },
   subtitle: {
@@ -439,7 +440,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: "transparent",
   },
   dotFilled: {
-    backgroundColor: "#fff",
+    backgroundColor: C.card,
     borderColor:     "#fff",
   },
   error: {
@@ -512,7 +513,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection:     "row",
     alignItems:        "center",
     gap:               ms(8),
-    backgroundColor:   "#fff",
+    backgroundColor: C.card,
     borderRadius:      ms(14),
     paddingVertical:   ms(14),
     paddingHorizontal: ms(32),
@@ -520,7 +521,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   bioEnableText: {
     fontSize:   fs(15),
-    fontWeight: "700",
+    fontFamily: "Inter_700Bold", fontWeight: "700",
     color:      colors.primary,
   },
   bioSkipBtn: {

@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, ActivityIndicator, RefreshControl, TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, TextInput,
 } from "react-native";
 import { BottomSheet } from "../../components/ui/BottomSheet";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -122,8 +121,8 @@ function AddStudentModal({ visible, batch, enrolledIds, onClose, onEnrolled }: {
                 {localCount}/{batch.capacity} seats
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={ms(24)} color={C.placeholder} />
+            <TouchableOpacity style={am.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={ms(18)} color={C.muted} />
             </TouchableOpacity>
           </View>
 
@@ -223,13 +222,14 @@ const makeAmStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetPad:     { paddingTop: ms(12), paddingHorizontal: ms(16), paddingBottom: ms(8) },
   handle:       { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
   header:       { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(8) },
-  title:        { flex: 1, fontSize: fs(16), fontWeight: "800", color: C.text },
+  title:        { flex: 1, fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  closeBtn:     { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
   pill:         { borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(4) },
-  pillT:        { fontSize: fs(11.5), fontWeight: "800" },
+  pillT:        { fontSize: fs(11.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
   fullBanner:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.red + "18", borderRadius: ms(10), padding: ms(10), marginBottom: ms(10) },
-  fullT:        { fontSize: fs(12), color: C.red, fontWeight: "600" },
+  fullT:        { fontSize: fs(12), color: C.red, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
   resultBanner: { flexDirection: "row", alignItems: "center", gap: ms(8), borderRadius: ms(10), padding: ms(10), marginBottom: ms(10) },
-  resultT:      { fontSize: fs(12.5), fontWeight: "600", flex: 1 },
+  resultT:      { fontSize: fs(12.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", flex: 1 },
   searchRow:    { flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: ms(12), borderWidth: 1, borderColor: C.border, paddingHorizontal: ms(12), paddingVertical: ms(10), marginBottom: ms(10), gap: ms(8) },
   searchInput:  { flex: 1, fontSize: fs(13), color: C.text, padding: 0, includeFontPadding: false },
   loaderWrap:   { alignItems: "center", paddingVertical: ms(40), gap: ms(12) },
@@ -238,14 +238,14 @@ const makeAmStyles = (colors: ThemeColors) => StyleSheet.create({
   emptyT:       { fontSize: fs(13), color: C.placeholder, textAlign: "center" },
   row:          { flexDirection: "row", alignItems: "center", paddingVertical: ms(12), borderBottomWidth: 1, borderBottomColor: C.border, gap: ms(12) },
   avatar:       { width: ms(40), height: ms(40), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  avatarT:      { fontSize: fs(13), fontWeight: "800", includeFontPadding: false },
-  studentName:  { fontSize: fs(13.5), fontWeight: "700", color: C.text },
+  avatarT:      { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", includeFontPadding: false },
+  studentName:  { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   studentSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
   enrolledBadge:{ flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.green + "18", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
-  enrolledT:    { fontSize: fs(11), fontWeight: "700", color: C.green },
+  enrolledT:    { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.green },
   addBtn:       { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: colors.primary + "10", justifyContent: "center", alignItems: "center" },
   doneBtn:      { marginTop: ms(12), marginBottom: ms(24), borderRadius: ms(14), backgroundColor: colors.primary, alignItems: "center", paddingVertical: ms(14) },
-  doneT:        { fontSize: fs(14), fontWeight: "800", color: "#fff" },
+  doneT:        { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
 });
 
 // ── Student Row ───────────────────────────────────────────────────────────────
@@ -285,12 +285,12 @@ const sr = StyleSheet.create({
   row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(12), paddingHorizontal: ms(14), gap: ms(12) },
   rowBorder: { borderTopWidth: 1, borderTopColor: C.border },
   avatar:    { width: ms(40), height: ms(40), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  avatarT:   { fontSize: fs(13), fontWeight: "800", includeFontPadding: false },
-  name:      { fontSize: fs(13.5), fontWeight: "700", color: C.text },
+  avatarT:   { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", includeFontPadding: false },
+  name:      { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   sub:       { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
   right:     { flexDirection: "row", alignItems: "center", gap: ms(8), flexShrink: 0 },
   tag:       { borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  tagT:      { fontSize: fs(10.5), fontWeight: "800" },
+  tagT:      { fontSize: fs(10.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
   editBtn:   { width: ms(28), height: ms(28), borderRadius: ms(8), backgroundColor: C.blue + "12", justifyContent: "center", alignItems: "center" },
 });
 
@@ -331,7 +331,6 @@ export function BatchDetailScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScreenHeader
         title={batch.name}
@@ -375,7 +374,7 @@ export function BatchDetailScreen({ navigation, route }: Props) {
               { icon: "calendar-outline", label: "Start",    value: fmtDate(batch.startDate), color: C.blue },
               { icon: "flag-outline",     label: "End",      value: fmtDate(batch.endDate),   color: C.orange },
             ].map((item) => (
-              <View key={item.label} style={[s.infoTile, { borderLeftColor: item.color }]}>
+              <View key={item.label} style={s.infoTile}>
                 <Text style={[s.infoTileLabel, { color: item.color }]}>{item.label}</Text>
                 <Text style={s.infoTileValue} numberOfLines={1}>{item.value}</Text>
               </View>
@@ -488,8 +487,8 @@ export function BatchDetailScreen({ navigation, route }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: colors.primary },
-  scroll: { flex: 1, backgroundColor: C.bg },
+  safe:   { flex: 1, backgroundColor: colors.screenBg },
+  scroll: { flex: 1, backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16), gap: ms(14) },
 
   // Combined info card
@@ -507,22 +506,22 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   badgeRow:    { flexDirection: "row", gap: ms(8), marginBottom: ms(8) },
   examBadge:   { flexDirection: "row", alignItems: "center", gap: ms(5), borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(4) },
   examDot:     { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  examBadgeT:  { fontSize: fs(11), fontWeight: "800", letterSpacing: 0.3 },
+  examBadgeT:  { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.3 },
   statusBadge: { flexDirection: "row", alignItems: "center", gap: ms(5), borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(4) },
-  statusBadgeT:{ fontSize: fs(11), fontWeight: "700" },
-  courseName:  { fontSize: fs(13), color: C.muted, fontWeight: "600" },
+  statusBadgeT:{ fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  courseName:  { fontSize: fs(13), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 
   // 2×2 info grid
   infoGrid:      { flexDirection: "row", flexWrap: "wrap", padding: ms(10), gap: ms(8) },
-  infoTile:      { width: "47.5%" as any, backgroundColor: C.inputBg, borderRadius: ms(10), padding: ms(10), borderLeftWidth: ms(3) },
-  infoTileLabel: { fontSize: fs(10), fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: ms(3) },
-  infoTileValue: { fontSize: fs(13), fontWeight: "700", color: C.text },
+  infoTile:      { width: "47.5%" as any, backgroundColor: C.inputBg, borderRadius: ms(10), padding: ms(10) },
+  infoTileLabel: { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: ms(3) },
+  infoTileValue: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   // Capacity bar (inside infoCard)
   capSection:  { paddingHorizontal: ms(14), paddingVertical: ms(12), gap: ms(6) },
   capLabelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  capLabel:    { fontSize: fs(11), color: C.muted, fontWeight: "600" },
-  capFraction: { fontSize: fs(11), fontWeight: "800" },
+  capLabel:    { fontSize: fs(11), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  capFraction: { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
   capTrack:    { height: ms(5), backgroundColor: C.border, borderRadius: ms(3), overflow: "hidden" },
   capFill:     { height: "100%", borderRadius: ms(3) },
 
@@ -539,10 +538,10 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cardHeader:     { flexDirection: "row", alignItems: "center", gap: ms(10), padding: ms(14) },
   cardHeaderIcon: { width: ms(32), height: ms(32), borderRadius: ms(9), alignItems: "center", justifyContent: "center" },
-  cardTitle:      { flex: 1, fontSize: fs(14), fontWeight: "800", color: C.text },
+  cardTitle:      { flex: 1, fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   cardDivider:    { height: 1, backgroundColor: C.border },
   countPill:      { backgroundColor: colors.primary + "12", borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(4) },
-  countPillT:     { fontSize: fs(12), fontWeight: "800", color: colors.primary },
+  countPillT:     { fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary },
 
   // Nav card (Class Schedule)
   navCard: {
@@ -559,7 +558,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
     elevation:       3,
   },
   navIcon:  { width: ms(44), height: ms(44), borderRadius: ms(13), alignItems: "center", justifyContent: "center" },
-  navTitle: { fontSize: fs(13), fontWeight: "700", color: C.text },
+  navTitle: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   navSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
 
   // Empty / loading inside card
@@ -567,12 +566,12 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   centerT:     { fontSize: fs(13), color: C.muted },
   emptyBlock:  { alignItems: "center", paddingVertical: ms(28), gap: ms(6) },
   emptyIllus:  { width: ms(64), height: ms(64), borderRadius: ms(20), backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", marginBottom: ms(4) },
-  emptyT:      { fontSize: fs(13), fontWeight: "700", color: C.muted },
+  emptyT:      { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
   emptySub:    { fontSize: fs(11), color: C.placeholder, textAlign: "center" },
 
   // Add student / full banner
   addStudentBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: C.green + "12", paddingVertical: ms(14), margin: ms(12), borderRadius: ms(12) },
-  addStudentT:   { fontSize: fs(13), fontWeight: "700", color: C.green },
+  addStudentT:   { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.green },
   fullBanner:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6), backgroundColor: C.red + "12", paddingVertical: ms(12), margin: ms(12), borderRadius: ms(12) },
-  fullBannerT:   { fontSize: fs(12), fontWeight: "600", color: C.red },
+  fullBannerT:   { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.red },
 });

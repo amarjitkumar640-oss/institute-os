@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, StatusBar, TextInput, TouchableOpacity, ActivityIndicator,
+  Platform, TextInput, TouchableOpacity, ActivityIndicator, Keyboard,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,6 +32,18 @@ const SOURCE_CHIPS = ["Walk-in", "Referral", "Phone Call", "Social Media"];
 export function AddLeadScreen({ navigation }: Props) {
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // RN auto-scrolls to keep a focused field visible above the keyboard but
+  // never scrolls back on dismiss — undo that so the form returns to its
+  // original scroll position once the keyboard is fully gone.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return () => sub.remove();
+  }, []);
+
   const [name, setName]           = useState("");
   const [phone, setPhone]         = useState("");
   const [targetExam, setTargetExam] = useState<string | null>(null);
@@ -96,7 +108,6 @@ export function AddLeadScreen({ navigation }: Props) {
   if (created) {
     return (
       <SafeAreaView style={s.safe} edges={["bottom"]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <View style={s.successOverlay}>
           <View style={s.successCard}>
             <LinearGradient colors={[C.green, "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
@@ -130,11 +141,10 @@ export function AddLeadScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader title="New Lead" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={s.card}>
             <FormField label="LEAD'S NAME" value={name} onChangeText={(v) => { setName(v); setErrors((p) => ({ ...p, name: "" })); }}
               placeholder="e.g. Priya Sharma" error={errors.name} icon="person-outline" clearable />
@@ -229,23 +239,23 @@ export function AddLeadScreen({ navigation }: Props) {
 }
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: colors.primary },
+  safe:   { flex: 1, backgroundColor: colors.screenBg },
   flex:   { flex: 1 },
-  scroll: { flex: 1, backgroundColor: C.bg },
+  scroll: { flex: 1, backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
 
   card: { backgroundColor: C.card, borderRadius: ms(20), padding: ms(18), marginBottom: ms(16), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 
   fieldBlock: { marginBottom: ms(20) },
-  fieldLabel: { fontSize: fs(12.5), fontWeight: "700", color: C.text, marginBottom: ms(9), letterSpacing: 0.3 },
+  fieldLabel: { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(9), letterSpacing: 0.3 },
 
   examGrid: { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   examCard: { flexBasis: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6), paddingVertical: ms(12), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
-  examCardT: { fontSize: fs(13), fontWeight: "700", color: C.text },
+  examCardT: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   chipRow: { flexDirection: "row", gap: ms(6) },
   chip:    { flex: 1, alignItems: "center", paddingHorizontal: ms(4), paddingVertical: ms(9), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
-  chipT:   { fontSize: fs(11), fontWeight: "700", color: C.muted },
+  chipT:   { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
 
   notesInput: { minHeight: ms(80), backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(14), color: C.text },
 
@@ -255,14 +265,14 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   submitError:  { flexDirection: "row", alignItems: "flex-start", gap: ms(8), backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginTop: ms(4) },
   submitErrorT: { fontSize: fs(13), color: C.red, lineHeight: fs(18), flex: 1 },
 
-  successOverlay: { flex: 1, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
+  successOverlay: { flex: 1, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
   successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(28), padding: ms(26), alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
   checkCircle:    { width: ms(76), height: ms(76), borderRadius: ms(38), justifyContent: "center", alignItems: "center", marginBottom: ms(16) },
-  successTitle:   { fontSize: fs(21), fontWeight: "800", color: C.text, marginBottom: ms(6) },
+  successTitle:   { fontSize: fs(21), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(6) },
   successSub:     { fontSize: fs(13), color: C.muted, textAlign: "center", marginBottom: ms(22) },
   doneBtnWrap:    { width: "100%", marginBottom: ms(10) },
   outlineBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(14), borderWidth: 1.5, borderColor: colors.primary },
-  outlineBtnT:    { fontSize: fs(14), fontWeight: "700", color: colors.primary },
+  outlineBtnT:    { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(15) },
-  doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 });

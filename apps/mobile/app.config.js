@@ -21,6 +21,23 @@ const TENANT_SLUG   = process.env.TENANT_SLUG || null;
 const TENANT_NAME   = process.env.TENANT_NAME || "Institute OS";
 const IOS_BUNDLE_ID = process.env.TENANT_IOS_BUNDLE_ID || "com.anonymous.mobile";
 const ANDROID_PKG   = process.env.TENANT_ANDROID_PACKAGE || "com.anonymous.mobile";
+// Native (OS-level) splash background — can't read live API branding since it
+// renders before any JS runs, so it's baked in at build time like the icon.
+// Matches DEFAULT_COLORS.primary in ThemeContext.tsx; override per tenant by
+// setting this alongside the other TENANT_* build vars.
+const SPLASH_COLOR  = process.env.TENANT_SPLASH_COLOR || "#8B1E3F";
+
+// Per-tenant Firebase config file — place the downloaded google-services.json
+// in assets/tenants/<slug>/ for per-org builds, or at the root for the default build.
+function googleServicesFile() {
+  if (TENANT_SLUG) {
+    const tenantPath = path.join(__dirname, "assets", "tenants", TENANT_SLUG, "google-services.json");
+    if (fs.existsSync(tenantPath)) return `./assets/tenants/${TENANT_SLUG}/google-services.json`;
+  }
+  const rootPath = path.join(__dirname, "google-services.json");
+  if (fs.existsSync(rootPath)) return "./google-services.json";
+  return null;
+}
 
 function tenantAsset(fileName, fallback) {
   if (TENANT_SLUG) {
@@ -49,7 +66,6 @@ module.exports = {
       },
     },
     android: {
-      usesCleartextTraffic: true,
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: tenantAsset("android-icon-foreground.png", "./assets/android-icon-foreground.png"),
@@ -64,6 +80,7 @@ module.exports = {
       predictiveBackGestureEnabled: false,
       softwareKeyboardLayoutMode: "pan",
       package: ANDROID_PKG,
+      ...(googleServicesFile() && { googleServicesFile: googleServicesFile() }),
     },
     web: {
       favicon: tenantAsset("favicon.png", "./assets/favicon.png"),
@@ -71,6 +88,46 @@ module.exports = {
     plugins: [
       "expo-secure-store",
       "expo-local-authentication",
+      [
+        "expo-splash-screen",
+        {
+          backgroundColor: SPLASH_COLOR,
+          // Falls back to the real institute logo (not a generic placeholder)
+          // so a tenant without a custom splash-icon.png still gets a
+          // correctly-branded native splash out of the box.
+          image: tenantAsset("splash-icon.png", "./assets/institute-logo.png"),
+          imageWidth: 160,
+          resizeMode: "contain",
+        },
+      ],
+      [
+        "expo-notifications",
+        {
+          // Fallback icon tint for any push that doesn't set its own
+          // android.notification.color (the API sets one explicitly per
+          // notification type — see notification.service.ts's TYPE_META).
+          // Was "#ffffff" — white-on-white made the icon invisible.
+          icon: tenantAsset("android-icon-monochrome.png", "./assets/android-icon-monochrome.png"),
+          color: "#8B1E3F",
+        },
+      ],
+      [
+        "expo-build-properties",
+        {
+          // The plain "android: { usesCleartextTraffic }" config key does
+          // NOT exist in Expo's config-plugin system — it's silently
+          // ignored, which is why the generated AndroidManifest.xml never
+          // had it despite being set. expo-build-properties is the actual
+          // supported way to allow plain-HTTP API URLs (like the QA server)
+          // in a real native build.
+          android: { usesCleartextTraffic: true },
+        },
+      ],
     ],
+    extra: {
+      eas: {
+        projectId: "b99fad5a-cb3e-410d-b188-6023edc980eb",
+      },
+    },
   },
 };

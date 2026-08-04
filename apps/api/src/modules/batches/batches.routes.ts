@@ -24,9 +24,17 @@ const INCLUDE = {
   _count:  { select: { enrollments: true } },
 } as const;
 
+// When a teacher calls this route, only return batches they have a slot in.
+function teacherBatchFilter(req: any) {
+  if (req.auth!.role === "teacher" && req.auth!.facultyId) {
+    return { classSlots: { some: { facultyId: req.auth!.facultyId } } };
+  }
+  return {};
+}
+
 batchesRouter.get("/", requireAuth, async (req, res) => {
   const batches = await prisma.batch.findMany({
-    where:   centerFilter(req),
+    where:   { ...(await centerFilter(req)), ...teacherBatchFilter(req) },
     include: INCLUDE,
     orderBy: { startDate: "asc" },
   });
@@ -35,7 +43,7 @@ batchesRouter.get("/", requireAuth, async (req, res) => {
 
 batchesRouter.get("/:id", requireAuth, async (req, res) => {
   const batch = await prisma.batch.findFirst({
-    where: { id: req.params.id, tenantId: req.auth!.tenantId },
+    where: { id: req.params.id, tenantId: req.auth!.tenantId, ...teacherBatchFilter(req) },
     include: INCLUDE,
   });
   if (!batch) return res.status(404).json({ error: "Batch not found" });

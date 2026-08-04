@@ -6,11 +6,11 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  StatusBar,
   TextInput,
   Animated,
   ActivityIndicator,
   TouchableOpacity,
+  Keyboard,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +26,7 @@ import { listExamCategories, type ExamCategoryItem } from "../../api/examCategor
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateCourse">;
 
@@ -91,6 +92,18 @@ export function CreateCourseScreen({ navigation }: Props) {
   const { showConfirm } = useAlert();
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // RN auto-scrolls to keep a focused field visible above the keyboard but
+  // never scrolls back on dismiss — undo that so the form returns to its
+  // original scroll position once the keyboard is fully gone.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return () => sub.remove();
+  }, []);
+
   const [form, setForm]               = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors]           = useState<FormErrors>({});
   const [loading, setLoading]         = useState(false);
@@ -102,7 +115,7 @@ export function CreateCourseScreen({ navigation }: Props) {
   }, []);
 
   const examOptions = [
-    { label: "General (All Categories)", value: GENERAL_VALUE, color: "#8A7F82" },
+    { label: "General (All Categories)", value: GENERAL_VALUE, color: C.muted },
     ...categories.map((c) => ({ label: c.label, value: c.id, color: c.color })),
   ];
 
@@ -189,7 +202,7 @@ export function CreateCourseScreen({ navigation }: Props) {
 
   function handleBack() {
     if (isDirty) {
-      showConfirm("Discard Changes?", "You have unsaved changes. Are you sure you want to go back?", () => navigation.goBack(), { confirmLabel: "Discard", cancelLabel: "Stay", destructive: true });
+      showConfirm("Discard Changes?", "You have unsaved changes. Are you sure you want to go back?", () => navigation.goBack(), { confirmLabel: "Discard", cancelLabel: "Stay", brand: true, icon: "arrow-undo-outline" });
     } else {
       navigation.goBack();
     }
@@ -197,7 +210,6 @@ export function CreateCourseScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScreenHeader title="New Course" onBack={handleBack} />
 
@@ -207,6 +219,7 @@ export function CreateCourseScreen({ navigation }: Props) {
         keyboardVerticalOffset={0}
       >
         <ScrollView
+          ref={scrollRef}
           style={s.scroll}
           contentContainerStyle={s.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -326,7 +339,7 @@ export function CreateCourseScreen({ navigation }: Props) {
             {/* Animated checkmark */}
             <Animated.View style={[s.checkWrap, { transform: [{ scale: checkScale }] }]}>
               <LinearGradient
-                colors={["#1B9C63", "#16A085"]}
+                colors={[C.green, "#16A085"]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={s.checkCircle}
               >
@@ -340,9 +353,9 @@ export function CreateCourseScreen({ navigation }: Props) {
             {/* Details */}
             <View style={s.detailBox}>
               <DetailRow icon="book-outline"   label="Course Name" value={createdCourse.name} color={colors.primary} />
-              <DetailRow icon="layers-outline" label="Category"    value={createdCourse.examCategories.length ? createdCourse.examCategories.map((c) => c.label).join(", ") : "General (All Categories)"} color="#2563A8" />
-              <DetailRow icon="time-outline"   label="Duration"    value={`${createdCourse.durationMonths} months`} color="#E8752C" />
-              <DetailRow icon="wallet-outline" label="Default Fee" value={`₹${createdCourse.defaultFee.toLocaleString("en-IN")}`} color="#1B9C63" last />
+              <DetailRow icon="layers-outline" label="Category"    value={createdCourse.examCategories.length ? createdCourse.examCategories.map((c) => c.label).join(", ") : "General (All Categories)"} color={C.blue} />
+              <DetailRow icon="time-outline"   label="Duration"    value={`${createdCourse.durationMonths} months`} color={C.orange} />
+              <DetailRow icon="wallet-outline" label="Default Fee" value={`₹${createdCourse.defaultFee.toLocaleString("en-IN")}`} color={C.green} last />
             </View>
 
             {/* CTA button */}
@@ -384,48 +397,48 @@ function DetailRow({
 
 const dr = StyleSheet.create({
   row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(10), gap: ms(12) },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(32), height: ms(32), borderRadius: ms(8), justifyContent: "center", alignItems: "center", flexShrink: 0 },
   textWrap:  { flex: 1 },
-  label:     { fontSize: fs(10), color: "#8A7F82", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
-  value:     { fontSize: fs(13), color: "#2B1B1F", fontWeight: "700" },
+  label:     { fontSize: fs(10), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
+  value:     { fontSize: fs(13), color: C.text, fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: colors.primary },
+  safe:          { flex: 1, backgroundColor: colors.screenBg },
   flex:          { flex: 1 },
-  scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
+  scroll:        { flex: 1, backgroundColor: colors.screenBg },
   scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(20) },
 
-  section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
+  section:       { backgroundColor: C.card, borderRadius: ms(18), padding: ms(14), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(12) },
   sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2), backgroundColor: colors.primary },
-  sectionTitle:  { fontSize: fs(12), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textTransform: "uppercase" },
+  sectionTitle:  { fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 1, textTransform: "uppercase" },
 
   submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },
-  submitErrorT:  { fontSize: fs(13), color: "#C0392B", lineHeight: fs(18) },
+  submitErrorT:  { fontSize: fs(13), color: C.red, lineHeight: fs(18) },
 
   buttonGroup:   { gap: ms(12) },
 
   // Full-screen loader
-  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(255,251,240,0.96)", justifyContent: "center", alignItems: "center" },
-  loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: "#FFFFFF", borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginTop: ms(4) },
-  loaderSub:     { fontSize: fs(12), color: "#8A7F82" },
+  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
+  loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
+  loaderTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginTop: ms(4) },
+  loaderSub:     { fontSize: fs(12), color: C.muted },
 
   // Full-screen success
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
-  successCard:    { width: "100%", backgroundColor: "#FFFFFF", borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
 
   checkWrap:     { marginBottom: ms(20) },
   checkCircle:   { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
 
-  successTitle:  { fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(6) },
-  successSub:    { fontSize: fs(13), color: "#8A7F82", marginBottom: ms(24), textAlign: "center" },
+  successTitle:  { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(6) },
+  successSub:    { fontSize: fs(13), color: C.muted, marginBottom: ms(24), textAlign: "center" },
 
-  detailBox:     { width: "100%", backgroundColor: "#FAFAFA", borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: "#F0EDE8" },
+  detailBox:     { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: C.border },
 
   doneBtnWrap:   { width: "100%" },
   doneBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  doneBtnT:      { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:      { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 });

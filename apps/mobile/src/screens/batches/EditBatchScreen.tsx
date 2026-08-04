@@ -1,7 +1,6 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
-  StatusBar, TouchableOpacity, Animated, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated, ActivityIndicator, Keyboard,
 } from "react-native";
 import { BottomSheet } from "../../components/ui/BottomSheet";
 import { Ionicons } from "@expo/vector-icons";
@@ -139,21 +138,21 @@ function DatePickerModal({ visible, value, minYear = 2020, maxYear = 2035, onCon
 const makeDpStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
-  title:       { fontSize: fs(16), fontWeight: "800", color: C.text, marginBottom: ms(8), textAlign: "center" },
+  title:       { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(8), textAlign: "center" },
   selectors:   { flexDirection: "row", height: ms(180), gap: ms(4) },
   selector:    { flex: 1 },
-  colLabel:    { fontSize: fs(10), fontWeight: "800", color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
+  colLabel:    { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
   col:         { flex: 1 },
   item:        { alignItems: "center", paddingVertical: ms(10) },
   itemActive:  { backgroundColor: colors.primary + "12", borderRadius: ms(8) },
-  itemT:       { fontSize: fs(15), color: C.muted, fontWeight: "600" },
-  itemActiveT: { color: colors.primary, fontWeight: "800" },
+  itemT:       { fontSize: fs(15), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  itemActiveT: { color: colors.primary, fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
   highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 1.5, borderColor: colors.primary + "30", backgroundColor: colors.primary + "06" },
   btnRow:      { flexDirection: "row", gap: ms(10), marginTop: ms(20) },
   cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg },
-  cancelT:     { fontSize: fs(14), fontWeight: "700", color: C.muted },
+  cancelT:     { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
   confirmBtn:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: colors.primary },
-  confirmT:    { fontSize: fs(14), fontWeight: "800", color: "#fff" },
+  confirmT:    { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
 });
 
 // ── Date display field ────────────────────────────────────────────────────────
@@ -199,14 +198,14 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
 }
 
 const f = StyleSheet.create({
-  label:       { fontSize: fs(12.5), fontWeight: "700", color: C.text, marginBottom: ms(7), letterSpacing: 0.3 },
+  label:       { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(7), letterSpacing: 0.3 },
   field:       { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: 1, borderColor: C.border, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: C.inputBg },
   fieldReadOnly:{ backgroundColor: C.bg, borderColor: C.border },
   fieldError:  { borderColor: C.red, backgroundColor: C.red + "06" },
-  fieldT:      { flex: 1, fontSize: fs(14), color: C.text, fontWeight: "600" },
-  placeholder: { color: C.placeholder, fontWeight: "400" },
+  fieldT:      { flex: 1, fontSize: fs(14), color: C.text, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  placeholder: { color: C.placeholder, fontFamily: "Inter_400Regular", fontWeight: "400" },
   autoBadge:   { backgroundColor: C.green + "18", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  autoT:       { fontSize: fs(10), fontWeight: "800", color: C.green },
+  autoT:       { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
   errRow:      { flexDirection: "row", alignItems: "center", marginTop: ms(5), gap: ms(4) },
   errT:        { fontSize: fs(11.5), color: C.red, flex: 1 },
 });
@@ -217,6 +216,17 @@ export function EditBatchScreen({ navigation, route }: Props) {
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
   const { batch } = route.params;
+  const scrollRef = useRef<ScrollView>(null);
+
+  // RN auto-scrolls to keep a focused field visible above the keyboard but
+  // never scrolls back on dismiss — undo that so the form returns to its
+  // original scroll position once the keyboard is fully gone.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return () => sub.remove();
+  }, []);
 
   const [name, setName]         = useState(batch.name);
   const [capacity, setCapacity] = useState(String(batch.capacity));
@@ -275,11 +285,11 @@ export function EditBatchScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader title="Edit Batch" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
+          ref={scrollRef}
           style={s.scroll}
           contentContainerStyle={s.body}
           keyboardShouldPersistTaps="handled"
@@ -499,8 +509,8 @@ export function EditBatchScreen({ navigation, route }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: colors.primary },
-  scroll: { flex: 1, backgroundColor: C.bg },
+  safe:   { flex: 1, backgroundColor: colors.screenBg },
+  scroll: { flex: 1, backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), gap: ms(14) },
 
   // Card
@@ -516,18 +526,18 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cardHead:     { flexDirection: "row", alignItems: "center", gap: ms(10), padding: ms(14) },
   cardHeadIcon: { width: ms(32), height: ms(32), borderRadius: ms(9), alignItems: "center", justifyContent: "center" },
-  cardHeadT:    { flex: 1, fontSize: fs(14), fontWeight: "800", color: C.text },
+  cardHeadT:    { flex: 1, fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   divider:      { height: 1, backgroundColor: C.border },
 
   // Lock chip
   lockChip:  { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.inputBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(4) },
-  lockChipT: { fontSize: fs(10), fontWeight: "700", color: C.muted },
+  lockChipT: { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
 
   // Course row
   courseRow:   { flexDirection: "row", alignItems: "center", gap: ms(12), padding: ms(14) },
   examBadge:   { borderRadius: ms(8), paddingHorizontal: ms(10), paddingVertical: ms(5) },
-  examBadgeT:  { fontSize: fs(11), fontWeight: "800" },
-  courseName:  { fontSize: fs(13), fontWeight: "700", color: C.text },
+  examBadgeT:  { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  courseName:  { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   courseSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
 
   // Fields padding wrapper
@@ -536,9 +546,9 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   // Status
   statusGrid:   { flexDirection: "row", gap: ms(8), padding: ms(14) },
   statusChip:   { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6), paddingVertical: ms(10), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border },
-  statusChipT:  { fontSize: fs(12), fontWeight: "700", color: C.muted },
+  statusChipT:  { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
   enrolledNote: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.blue + "12", borderRadius: ms(10), padding: ms(10), margin: ms(14), marginTop: 0 },
-  enrolledNoteT:{ fontSize: fs(12), color: C.blue, fontWeight: "600" },
+  enrolledNoteT:{ fontSize: fs(12), color: C.blue, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 
   // Submit error
   submitErr:  { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.red + "12", borderRadius: ms(12), padding: ms(12) },
@@ -559,10 +569,10 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
     shadowRadius:    ms(10),
     elevation:       6,
   },
-  saveBtnT: { fontSize: fs(15), fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+  saveBtnT: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
 
   // Success overlay
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
   successScroll:  { flexGrow: 1, justifyContent: "center", paddingHorizontal: ms(20), paddingVertical: ms(32) },
   successCard: {
     backgroundColor: C.card,
@@ -578,18 +588,18 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   checkWrap:   { marginBottom: ms(20) },
   checkCircle: { width: ms(80), height: ms(80), borderRadius: ms(40), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
 
-  successTitle:   { fontSize: fs(22), fontWeight: "800", color: C.text, marginBottom: ms(8) },
+  successTitle:   { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(8) },
   successNameRow: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: colors.primary + "10", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(6), marginBottom: ms(6) },
-  successName:    { fontSize: fs(13), fontWeight: "800", color: colors.primary, flex: 1 },
+  successName:    { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary, flex: 1 },
   successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(20) },
 
   summaryGrid:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(14), marginBottom: ms(20), borderWidth: 1, borderColor: C.border, overflow: "hidden" },
   summaryRow:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(11), paddingHorizontal: ms(14), gap: ms(12) },
   summaryRowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   summaryIcon:      { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
-  summaryLabel:     { fontSize: fs(10), color: C.muted, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
-  summaryValue:     { fontSize: fs(13), fontWeight: "700", color: C.text },
+  summaryLabel:     { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
+  summaryValue:     { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   goBackBtn: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14) },
-  goBackT:   { fontSize: fs(14), fontWeight: "800", color: "#fff" },
+  goBackT:   { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
 });

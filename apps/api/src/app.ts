@@ -17,6 +17,7 @@ import { scheduleRouter } from "./modules/schedule/schedule.routes";
 import { documentTypesRouter } from "./modules/documents/documentTypes.routes";
 import { examCategoriesRouter } from "./modules/examCategories/examCategories.routes";
 import { tenantsRouter } from "./modules/tenants/tenants.routes";
+import { notificationsRouter } from "./modules/notifications/notifications.routes";
 import { errorHandler }  from "./middleware/errorHandler";
 
 export const app = express();
@@ -51,5 +52,6 @@ app.use("/api/schedule", scheduleRouter);
 app.use("/api/document-types", documentTypesRouter);
 app.use("/api/exam-categories", examCategoriesRouter);
 app.use("/api/tenants", tenantsRouter);
+app.use("/api/notifications", notificationsRouter);
 
 app.use(errorHandler);

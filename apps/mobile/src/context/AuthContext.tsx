@@ -7,6 +7,8 @@ import {
   storeAccessToken, storeRefreshToken,
   registerUnauthorizedHandler,
 } from "../api/client";
+import { useSetBrandColors } from "./ThemeContext";
+import { registerPushToken, deregisterPushToken } from "../lib/pushNotifications";
 
 const TENANT_ID = process.env.EXPO_PUBLIC_TENANT_ID ?? "";
 
@@ -31,6 +33,18 @@ interface AuthContextValue {
   login:         (identifier: string, password: string) => Promise<{ needsCenterSelect: boolean }>;
   selectCenter:  (centerId: string | null) => Promise<void>;
   switchCenter:  () => Promise<void>; // re-surface the center picker from within the app
+  // True only when pendingCenters was surfaced by switchCenter() (a session
+  // already exists) rather than login() (no session to fall back to yet) —
+  // lets the picker's back button know whether "back" means cancel-back-in
+  // or log-out.
+  isSwitchingCenter: boolean;
+  cancelCenterSwitch: () => void;
+  // True only when this staff has zero CenterStaff assignments — distinct
+  // from isAllCenters, which is also true for a genuine 2+-center staff who
+  // chose the aggregate view. RootNavigator gates on this before the normal
+  // app ever mounts, so screens that read isAllCenters never see this case.
+  noCentersAssigned: boolean;
+  recheckCenterAssignment: () => Promise<void>;
   logout:        () => Promise<void>;
 }
 
@@ -41,10 +55,39 @@ const lastCenterKey = (staffId: string) => `last_center_${staffId}`;
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const setBrandColors = useSetBrandColors();
   const [staff,          setStaff]          = useState<StaffInfo | null>(null);
   const [currentCenter,  setCurrentCenter]  = useState<CenterInfo | null>(null);
   const [pendingCenters, setPendingCenters] = useState<CenterInfo[] | null>(null);
   const [isLoading,      setIsLoading]      = useState(true);
+  const [isSwitchingCenter, setIsSwitchingCenter] = useState(false);
+  const [noCentersAssigned, setNoCentersAssigned] = useState(false);
+
+  // Re-checks this staff's own CenterStaff assignments and updates state
+  // accordingly: 0 → flag it, 1 → silently auto-select it (same as the
+  // single-center login path), 2+ → clear the flag and stay in All Centers
+  // mode. Shared by the mount-restore effect and the "Refresh" action on
+  // NoCenterAssignedScreen, so there's exactly one place this logic lives.
+  async function recheckCenterAssignment() {
+    try {
+      const { data: myCenters } = await apiClient.get<CenterInfo[]>("/centers");
+      if (myCenters.length === 0) {
+        setNoCentersAssigned(true);
+      } else if (myCenters.length === 1) {
+        setNoCentersAssigned(false);
+        const { data: sd } = await apiClient.post("/auth/select-center", { centerId: myCenters[0].id });
+        await storeAccessToken(sd.accessToken);
+        const center = myCenters[0];
+        setCurrentCenter(center);
+        await SecureStore.setItemAsync(CENTER_KEY, JSON.stringify(center));
+      } else {
+        setNoCentersAssigned(false);
+        // 2+: stays in All Centers mode, currentCenter remains null
+      }
+    } catch {
+      // Network unavailable — leave state as-is, caller can retry
+    }
+  }
 
   // Wire the 401 interceptor to our logout function so any expired/invalid
   // token anywhere in the app immediately returns the user to the login screen.
@@ -68,9 +111,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (token && staffJson) {
           setStaff(JSON.parse(staffJson));
-          // centerJson being the string "null" means all-centers mode was active
           if (centerJson && centerJson !== "null") {
             setCurrentCenter(JSON.parse(centerJson));
+          } else if (centerJson === "null") {
+            // Was in All Centers mode (or had zero assignments) — re-validate
+            // against this staff's own current assignments.
+            await recheckCenterAssignment();
           }
         }
       } finally {
@@ -87,17 +133,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data.refreshToken) await storeRefreshToken(data.refreshToken);
     await SecureStore.setItemAsync(STAFF_KEY, JSON.stringify(data.staff));
     setStaff(data.staff);
+    if (data.branding) setBrandColors(data.branding);
+
+    // Register for push notifications after successful auth (fire-and-forget)
+    registerPushToken().catch(console.error);
+
+    // Reset here (not just in the branch below) so re-logging in as a
+    // different, now-assigned staff on the same device clears a stale flag.
+    setNoCentersAssigned(false);
 
     if (centers.length <= 1) {
-      // Single center auto-selected — token is already scoped
+      // Single center auto-selected — token is already scoped. 0 centers is
+      // also handled by this branch (data.currentCenter/centers[0] both
+      // resolve to null), just flagged so RootNavigator can show why.
       const center: CenterInfo | null = data.currentCenter ?? centers[0] ?? null;
       setCurrentCenter(center);
+      setNoCentersAssigned(centers.length === 0);
       await SecureStore.setItemAsync(CENTER_KEY, JSON.stringify(center));
       return { needsCenterSelect: false };
     }
 
     // Multiple centers — check for a saved preference from a previous session
     const savedId   = await SecureStore.getItemAsync(lastCenterKey(data.staff.id));
+
+    if (savedId === "__all__") {
+      // User previously chose "All Centers" — restore that without showing picker
+      const { data: sd } = await apiClient.post("/auth/select-center", { centerId: null });
+      await storeAccessToken(sd.accessToken);
+      setCurrentCenter(null);
+      await SecureStore.setItemAsync(CENTER_KEY, JSON.stringify(null));
+      return { needsCenterSelect: false };
+    }
+
     const preferred = savedId ? centers.find((c) => c.id === savedId) : null;
 
     if (preferred) {
@@ -130,26 +197,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setCurrentCenter(center);
     setPendingCenters(null);
+    setIsSwitchingCenter(false);
     await SecureStore.setItemAsync(CENTER_KEY, JSON.stringify(center));
 
-    // Persist preference so next login auto-selects this center
-    if (centerId && staff) {
-      await SecureStore.setItemAsync(lastCenterKey(staff.id), centerId);
+    // Persist preference so next login auto-selects this center (or all-centers mode)
+    if (staff) {
+      await SecureStore.setItemAsync(lastCenterKey(staff.id), centerId ?? "__all__");
     }
   }
 
   async function switchCenter() {
-    // Re-fetch this staff member's assigned centers from the API and re-show the picker.
-    // Only truly a no-op when there are zero centers to choose from — a single
-    // assignment still needs to be shown so the user can select into it (e.g. right
-    // after being auto-assigned to a newly-created center, before their session
-    // token has been refreshed to reflect it).
+    // Only centers this staff is actually assigned to (same source as
+    // login) — not /centers/assignable, which is deliberately tenant-wide
+    // for the "attach a new record to any center" create-flow picker, a
+    // different concern from "which center do I want to work in."
     const { data } = await apiClient.get<CenterInfo[]>("/centers");
     if (data.length === 0) return;
     setPendingCenters(data);
+    setIsSwitchingCenter(true);
+  }
+
+  // Dismisses the picker without changing anything — only valid mid-session
+  // (isSwitchingCenter), since currentCenter/isAllCenters were never touched
+  // by switchCenter() in the first place, so there's nothing to restore.
+  function cancelCenterSwitch() {
+    setPendingCenters(null);
+    setIsSwitchingCenter(false);
   }
 
   async function logout() {
+    deregisterPushToken().catch(console.error);
     await Promise.all([
       clearAccessToken(),
       clearRefreshToken(),
@@ -159,6 +236,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStaff(null);
     setCurrentCenter(null);
     setPendingCenters(null);
+    setIsSwitchingCenter(false);
+    setNoCentersAssigned(false);
   }
 
   // All-centers mode = logged in, center selection done, but no specific center pinned
@@ -166,7 +245,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ staff, currentCenter, isAllCenters, pendingCenters, isLoading, login, selectCenter, switchCenter, logout }}
+      value={{
+        staff, currentCenter, isAllCenters, pendingCenters, isLoading,
+        login, selectCenter, switchCenter, isSwitchingCenter, cancelCenterSwitch,
+        noCentersAssigned, recheckCenterAssignment, logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

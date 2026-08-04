@@ -58,7 +58,7 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push — amd64, matching the Oracle instance
+      - name: Build and push api — amd64, matching the Oracle instance
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -66,6 +66,21 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/institute-os-api:quality
+
+      # One image, every tenant — the tenant is resolved at runtime from the
+      # URL (see apps/web/src/context/TenantContext.tsx), so this never needs
+      # a per-tenant build. VITE_API_URL/BASE_PATH are the only build args.
+      - name: Build and push web — amd64, matching the Oracle instance
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/institute-os-web:quality
+          build-args: |
+            VITE_API_URL=http://${{ secrets.VPS_HOST }}/qa
+            BASE_PATH=/qa/
 
       - name: Sync infra config to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -88,8 +103,8 @@ jobs:
             ${{ secrets.QA_ENV_FILE }}
             ENVEOF
             cd ~/institute-os/infra
-            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api-qa
-            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d postgres-qa api-qa
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api-qa web-qa
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d postgres-qa api-qa web-qa
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx prisma migrate deploy --schema prisma/schema.prisma
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx tsx prisma/backfillPhotoKeys.ts
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx tsx prisma/seedDocumentTypes.ts

@@ -1,18 +1,24 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ActivityIndicator, StatusBar, View } from "react-native";
+import { StatusBar } from "react-native";
+import * as Notifications from "expo-notifications";
+import type { NavigationContainerRef } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
+import { useOrg } from "../context/OrgContext";
+import { useThemeColors } from "../context/ThemeContext";
 import { AlertProvider } from "../context/AlertContext";
 import { NetworkProvider } from "../context/NetworkContext";
 import { AppLockProvider, useAppLock } from "../context/AppLockContext";
 import { NetworkBanner } from "../components/ui/NetworkBanner";
+import { AppSplashScreen } from "../components/ui/AppSplashScreen";
 import { AppLockScreen } from "../screens/lock/AppLockScreen";
 import type { RootStackParamList } from "./types";
 
 // Screens — organised by feature folder
 import { LoginScreen }          from "../screens/auth/LoginScreen";
 import { CenterSelectScreen }      from "../screens/centers/CenterSelectScreen";
+import { NoCenterAssignedScreen }  from "../screens/centers/NoCenterAssignedScreen";
 import { CenterManagementScreen }  from "../screens/centers/CenterManagementScreen";
 import { StaffManagementScreen }   from "../screens/staff/StaffManagementScreen";
 import { OrganizationSettingsScreen } from "../screens/settings/OrganizationSettingsScreen";
@@ -42,18 +48,40 @@ import { AddLeadScreen }     from "../screens/leads/AddLeadScreen";
 import { StudentsScreen }    from "../screens/students/StudentsScreen";
 import { BatchScheduleScreen } from "../screens/schedule/BatchScheduleScreen";
 import { SessionDetailScreen } from "../screens/schedule/SessionDetailScreen";
+import { NotificationsScreen } from "../screens/notifications/NotificationsScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function RootNavigatorInner() {
-  const { staff, isLoading, pendingCenters } = useAuth();
+  const { staff, isLoading, pendingCenters, noCentersAssigned } = useAuth();
+  const { name: orgName, isLoading: orgLoading } = useOrg();
+  const navRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
 
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
+  // Navigate to the relevant screen when user taps a push notification.
+  // Wrapped in try-catch: addNotificationResponseReceivedListener throws when
+  // the native module isn't linked (JS-only dev client before native rebuild).
+  useEffect(() => {
+    let sub: Notifications.EventSubscription | null = null;
+    try {
+      sub = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+        const screen = data?.screen as string | undefined;
+        if (!screen || !navRef.current) return;
+        setTimeout(() => {
+          try { (navRef.current as any).navigate(screen, data); } catch { /* unknown screen */ }
+        }, 300);
+      });
+    } catch {
+      // Native module not yet linked
+    }
+    return () => { sub?.remove(); };
+  }, []);
+
+  // Waits on both auth session restore and the tenant's org/branding fetch,
+  // so this is the point the splash actually has real colors/logo/name to
+  // show rather than the ThemeContext defaults used before either resolves.
+  if (isLoading || orgLoading) {
+    return <AppSplashScreen orgName={orgName} />;
   }
 
   if (!staff) return <LoginScreen />;
@@ -61,8 +89,13 @@ function RootNavigatorInner() {
   // Between login and center selection — show the center picker full-screen
   if (pendingCenters) return <CenterSelectScreen />;
 
+  // Zero CenterStaff assignments — distinct from All Centers mode (see
+  // AuthContext.tsx). Screens past this point assume at least one
+  // assignment, so this must gate before the normal Stack ever mounts.
+  if (noCentersAssigned) return <NoCenterAssignedScreen />;
+
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navRef}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
         {/* Dashboard — home after login */}
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
@@ -99,6 +132,9 @@ function RootNavigatorInner() {
         <Stack.Screen name="BatchSchedule" component={BatchScheduleScreen} />
         <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
 
+        {/* Notifications */}
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
+
         {/* Admin-only management screens */}
         <Stack.Screen name="CenterManagement" component={CenterManagementScreen} />
         <Stack.Screen name="StaffManagement"  component={StaffManagementScreen} />
@@ -124,12 +160,17 @@ function AppLockGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ThemedStatusBar() {
+  const colors = useThemeColors();
+  const barStyle = colors.headerText === "#FFFFFF" ? "light-content" : "dark-content";
+  return <StatusBar barStyle={barStyle} translucent backgroundColor={colors.headerBg} />;
+}
+
 export function RootNavigator() {
   return (
     <NetworkProvider>
       <AlertProvider>
-        {/* Global default — every screen inherits this unless it overrides */}
-        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <ThemedStatusBar />
         <AppLockProvider>
           <AppLockGate>
             <RootNavigatorInner />

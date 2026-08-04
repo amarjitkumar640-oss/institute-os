@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { apiClient } from "../../api/client";
+import { useThemeColors } from "../../context/ThemeContext";
 
 interface Student {
   id: string;
@@ -11,6 +12,7 @@ interface Student {
 }
 
 export function StudentsScreen() {
+  const colors = useThemeColors();
   const [students, setStudents] = useState<Student[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -31,7 +33,7 @@ export function StudentsScreen() {
       style={styles.list}
       data={students}
       keyExtractor={(item) => item.id}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadStudents} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadStudents} colors={[colors.primary]} tintColor={colors.primary} />}
       renderItem={({ item }) => (
         <View style={styles.row}>
           <Text style={styles.name}>{item.fullName}</Text>
@@ -46,7 +48,7 @@ export function StudentsScreen() {
 const styles = StyleSheet.create({
   list: { flex: 1 },
   row: { padding: 16, borderBottomWidth: 1, borderBottomColor: "#eee" },
-  name: { fontSize: 16, fontWeight: "600" },
+  name: { fontSize: 16, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
   meta: { color: "#666", marginTop: 4 },
   empty: { textAlign: "center", marginTop: 32, color: "#999" },
 });

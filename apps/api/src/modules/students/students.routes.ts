@@ -10,6 +10,7 @@ import { generateStudentCode, withPhotoUrl, withPhotoUrls, serializeStudentDocum
 import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
 import { BatchFullError, createEnrollment } from "../enrollments/enrollments.service";
 import { generateReceiptNo, generateSchedule } from "../fees/fees.service";
+import { notifyEnrollmentEvents } from "../notifications/notification.service";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -17,20 +18,52 @@ export const studentsRouter = Router();
 
 studentsRouter.get("/", requireAuth, async (req, res) => {
   const { batchId } = req.query as { batchId?: string };
+  const isTeacher  = req.auth!.role === "teacher";
+  const facultyId  = req.auth!.facultyId;
+
+  // Resolve the batches a teacher is allowed to see.
+  // For non-teachers this is null (no restriction beyond center).
+  let teacherBatchIds: string[] | null = null;
+  if (isTeacher && facultyId) {
+    const slots = await prisma.classSlot.findMany({
+      where:  { facultyId, batch: { tenantId: req.auth!.tenantId } },
+      select: { batchId: true },
+      distinct: ["batchId"],
+    });
+    teacherBatchIds = slots.map((s) => s.batchId);
+  }
+
   if (batchId) {
+    // Teachers may only query students in their own batches.
+    if (teacherBatchIds !== null && !teacherBatchIds.includes(batchId)) {
+      return res.json([]);
+    }
     const enrollments = await prisma.enrollment.findMany({
       where: { batchId, status: "active", batch: { tenantId: req.auth!.tenantId } },
-      include: { student: true, batch: { select: { id: true, name: true } } },
+      include: { student: { include: { course: { select: { name: true } } } }, batch: { select: { id: true, name: true } } },
     });
     return res.json(await withPhotoUrls(enrollments.map((e) => ({
       ...e.student,
       activeEnrollment: { batchId: e.batch.id, batchName: e.batch.name },
     }))));
   }
+
+  // For teachers without any assigned batches, return empty.
+  if (teacherBatchIds !== null && teacherBatchIds.length === 0) {
+    return res.json([]);
+  }
+
   const students = await prisma.student.findMany({
-    where:   centerFilter(req),
+    where: {
+      ...(await centerFilter(req)),
+      // Teachers see only students enrolled in their assigned batches.
+      ...(teacherBatchIds !== null
+        ? { enrollments: { some: { batchId: { in: teacherBatchIds }, status: "active" } } }
+        : {}),
+    },
     include: {
       center: { select: { id: true, name: true } },
+      course: { select: { name: true } },
       enrollments: {
         where:   { status: "active" },
         include: { batch: { select: { id: true, name: true } } },
@@ -112,6 +145,7 @@ studentsRouter.post(
             passYear:           studentData.passYear ?? null,
             board:              studentData.board ?? null,
             whatsapp:           studentData.whatsapp ?? null,
+            courseId:           studentData.courseId ?? null,
             coursePreference:   studentData.coursePreference ?? null,
             durationPreference: studentData.durationPreference ?? null,
             preferredTiming:    studentData.preferredTiming ?? null,
@@ -216,6 +250,9 @@ studentsRouter.post(
         return { student, enrollment };
       });
 
+      if (result.enrollment) {
+        await notifyEnrollmentEvents(prisma, tenantId, result.enrollment.batchId).catch(console.error);
+      }
       res.status(201).json({ ...result, student: await withPhotoUrl(result.student) });
     } catch (err) {
       if (err instanceof BatchFullError) {

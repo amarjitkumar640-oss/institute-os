@@ -428,12 +428,12 @@ export async function getScheduleDetail(db: PrismaClient, enrollmentId: string, 
 export async function listSchedules(
   db:       PrismaClient,
   tenantId: string,
-  centerId: string | null | undefined,
+  centerIds: string[],
   params:   { search?: string; status?: string; batchId?: string },
 ) {
   const where: Prisma.StudentFeeScheduleWhereInput = {
     enrollment: {
-      batch: { tenantId, ...(centerId ? { centerId } : {}) },
+      batch: { tenantId, centerId: { in: centerIds } },
       batchId: params.batchId ?? undefined,
       student: params.search
         ? {
@@ -534,11 +534,11 @@ export async function backfillAdmissionPayments(db: PrismaClient): Promise<numbe
 
 // ── Dashboard summary ─────────────────────────────────────────────────────────
 
-export async function getFeeSummary(db: PrismaClient, tenantId: string, centerId?: string | null) {
+export async function getFeeSummary(db: PrismaClient, tenantId: string, centerIds: string[]) {
   const now = new Date();
   const som = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const scopeFilter = { enrollment: { batch: { tenantId, ...(centerId ? { centerId } : {}) } } };
+  const scopeFilter = { enrollment: { batch: { tenantId, centerId: { in: centerIds } } } };
 
   const [collectedThisMonth, outstandingAgg, overdueCount, activeSchedules] = await Promise.all([
     db.paymentTransaction.aggregate({

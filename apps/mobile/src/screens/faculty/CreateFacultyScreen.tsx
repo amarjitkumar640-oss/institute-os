@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, StatusBar, TextInput, Animated,
+  Platform, TextInput, Animated, Keyboard,
   ActivityIndicator, TouchableOpacity,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,6 +19,7 @@ import { listExamCategories, type ExamCategoryItem } from "../../api/examCategor
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateFaculty">;
 
@@ -109,16 +110,25 @@ function SubjectPicker({
   onToggle: (id: string) => void;
 }) {
   const colors = useThemeColors();
-  const groups = useMemo(() => [
-    { key: "shared", label: "Shared (All Exams)", color: "#E8752C", items: subjects.filter((s) => s.examCategories.length === 0) },
-    ...categories.map((c) => ({
+  const groups = useMemo(() => {
+    const totalCats = categories.length;
+    // Shared: uncategorised (0) OR linked to every exam category
+    const sharedItems = subjects.filter(
+      (s) => s.examCategories.length === 0 || (totalCats > 0 && s.examCategories.length === totalCats)
+    );
+    const sharedSet = new Set(sharedItems.map((s) => s.id));
+    // Subjects with 1 to (N-1) categories appear under each of their categories (accurate, may duplicate)
+    const catGroups = categories.map((c) => ({
       key:   c.id,
       label: c.label,
       color: c.color,
-      // A subject relevant to several categories appears under each of them.
-      items: subjects.filter((s) => s.examCategories.some((ec) => ec.id === c.id)),
-    })),
-  ], [subjects, categories]);
+      items: subjects.filter((s) => !sharedSet.has(s.id) && s.examCategories.some((ec) => ec.id === c.id)),
+    }));
+    return [
+      { key: "shared", label: "Shared (All Exams)", color: C.orange, items: sharedItems },
+      ...catGroups,
+    ];
+  }, [subjects, categories]);
 
   if (loading) {
     return (
@@ -133,7 +143,7 @@ function SubjectPicker({
     if (items.length === 0) return null;
     return (
       <View key={key} style={sp.group}>
-        <View style={[sp.groupLabel, { borderLeftColor: color }]}>
+        <View style={sp.groupLabel}>
           <Text style={[sp.groupLabelT, { color }]}>{label}</Text>
         </View>
         <View style={sp.chipRow}>
@@ -168,13 +178,13 @@ function SubjectPicker({
 const sp = StyleSheet.create({
   wrap:        { gap: ms(16) },
   center:      { alignItems: "center", paddingVertical: ms(20), gap: ms(8) },
-  loadingT:    { fontSize: fs(12), color: "#8A7F82" },
+  loadingT:    { fontSize: fs(12), color: C.muted },
   group:       { gap: ms(10) },
-  groupLabel:  { borderLeftWidth: ms(3), paddingLeft: ms(8) },
-  groupLabelT: { fontSize: fs(11), fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
+  groupLabel:  { paddingLeft: ms(8) },
+  groupLabelT: { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
   chipRow:     { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
-  chip:        { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(10), paddingVertical: ms(7), borderRadius: ms(8), backgroundColor: "#FFFFFF", borderWidth: 1.5, borderColor: "#E0D8D4" },
-  chipT:       { fontSize: fs(12), fontWeight: "600", color: "#8A7F82", flexShrink: 1 },
+  chip:        { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(10), paddingVertical: ms(7), borderRadius: ms(8), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border },
+  chipT:       { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, flexShrink: 1 },
   chipTActive: { color: "#FFFFFF" },
 });
 
@@ -184,6 +194,18 @@ export function CreateFacultyScreen({ navigation }: Props) {
   const { showConfirm } = useAlert();
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // RN auto-scrolls to keep a focused field visible above the keyboard but
+  // never scrolls back on dismiss — undo that so the form returns to its
+  // original scroll position once the keyboard is fully gone.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return () => sub.remove();
+  }, []);
+
   const [form, setForm]       = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors]   = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
@@ -296,7 +318,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
 
   function handleBack() {
     if (isDirty) {
-      showConfirm("Discard Changes?", "You have unsaved changes. Go back?", () => navigation.goBack(), { confirmLabel: "Discard", cancelLabel: "Stay", destructive: true });
+      showConfirm("Discard Changes?", "You have unsaved changes. Go back?", () => navigation.goBack(), { confirmLabel: "Discard", cancelLabel: "Stay", brand: true, icon: "arrow-undo-outline" });
     } else {
       navigation.goBack();
     }
@@ -304,15 +326,14 @@ export function CreateFacultyScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader title="Add Faculty" onBack={handleBack} />
 
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* ── Personal Info ── */}
           <View style={s.section}>
-            <SectionHead dot={colors.primary} title="Personal Information" />
+            <SectionHead icon="person-outline" title="Personal Information" color={colors.primary} />
             <FormField label="FULL NAME" value={form.fullName} onChangeText={(v) => setField("fullName", v)}
               placeholder="e.g. Dr. Priya Sharma" error={errors.fullName} icon="person-outline"
               maxLength={120} clearable returnKeyType="next" onSubmitEditing={() => phoneRef.current?.focus()} blurOnSubmit={false} />
@@ -326,7 +347,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
 
           {/* ── Professional Info ── */}
           <View style={s.section}>
-            <SectionHead dot={colors.primary} title="Professional Details" />
+            <SectionHead icon="briefcase-outline" title="Professional Details" color={colors.primary} />
             <FormField label="QUALIFICATION" value={form.qualification} onChangeText={(v) => setField("qualification", v)}
               placeholder="e.g. M.Sc Mathematics, B.Ed" error={errors.qualification} icon="school-outline"
               maxLength={200} clearable returnKeyType="next" onSubmitEditing={() => expRef.current?.focus()} blurOnSubmit={false} />
@@ -343,7 +364,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
 
           {/* ── Subjects ── */}
           <View style={s.section}>
-            <SectionHead dot={colors.primary} title="Subjects to Teach" />
+            <SectionHead icon="book-outline" title="Subjects to Teach" color={colors.primary} />
             <Text style={s.subjectHint}>Select subjects this faculty member is qualified to teach.</Text>
             <SubjectPicker
               subjects={subjects}
@@ -385,7 +406,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
           <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
             <Animated.View style={{ transform: [{ scale: checkScale }], marginBottom: ms(20) }}>
-              <LinearGradient colors={["#1B9C63", "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
+              <LinearGradient colors={[C.green, "#16A085"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.checkCircle}>
                 <Ionicons name="checkmark" size={ms(44)} color="#fff" />
               </LinearGradient>
             </Animated.View>
@@ -395,17 +416,17 @@ export function CreateFacultyScreen({ navigation }: Props) {
 
             <View style={s.detailBox}>
               <DetailRow icon="person-outline"   label="Name"          value={createdFaculty.fullName}                                  color={colors.primary} />
-              <DetailRow icon="id-card-outline"  label="Employee Code" value={createdFaculty.employeeCode}                              color="#2563A8" />
-              <DetailRow icon="school-outline"   label="Qualification" value={createdFaculty.qualification}                             color="#E8752C" />
+              <DetailRow icon="id-card-outline"  label="Employee Code" value={createdFaculty.employeeCode}                              color={C.blue} />
+              <DetailRow icon="school-outline"   label="Qualification" value={createdFaculty.qualification}                             color={C.orange} />
               <DetailRow icon="briefcase-outline" label="Experience"   value={`${createdFaculty.experienceYears} year${createdFaculty.experienceYears !== 1 ? "s" : ""}`} color={colors.accent} />
-              <DetailRow icon="book-outline"     label="Subjects"      value={`${createdFaculty.subjectCount} subject${createdFaculty.subjectCount !== 1 ? "s" : ""} assigned`} color="#1B9C63" last />
+              <DetailRow icon="book-outline"     label="Subjects"      value={`${createdFaculty.subjectCount} subject${createdFaculty.subjectCount !== 1 ? "s" : ""} assigned`} color={C.green} last />
             </View>
 
             <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-              <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+              <View style={[s.doneBtn, { backgroundColor: colors.primary }]}>
                 <Ionicons name="people-outline" size={ms(18)} color="#fff" />
                 <Text style={s.doneBtnT}>View All Faculty</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -425,15 +446,22 @@ export function CreateFacultyScreen({ navigation }: Props) {
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
-function SectionHead({ dot, title }: { dot: string; title: string }) {
-  const s = useThemedStyles(makeSStyles);
+function SectionHead({ icon, title, color }: { icon: string; title: string; color: string }) {
   return (
-    <View style={s.sectionHeader}>
-      <View style={[s.sectionDot, { backgroundColor: dot }]} />
-      <Text style={s.sectionTitle}>{title}</Text>
+    <View style={sh.wrap}>
+      <View style={[sh.iconBox, { backgroundColor: color + "18" }]}>
+        <Ionicons name={icon as any} size={ms(16)} color={color} />
+      </View>
+      <Text style={[sh.label, { color }]}>{title.toUpperCase()}</Text>
     </View>
   );
 }
+
+const sh = StyleSheet.create({
+  wrap:    { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(16) },
+  iconBox: { width: ms(34), height: ms(34), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
+  label:   { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 1 },
+});
 
 function DetailRow({ icon, label, value, color, last = false }: {
   icon: string; label: string; value: string; color: string; last?: boolean;
@@ -453,43 +481,40 @@ function DetailRow({ icon, label, value, color, last = false }: {
 
 const dr = StyleSheet.create({
   row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(10), gap: ms(12) },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(32), height: ms(32), borderRadius: ms(8), justifyContent: "center", alignItems: "center", flexShrink: 0 },
   textWrap:  { flex: 1 },
-  label:     { fontSize: fs(10), color: "#8A7F82", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
-  value:     { fontSize: fs(13), color: "#2B1B1F", fontWeight: "700" },
+  label:     { fontSize: fs(10), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
+  value:     { fontSize: fs(13), color: C.text, fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: colors.primary },
+  safe:          { flex: 1, backgroundColor: colors.screenBg },
   flex:          { flex: 1 },
-  scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
+  scroll:        { flex: 1, backgroundColor: colors.screenBg },
   scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(40) },
 
-  section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(18) },
-  sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2) },
-  sectionTitle:  { fontSize: fs(12), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textTransform: "uppercase" },
+  section:       { backgroundColor: C.card, borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 
-  subjectHint:   { fontSize: fs(12), color: "#8A7F82", marginBottom: ms(14) },
-  selectedCount: { fontSize: fs(12), color: "#1B9C63", fontWeight: "700", marginTop: ms(14), textAlign: "center" },
+  subjectHint:   { fontSize: fs(12), color: C.muted, marginBottom: ms(14) },
+  selectedCount: { fontSize: fs(12), color: C.green, fontFamily: "Inter_700Bold", fontWeight: "700", marginTop: ms(14), textAlign: "center" },
 
-  submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },
-  submitErrorT:  { fontSize: fs(13), color: "#C0392B", lineHeight: fs(18) },
+  submitError:   { backgroundColor: C.red + "0F", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(14), marginBottom: ms(16) },
+  submitErrorT:  { fontSize: fs(13), color: C.red, lineHeight: fs(18) },
   buttonGroup:   { gap: ms(12) },
 
-  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(255,251,240,0.96)", justifyContent: "center", alignItems: "center" },
-  loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: "#FFFFFF", borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginTop: ms(4) },
-  loaderSub:     { fontSize: fs(12), color: "#8A7F82" },
+  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
+  loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
+  loaderTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginTop: ms(4) },
+  loaderSub:     { fontSize: fs(12), color: C.muted },
 
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
-  successCard:    { width: "100%", backgroundColor: "#FFFFFF", borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
   checkCircle:    { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
-  successTitle:   { fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(6) },
-  successSub:     { fontSize: fs(13), color: "#8A7F82", marginBottom: ms(24), textAlign: "center" },
-  detailBox:      { width: "100%", backgroundColor: "#FAFAFA", borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: "#F0EDE8" },
+  successTitle:   { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(6) },
+  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(24), textAlign: "center" },
+  detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: C.border },
   doneBtnWrap:    { width: "100%" },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 });

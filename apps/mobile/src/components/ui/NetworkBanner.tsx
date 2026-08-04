@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
 import { useNetwork } from "../../context/NetworkContext";
+import { C } from "../../theme";
 
 const BANNER_H = ms(56);
 
@@ -64,7 +65,7 @@ export function NetworkBanner() {
           <Ionicons
             name={isReconnected ? "wifi" : "wifi-outline"}
             size={ms(17)}
-            color={isReconnected ? "#1B9C63" : "#C64A3E"}
+            color={isReconnected ? C.green : "#C64A3E"}
           />
         </View>
 
@@ -135,7 +136,7 @@ const s = StyleSheet.create({
     opacity:      0.12,
   },
   dotOffline: { backgroundColor: "#C64A3E" },
-  dotOnline:  { backgroundColor: "#1B9C63" },
+  dotOnline:  { backgroundColor: C.green },
 
   // Icon
   iconCircle: {
@@ -151,10 +152,10 @@ const s = StyleSheet.create({
 
   // Text
   textCol: { flex: 1 },
-  title:   { fontSize: fs(13.5), fontWeight: "700", marginBottom: ms(1) },
+  title:   { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", marginBottom: ms(1) },
   titleOffline: { color: "#F5D0CC" },
   titleOnline:  { color: "#B8EDD6" },
-  sub: { fontSize: fs(11), color: "rgba(255,255,255,0.45)", fontWeight: "500" },
+  sub: { fontSize: fs(11), color: "rgba(255,255,255,0.45)", fontFamily: "Inter_500Medium", fontWeight: "500" },
 
   // Status pill
   pill: {
@@ -165,7 +166,7 @@ const s = StyleSheet.create({
   },
   pillOffline: { backgroundColor: "rgba(198,74,62,0.18)" },
   pillOnline:  { backgroundColor: "rgba(27,156,99,0.18)"  },
-  pillT:       { fontSize: fs(10.5), fontWeight: "700" },
+  pillT:       { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
   pillTOffline:{ color: "#E8907E" },
   pillTOnline: { color: "#5ED4A0"  },
 });

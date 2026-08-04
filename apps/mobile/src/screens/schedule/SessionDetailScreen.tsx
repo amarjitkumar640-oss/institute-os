@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, StatusBar, FlatList,
+  ActivityIndicator, TextInput, FlatList,
 } from "react-native";
 import { BottomSheet } from "../../components/ui/BottomSheet";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -51,7 +51,7 @@ function avatarColor(name: string, colors: ThemeColors) {
 
 const STATUS_META = {
   scheduled: { label: "Scheduled", color: C.blue,  bg: "#EEF4FF", icon: "calendar-outline"         },
-  completed: { label: "Completed", color: C.green,  bg: "#EAF7F1", icon: "checkmark-circle-outline"  },
+  completed: { label: "Completed", color: C.green,  bg: C.greenBg, icon: "checkmark-circle-outline"  },
   cancelled: { label: "Cancelled", color: C.red,    bg: "#FEF0EE", icon: "close-circle-outline"      },
 } as const;
 
@@ -135,7 +135,6 @@ export function SessionDetailScreen({ route, navigation }: Props) {
   if (loading) {
     return (
       <SafeAreaView style={sd.safe} edges={["bottom"]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <ScreenHeader title="Session Detail" onBack={() => navigation.goBack()} />
         <View style={sd.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       </SafeAreaView>
@@ -145,7 +144,6 @@ export function SessionDetailScreen({ route, navigation }: Props) {
   if (!session) {
     return (
       <SafeAreaView style={sd.safe} edges={["bottom"]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <ScreenHeader title="Session Detail" onBack={() => navigation.goBack()} />
         <View style={sd.center}>
           <View style={sd.emptyIllus}>
@@ -167,7 +165,6 @@ export function SessionDetailScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={sd.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScreenHeader
         title="Session Detail"
@@ -175,7 +172,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
       />
 
       <ScrollView
-        style={{ flex: 1, backgroundColor: C.bg }}
+        style={{ flex: 1, backgroundColor: colors.screenBg }}
         contentContainerStyle={sd.body}
         showsVerticalScrollIndicator={false}
       >
@@ -466,8 +463,8 @@ export function SessionDetailScreen({ route, navigation }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: colors.primary },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: C.bg },
+  safe:   { flex: 1, backgroundColor: colors.screenBg },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(48), gap: ms(12) },
 
   emptyIllus: {
@@ -476,14 +473,14 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     marginBottom: ms(12),
   },
-  emptyTitle: { fontSize: fs(15), fontWeight: "700", color: C.text },
+  emptyTitle: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
 
   // Date card
   dateCard: {
     flexDirection:   "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.card,
     borderRadius:    ms(16),
-    shadowColor:     "#2B1B1F",
+    shadowColor:     C.text,
     shadowOffset:    { width: 0, height: ms(2) },
     shadowOpacity:   0.07,
     shadowRadius:    ms(8),
@@ -492,20 +489,20 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   statusStripe: { width: ms(4) },
   dateBody:     { flex: 1, padding: ms(16) },
-  batchName:    { fontSize: fs(11), fontWeight: "600", color: C.muted, marginBottom: ms(4), textTransform: "uppercase", letterSpacing: 0.4 },
-  fullDate:     { fontSize: fs(15), fontWeight: "800", color: C.text, marginBottom: ms(2) },
+  batchName:    { fontSize: fs(11), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, marginBottom: ms(4), textTransform: "uppercase", letterSpacing: 0.4 },
+  fullDate:     { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(2) },
   timeRange:    { fontSize: fs(13), color: C.muted, marginBottom: ms(10) },
   badgeRow:     { flexDirection: "row", gap: ms(8), flexWrap: "wrap" },
   statusBadge:  { flexDirection: "row", alignItems: "center", gap: ms(4), borderRadius: ms(6), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  statusBadgeT: { fontSize: fs(11), fontWeight: "700" },
+  statusBadgeT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700" },
   typeBadge:    { flexDirection: "row", alignItems: "center", gap: ms(4), borderRadius: ms(6), paddingHorizontal: ms(8), paddingVertical: ms(3), backgroundColor: "#F3F4F6" },
   typeBadgeT:   { fontSize: fs(11), color: C.muted },
 
   // Info card
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.card,
     borderRadius:    ms(16),
-    shadowColor:     "#2B1B1F",
+    shadowColor:     C.text,
     shadowOffset:    { width: 0, height: ms(2) },
     shadowOpacity:   0.07,
     shadowRadius:    ms(8),
@@ -516,7 +513,7 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
   infoRow:  { flexDirection: "row", alignItems: "center", padding: ms(14), gap: ms(10) },
   infoIcon: { width: ms(34), height: ms(34), borderRadius: ms(9), alignItems: "center", justifyContent: "center" },
   infoLabel:{ fontSize: fs(10), color: C.muted, textTransform: "uppercase", letterSpacing: 0.4 },
-  infoValue:{ fontSize: fs(13), fontWeight: "700", color: C.text, marginTop: 1 },
+  infoValue:{ fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginTop: 1 },
 
   // Cancel / notes
   cancelCard: {
@@ -525,7 +522,7 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cancelT: { flex: 1, fontSize: fs(12), color: C.red },
 
-  notesCard:  { backgroundColor: "#FFFFFF", borderRadius: ms(12), padding: ms(14), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(1) }, shadowOpacity: 0.05, shadowRadius: ms(4), elevation: 1 },
+  notesCard:  { backgroundColor: C.card, borderRadius: ms(12), padding: ms(14), shadowColor: C.text, shadowOffset: { width: 0, height: ms(1) }, shadowOpacity: 0.05, shadowRadius: ms(4), elevation: 1 },
   notesLabel: { fontSize: fs(10), color: C.muted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: ms(4) },
   notesT:     { fontSize: fs(13), color: C.text, lineHeight: fs(20) },
 
@@ -536,7 +533,7 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
   errorT: { flex: 1, fontSize: fs(12), color: C.red },
 
   // Cancel input
-  inputLabel:  { fontSize: fs(11), fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.4, padding: ms(14), paddingBottom: ms(6) },
+  inputLabel:  { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.4, padding: ms(14), paddingBottom: ms(6) },
   reasonInput: {
     borderWidth: 1, borderColor: C.border, borderRadius: ms(8),
     marginHorizontal: ms(14), padding: ms(10), fontSize: fs(13), color: C.text,
@@ -544,25 +541,25 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cancelConfirmRow: { flexDirection: "row", gap: ms(10), padding: ms(14), paddingTop: ms(10) },
   cancelAbort:      { flex: 1, height: ms(44), borderRadius: ms(10), borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
-  cancelAbortT:     { fontSize: fs(13), color: C.muted, fontWeight: "600" },
+  cancelAbortT:     { fontSize: fs(13), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
   cancelConfirm:    { flex: 2, height: ms(44), borderRadius: ms(10), backgroundColor: C.red, alignItems: "center", justifyContent: "center" },
-  cancelConfirmT:   { fontSize: fs(13), fontWeight: "700", color: "#FFFFFF" },
+  cancelConfirmT:   { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#FFFFFF" },
 
   // Actions
   actionsRow: { flexDirection: "column", gap: ms(10) },
   actionBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), height: ms(50), borderRadius: ms(12) },
   completeBtn:{ backgroundColor: C.green },
   cancelBtn:  { backgroundColor: "#FEF0EE", borderWidth: 1, borderColor: C.red + "50" },
-  actionBtnT: { fontSize: fs(14), fontWeight: "700", color: "#FFFFFF" },
-  cancelBtnT: { fontSize: fs(14), fontWeight: "700", color: C.red },
+  actionBtnT: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#FFFFFF" },
+  cancelBtnT: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.red },
 
   // Change chip on faculty row
   changeChip:  { paddingHorizontal: ms(9), paddingVertical: ms(4), borderRadius: ms(6), backgroundColor: colors.primary + "10", borderWidth: 1, borderColor: colors.primary + "30" },
-  changeChipT: { fontSize: fs(10), fontWeight: "700", color: colors.primary },
+  changeChipT: { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
 
   // Faculty picker sheet (background override + bottom pad)
   pickerSheet: {
-    backgroundColor: C.bg,
+    backgroundColor: colors.bg,
     paddingBottom: ms(24),
   },
   pickerHeader: {
@@ -570,7 +567,7 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: ms(16), paddingBottom: ms(12),
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  pickerTitle: { fontSize: fs(15), fontWeight: "800", color: C.text },
+  pickerTitle: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
   pickerClose: { width: ms(32), height: ms(32), borderRadius: ms(8), alignItems: "center", justifyContent: "center", backgroundColor: C.inputBg },
   pickerSearch: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
@@ -587,14 +584,14 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: ms(10), paddingHorizontal: ms(12),
     borderRadius: ms(10), backgroundColor: "#FEF0EE",
   },
-  removeRowT: { fontSize: fs(13), color: C.red, fontWeight: "600" },
+  removeRowT: { fontSize: fs(13), color: C.red, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
   facultyRow: {
     flexDirection: "row", alignItems: "center", gap: ms(10),
     padding: ms(12), borderRadius: ms(12),
-    borderWidth: 1, borderColor: C.border, backgroundColor: "#FFFFFF",
+    borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
   },
   facultyAvatar:   { width: ms(40), height: ms(40), borderRadius: ms(12), alignItems: "center", justifyContent: "center" },
-  facultyInitials: { fontSize: fs(14), fontWeight: "800" },
-  facultyName:     { fontSize: fs(13), fontWeight: "700", color: C.text },
+  facultyInitials: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  facultyName:     { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   facultyCode:     { fontSize: fs(11), color: C.muted, marginTop: 1 },
 });

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
 import { useThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
 
 export interface SelectOption {
   label: string;
@@ -95,7 +96,7 @@ export function SelectChips(props: Props) {
 
       {hasError && (
         <View style={s.errorRow}>
-          <Ionicons name="alert-circle-outline" size={13} color="#C0392B" />
+          <Ionicons name="alert-circle-outline" size={13} color={C.red} />
           <Text style={s.errorT}>{error}</Text>
         </View>
       )}
@@ -105,7 +106,7 @@ export function SelectChips(props: Props) {
 
 const s = StyleSheet.create({
   wrap:        { marginBottom: ms(20) },
-  label:       { fontSize: fs(12.5), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(9), letterSpacing: 0.3 },
+  label:       { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(9), letterSpacing: 0.3 },
   chipRow:     { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   scroll:      { flexShrink: 0 },
   scrollContent:{ flexDirection: "row", gap: ms(8), paddingRight: ms(4) },
@@ -116,14 +117,14 @@ const s = StyleSheet.create({
     paddingHorizontal: ms(16),
     borderRadius: ms(20),
     borderWidth: 1.5,
-    borderColor: "#E8E3DC",
-    backgroundColor: "#FFFFFF",
+    borderColor: C.border,
+    backgroundColor: C.card,
     gap: ms(5),
   },
-  chipError:   { borderColor: "#C0392B" },
+  chipError:   { borderColor: C.red },
   chipIcon:    { flexShrink: 0 },
-  chipT:       { fontSize: fs(13), fontWeight: "600", color: "#8A7F82", includeFontPadding: false },
-  chipTOn:     { color: "#FFFFFF" },
+  chipT:       { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, includeFontPadding: false },
+  chipTOn:     { color: "#fff" },
   errorRow:    { flexDirection: "row", alignItems: "center", marginTop: ms(5), gap: ms(4) },
-  errorT:      { fontSize: fs(11.5), color: "#C0392B", flex: 1 },
+  errorT:      { fontSize: fs(11.5), color: C.red, flex: 1 },
 });

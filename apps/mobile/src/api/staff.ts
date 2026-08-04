@@ -14,6 +14,7 @@ export interface StaffMember {
   isActive:          boolean;
   createdAt:         string;
   centerAssignments: StaffCenterAssignment[];
+  linkedFaculty?:    { id: string } | null; // Faculty profile this login is linked to, if any
 }
 
 export interface CreateStaffInput {

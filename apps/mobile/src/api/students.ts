@@ -26,6 +26,8 @@ export interface StudentItem {
   passYear:           string | null;
   board:              string | null;
   whatsapp:           string | null;
+  courseId:           string | null;
+  course?:            { name: string } | null;
   coursePreference:   CoursePreference | null;
   durationPreference: DurationPref | null;
   preferredTiming:    BatchTiming | null;
@@ -55,6 +57,7 @@ export interface AdmitStudentPayload {
   passYear?:          string | null;
   board?:             string | null;
   whatsapp?:          string | null;
+  courseId?:          string | null;
   coursePreference?:  CoursePreference | null;
   durationPreference?: DurationPref | null;
   batchId?:           string | null;

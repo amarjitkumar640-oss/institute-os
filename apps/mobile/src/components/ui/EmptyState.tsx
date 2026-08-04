@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import {
   BatchesScene, StudentsScene, FacultyScene,
-  CoursesScene, SubjectsScene, StaffScene, CentersScene,
+  CoursesScene, SubjectsScene, StaffScene, CentersScene, LeadsScene,
 } from "../illustrations/Scenes";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
@@ -10,7 +10,7 @@ import { useThemeColors } from "../../context/ThemeContext";
 
 export type EmptyScene =
   | "batches" | "students" | "faculty"
-  | "courses" | "subjects" | "staff" | "centers";
+  | "courses" | "subjects" | "staff" | "centers" | "leads";
 
 interface Props {
   scene:     EmptyScene;
@@ -30,6 +30,7 @@ const SCENES: Record<EmptyScene, SceneComp> = {
   subjects: SubjectsScene,
   staff:    StaffScene,
   centers:  CentersScene,
+  leads:    LeadsScene,
 };
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -78,7 +79,7 @@ const s = StyleSheet.create({
   },
   title: {
     fontSize:   fs(16),
-    fontWeight: "700",
+    fontFamily: "Inter_700Bold", fontWeight: "700",
     color:      C.text,
     textAlign:  "center",
   },
@@ -101,7 +102,7 @@ const s = StyleSheet.create({
   },
   btnT: {
     fontSize:   fs(14),
-    fontWeight: "700",
+    fontFamily: "Inter_700Bold", fontWeight: "700",
     color:      "white",
   },
 });

@@ -38,3 +38,41 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   const { data } = await apiClient.get<DashboardStats>("/dashboard");
   return data;
 }
+
+// ── Teacher-scoped dashboard ────────────────────────────────────────────────
+
+export interface TeacherClassSession {
+  id: string;
+  scheduledDate: string; // ISO date
+  startTime: string;     // "HH:MM"
+  endTime: string;       // "HH:MM"
+  room: string | null;
+  status: "scheduled" | "completed" | "cancelled";
+  subject: { id: string; name: string } | null;
+  batch: { id: string; name: string };
+}
+
+export interface TeacherBatchSummary {
+  id: string;
+  name: string;
+}
+
+export type TeacherDashboardStats =
+  | { linked: false }
+  | {
+      linked: true;
+      classesToday: TeacherClassSession[];
+      myBatches: TeacherBatchSummary[];
+      totalBatches: number;
+      totalStudents: number;
+    };
+
+export async function fetchTeacherDashboardStats(): Promise<TeacherDashboardStats> {
+  // Send device local date so the server uses the correct calendar day (IST vs UTC).
+  const localDate = new Date();
+  const yyyy = localDate.getFullYear();
+  const mm   = String(localDate.getMonth() + 1).padStart(2, "0");
+  const dd   = String(localDate.getDate()).padStart(2, "0");
+  const { data } = await apiClient.get<TeacherDashboardStats>(`/dashboard/teacher?date=${yyyy}-${mm}-${dd}`);
+  return data;
+}

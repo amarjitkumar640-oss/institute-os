@@ -16,7 +16,7 @@ import {
   updateFaculty,
   deleteFaculty,
 } from "./faculty.service";
-import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
+import { assignedCenterIds, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
 
 export const facultyRouter = Router();
 
@@ -30,7 +30,7 @@ facultyRouter.get(
   validateQuery(facultyQuerySchema),
   async (req, res) => {
     const query = (req as ReqWithQuery).parsedQuery;
-    const result = await listFaculty(query, req.auth!.tenantId, req.auth?.centerId);
+    const result = await listFaculty(query, req.auth!.tenantId, await assignedCenterIds(req));
     res.json(result);
   }
 );
@@ -81,6 +81,8 @@ facultyRouter.patch(
       if ("notFound" in result)      return res.status(404).json({ error: "Faculty not found" });
       if ("emailConflict" in result) return res.status(409).json({ error: "Another faculty member with this email already exists.", field: "email" });
       if ("phoneConflict" in result) return res.status(409).json({ error: "Another faculty member with this phone number already exists.", field: "phone" });
+      if ("staffNotFound" in result) return res.status(404).json({ error: "No teacher account found with that ID.", field: "staffId" });
+      if ("staffConflict" in result) return res.status(409).json({ error: "That teacher account is already linked to another faculty profile.", field: "staffId" });
     } else {
       res.json(result.faculty);
     }

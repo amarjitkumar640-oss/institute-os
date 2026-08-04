@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/role";
 import { validateBody, validateQuery } from "../../middleware/validate";
+import { assignedCenterIds } from "../../lib/centerFilter";
 import {
   upsertFeeTemplate,
   getFeeTemplate,
@@ -71,8 +72,25 @@ feesRouter.get(
     const { search, status, batchId } = req.query as {
       search?: string; status?: string; batchId?: string;
     };
-    const data = await listSchedules(prisma, req.auth!.tenantId, req.auth?.centerId, { search, status, batchId });
-    res.json(data);
+    const data = await listSchedules(prisma, req.auth!.tenantId, await assignedCenterIds(req), { search, status, batchId });
+    const mapped = data.map((s) => {
+      const paidAmount = s.installments.reduce((sum, i) => sum + Number(i.paidAmount), 0);
+      const pendingAmount = Math.max(0, Number(s.effectiveFee) - paidAmount - Number(s.creditBalance));
+      return {
+        id: s.id,
+        enrollmentId: s.enrollmentId,
+        totalFee: Number(s.totalFee),
+        discountAmount: Number(s.discountAmount),
+        effectiveFee: Number(s.effectiveFee),
+        creditBalance: Number(s.creditBalance),
+        status: s.status,
+        student: s.enrollment.student,
+        batch: s.enrollment.batch,
+        paidAmount,
+        pendingAmount,
+      };
+    });
+    res.json(mapped);
   },
 );
 
@@ -189,9 +207,7 @@ feesRouter.get(
       ? { scheduleId, tenantId: req.auth!.tenantId }
       : {
           tenantId: req.auth!.tenantId,
-          ...(req.auth?.centerId
-            ? { schedule: { enrollment: { batch: { centerId: req.auth.centerId } } } }
-            : {}),
+          schedule: { enrollment: { batch: { centerId: { in: await assignedCenterIds(req) } } } },
         };
 
     const payments = await prisma.paymentTransaction.findMany({
@@ -213,7 +229,11 @@ feesRouter.get(
   "/summary",
   requireAuth,
   async (req, res) => {
-    const summary = await getFeeSummary(prisma, req.auth!.tenantId, req.auth?.centerId);
-    res.json(summary);
+    const summary = await getFeeSummary(prisma, req.auth!.tenantId, await assignedCenterIds(req));
+    res.json({
+      totalCollected: summary.collectedThisMonth,
+      totalPending: summary.pending,
+      overdueCount: summary.overdueCount,
+    });
   },
 );

@@ -6,7 +6,7 @@
     "base": {
       "node": "20.19.0",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.institute-os.example.com/api"
+        "EXPO_PUBLIC_API_URL": "http://137.23.52.221/qa/api"
       }
     },
     "development": {
@@ -16,13 +16,14 @@
     },
     "preview": {
       "extends": "base",
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "extends": "base"
     },
-
-    "_comment": "Per-organization profiles below extend production with that org's identity. Add one per tenant, matching the tenant's real UUID (EXPO_PUBLIC_TENANT_ID) and a slug matching an assets/tenants/<slug>/ folder if it has custom icons. Run e.g. `eas build --profile default-institute --platform all`.",
 
     "default-institute": {
       "extends": "production",
@@ -30,8 +31,19 @@
         "EXPO_PUBLIC_TENANT_ID": "00000000-0000-0000-0000-000000000001",
         "TENANT_SLUG": "default",
         "TENANT_NAME": "Institute OS",
-        "TENANT_IOS_BUNDLE_ID": "com.instituteos.default",
-        "TENANT_ANDROID_PACKAGE": "com.instituteos.default"
+        "TENANT_IOS_BUNDLE_ID": "com.instituteos.defaultinstitute",
+        "TENANT_ANDROID_PACKAGE": "com.instituteos.defaultinstitute"
+      }
+    },
+
+    "default-institute-preview": {
+      "extends": "preview",
+      "env": {
+        "EXPO_PUBLIC_TENANT_ID": "00000000-0000-0000-0000-000000000001",
+        "TENANT_SLUG": "default",
+        "TENANT_NAME": "Institute OS",
+        "TENANT_IOS_BUNDLE_ID": "com.instituteos.defaultinstitute",
+        "TENANT_ANDROID_PACKAGE": "com.instituteos.defaultinstitute"
       }
     }
   },

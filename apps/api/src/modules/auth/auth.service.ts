@@ -9,10 +9,6 @@ import type { AuthPayload } from "../../middleware/auth";
 export async function login({ tenantId, identifier, password }: LoginInput) {
   const trimmed = identifier.trim();
 
-  // The organization is already known (baked into the app build), so this
-  // just needs to find which column the identifier matches within that one
-  // tenant — no format auto-detection needed, since a match can only ever
-  // occur inside this single tenant.
   const staff = await prisma.staff.findFirst({
     where: {
       tenantId,
@@ -24,10 +20,7 @@ export async function login({ tenantId, identifier, password }: LoginInput) {
     },
     include: {
       tenant: true,
-      centerAssignments: {
-        include: { center: { select: { id: true, name: true } } },
-        where:   { center: { isActive: true } },
-      },
+      linkedFaculty: { select: { id: true } },
     },
   });
   if (!staff || !staff.isActive || !staff.tenant.isActive) return null;
@@ -35,21 +28,29 @@ export async function login({ tenantId, identifier, password }: LoginInput) {
   const valid = await bcrypt.compare(password, staff.passwordHash);
   if (!valid) return null;
 
-  const centers = staff.centerAssignments.map((ca) => ({
-    id:   ca.center.id,
-    name: ca.center.name,
-    role: ca.role,
+  // Source of truth for centers is this staff's own CenterStaff assignments
+  // (same pattern as GET /api/centers) — not every center in the tenant.
+  const assignments = await prisma.centerStaff.findMany({
+    where:   { staffId: staff.id, center: { isActive: true, tenantId } },
+    select:  { role: true, center: { select: { id: true, name: true } } },
+    orderBy: { center: { name: "asc" } },
+  });
+  const centers = assignments.map((a) => ({
+    id:   a.center.id,
+    name: a.center.name,
+    role: a.role,
   }));
 
-  // Auto-select if the staff belongs to exactly one center
+  // Auto-select if this staff is assigned to exactly one active center
   const autoCenterId = centers.length === 1 ? centers[0].id   : null;
   const autoCenterRole: StaffRole = centers.length === 1 ? centers[0].role : staff.role;
 
   const payload: AuthPayload = {
-    staffId:  staff.id,
-    role:     autoCenterRole,
-    centerId: autoCenterId,
-    tenantId: staff.tenantId,
+    staffId:   staff.id,
+    role:      autoCenterRole,
+    centerId:  autoCenterId,
+    tenantId:  staff.tenantId,
+    facultyId: staff.linkedFaculty?.id ?? null,
   };
   const accessToken = jwt.sign(payload, env.JWT_ACCESS_SECRET, {
     expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions["expiresIn"],
@@ -63,13 +64,14 @@ export async function login({ tenantId, identifier, password }: LoginInput) {
     refreshToken,
     staff: { id: staff.id, fullName: staff.fullName, role: staff.role },
     centers,
-    // currentCenter is null when staff has multiple centers (they must call select-center)
     currentCenter: centers.length === 1 ? centers[0] : null,
     branding: {
-      primary:   staff.tenant.brandPrimary,
-      secondary: staff.tenant.brandSecondary,
-      accent:    staff.tenant.brandAccent,
-      logoUrl:   staff.tenant.logoUrl,
+      primary:    staff.tenant.brandPrimary,
+      secondary:  staff.tenant.brandSecondary,
+      accent:     staff.tenant.brandAccent,
+      background: staff.tenant.brandBackground,
+      headerBg:   staff.tenant.brandHeaderBg,
+      logoUrl:    staff.tenant.logoUrl,
     },
   };
 }
@@ -78,10 +80,11 @@ export function refreshAccessToken(refreshToken: string): string | null {
   try {
     const payload = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET) as AuthPayload;
     const reissued: AuthPayload = {
-      staffId:  payload.staffId,
-      role:     payload.role,
-      centerId: payload.centerId ?? null,
-      tenantId: payload.tenantId,
+      staffId:   payload.staffId,
+      role:      payload.role,
+      centerId:  payload.centerId ?? null,
+      tenantId:  payload.tenantId,
+      facultyId: payload.facultyId ?? null,
     };
     return jwt.sign(reissued, env.JWT_ACCESS_SECRET, {
       expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions["expiresIn"],
@@ -92,32 +95,49 @@ export function refreshAccessToken(refreshToken: string): string | null {
 }
 
 export async function selectCenter(staffId: string, centerId: string | null) {
-  // Validate: if a centerId is provided, the staff must be assigned to that center
+  const staff = await prisma.staff.findUnique({
+    where:   { id: staffId },
+    select:  { tenantId: true, role: true, linkedFaculty: { select: { id: true } } },
+  });
+  if (!staff) return null;
+
   if (centerId) {
-    const assignment = await prisma.centerStaff.findUnique({
-      where: { centerId_staffId: { centerId, staffId } },
-      include: { center: { select: { id: true, name: true, isActive: true } } },
+    // Validate the center belongs to this tenant and is active
+    const center = await prisma.center.findFirst({
+      where: { id: centerId, tenantId: staff.tenantId, isActive: true },
+      select: { id: true, name: true },
     });
-    if (!assignment || !assignment.center.isActive) return null;
+    if (!center) return null;
 
-    const staff = await prisma.staff.findUnique({ where: { id: staffId }, select: { tenantId: true } });
-    if (!staff) return null;
+    // Must actually be assigned to this center — not just "exists in the tenant".
+    const assignment = await prisma.centerStaff.findUnique({
+      where:  { centerId_staffId: { centerId, staffId } },
+      select: { role: true },
+    });
+    if (!assignment) return null;
+    const role: StaffRole = assignment.role;
 
-    const payload: AuthPayload = { staffId, role: assignment.role, centerId, tenantId: staff.tenantId };
+    const payload: AuthPayload = {
+      staffId, role, centerId, tenantId: staff.tenantId,
+      facultyId: staff.linkedFaculty?.id ?? null,
+    };
     const accessToken = jwt.sign(payload, env.JWT_ACCESS_SECRET, {
       expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions["expiresIn"],
     });
-    return { accessToken, center: { id: assignment.center.id, name: assignment.center.name } };
+    return { accessToken, center };
   }
 
-  // centerId = null → "All Centers" mode. Staff must have ≥2 center assignments.
-  const staff = await prisma.staff.findUnique({
-    where: { id: staffId },
-    include: { centerAssignments: { include: { center: true } } },
+  // centerId = null → "All Centers" mode. This staff must themselves be
+  // assigned to ≥2 active centers — not just "the tenant has ≥2 centers".
+  const assignedCount = await prisma.centerStaff.count({
+    where: { staffId, center: { tenantId: staff.tenantId, isActive: true } },
   });
-  if (!staff || staff.centerAssignments.length < 2) return null;
+  if (assignedCount < 2) return null;
 
-  const payload: AuthPayload = { staffId, role: staff.role, centerId: null, tenantId: staff.tenantId };
+  const payload: AuthPayload = {
+    staffId, role: staff.role as StaffRole, centerId: null, tenantId: staff.tenantId,
+    facultyId: staff.linkedFaculty?.id ?? null,
+  };
   const accessToken = jwt.sign(payload, env.JWT_ACCESS_SECRET, {
     expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions["expiresIn"],
   });

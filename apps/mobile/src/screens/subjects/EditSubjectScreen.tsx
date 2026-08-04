@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, StatusBar, Animated, Easing, TouchableOpacity,
+  View, Text, StyleSheet, KeyboardAvoidingView, ScrollView, Keyboard,
+  Platform, Animated, Easing, TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -55,6 +55,17 @@ export function EditSubjectScreen({ navigation, route }: Props) {
   const { showConfirm } = useAlert();
   const insets = useSafeAreaInsets();
   const { subject } = route.params;
+  const scrollRef = useRef<ScrollView>(null);
+
+  // RN auto-scrolls to keep a focused field visible above the keyboard but
+  // never scrolls back on dismiss — undo that so the form returns to its
+  // original scroll position once the keyboard is fully gone.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return () => sub.remove();
+  }, []);
 
   const [name, setName]           = useState(subject.name);
   const [nameError, setNameError] = useState<string | undefined>();
@@ -71,7 +82,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
   }, []);
 
   const CATEGORIES: CategoryOption[] = [
-    { key: null, label: "Shared", sub: "Applies to all exam categories", color: "#E8752C", icon: "grid-outline" },
+    { key: null, label: "Shared", sub: "Applies to all exam categories", color: C.orange, icon: "grid-outline" },
     ...examCategories.map((c) => ({
       key:   c.id,
       label: c.label,
@@ -157,7 +168,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
 
   function handleBack() {
     if (isDirty) {
-      showConfirm("Discard Changes?", "You have unsaved changes. Go back?", () => navigation.goBack(), { confirmLabel: "Discard", cancelLabel: "Stay", destructive: true });
+      showConfirm("Discard Changes?", "You have unsaved changes. Go back?", () => navigation.goBack(), { confirmLabel: "Discard", cancelLabel: "Stay", brand: true, icon: "arrow-undo-outline" });
     } else {
       navigation.goBack();
     }
@@ -166,19 +177,24 @@ export function EditSubjectScreen({ navigation, route }: Props) {
   const catLabel = updated && updated.examCategories.length
     ? updated.examCategories.map((c) => c.label).join(", ")
     : "Shared";
-  const catColor = updated?.examCategories[0]?.color ?? "#E8752C";
+  const catColor = updated?.examCategories[0]?.color ?? C.orange;
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader title="Edit Subject" onBack={handleBack} />
 
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={s.content}>
+        <ScrollView
+          ref={scrollRef}
+          style={s.flex}
+          contentContainerStyle={s.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
 
           {/* ── Name ── */}
           <View style={s.section}>
-            <SectionHead dot={colors.primary} title="Subject Name" />
+            <SectionHead icon="book-outline" title="Subject Name" color={colors.primary} />
             <FormField
               label="NAME"
               value={name}
@@ -194,7 +210,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
 
           {/* ── Category ── */}
           <View style={s.section}>
-            <SectionHead dot={colors.primary} title="Exam Category" />
+            <SectionHead icon="layers-outline" title="Exam Category" color={colors.primary} />
             <Text style={s.catHint}>Choose one or more exams this subject belongs to (or leave as Shared).</Text>
             <View style={s.catGrid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
               {CATEGORIES.map((opt) => {
@@ -227,7 +243,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
           {/* Faculty count info */}
           {subject.facultyCount > 0 && (
             <View style={s.infoBox}>
-              <Ionicons name="information-circle-outline" size={ms(16)} color="#2563A8" />
+              <Ionicons name="information-circle-outline" size={ms(16)} color={C.blue} />
               <Text style={s.infoT}>
                 {subject.facultyCount} faculty member{subject.facultyCount > 1 ? "s are" : " is"} currently teaching this subject.
               </Text>
@@ -257,7 +273,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
               />
             )}
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Full-screen loader */}
@@ -274,7 +290,6 @@ export function EditSubjectScreen({ navigation, route }: Props) {
       {/* Full-screen success card */}
       {updated !== null && (
         <Animated.View style={[s.successOverlay, { opacity: cardOpacity }]}>
-          <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
           <View style={[s.successStatusBarBg, { height: insets.top }]} />
           <Animated.View style={[s.successCard, { transform: [{ translateY: cardSlide }] }]}>
 
@@ -316,10 +331,10 @@ export function EditSubjectScreen({ navigation, route }: Props) {
               </View>
 
               <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-                <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+                <View style={[s.doneBtn, { backgroundColor: colors.primary }]}>
                   <Ionicons name="list-outline" size={ms(18)} color="#fff" />
                   <Text style={s.doneBtnT}>View All Subjects</Text>
-                </LinearGradient>
+                </View>
               </TouchableOpacity>
             </Animated.View>
 
@@ -332,15 +347,22 @@ export function EditSubjectScreen({ navigation, route }: Props) {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function SectionHead({ dot, title }: { dot: string; title: string }) {
-  const s = useThemedStyles(makeSStyles);
+function SectionHead({ icon, title, color }: { icon: string; title: string; color: string }) {
   return (
-    <View style={s.sectionHeader}>
-      <View style={[s.sectionDot, { backgroundColor: dot }]} />
-      <Text style={s.sectionTitle}>{title}</Text>
+    <View style={sh.wrap}>
+      <View style={[sh.iconBox, { backgroundColor: color + "18" }]}>
+        <Ionicons name={icon as any} size={ms(16)} color={color} />
+      </View>
+      <Text style={[sh.label, { color }]}>{title.toUpperCase()}</Text>
     </View>
   );
 }
+
+const sh = StyleSheet.create({
+  wrap:    { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(10) },
+  iconBox: { width: ms(34), height: ms(34), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
+  label:   { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 1 },
+});
 
 function DetailRow({ icon, label, value, color, last = false }: {
   icon: string; label: string; value: string; color: string; last?: boolean;
@@ -363,41 +385,40 @@ const dr = StyleSheet.create({
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(32), height: ms(32), borderRadius: ms(8), justifyContent: "center", alignItems: "center" },
   textWrap:  { flex: 1 },
-  label:     { fontSize: fs(10), color: C.muted, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
-  value:     { fontSize: fs(13), color: C.text, fontWeight: "700" },
+  label:     { fontSize: fs(10), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
+  value:     { fontSize: fs(13), color: C.text, fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: colors.primary },
+  safe:          { flex: 1, backgroundColor: colors.screenBg },
   flex:          { flex: 1 },
-  content:       { flex: 1, backgroundColor: "#FFFBF0", paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(8), paddingBottom: ms(16) },
+  // Used as a ScrollView contentContainerStyle now (not a plain View) — see
+  // CreateSubjectScreen.tsx for the same fix and reasoning.
+  content:       { flexGrow: 1, backgroundColor: colors.screenBg, paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(8), paddingBottom: ms(16) },
 
-  section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: SECTION_PAD, marginBottom: ms(10), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(10) },
-  sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2) },
-  sectionTitle:  { fontSize: fs(12), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textTransform: "uppercase" },
+  section:       { backgroundColor: C.card, borderRadius: ms(18), padding: SECTION_PAD, marginBottom: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 
-  catHint:       { fontSize: fs(12), color: "#8A7F82", marginBottom: ms(8) },
+  catHint:       { fontSize: fs(12), color: C.muted, marginBottom: ms(8) },
   catGrid:       { flexDirection: "row", flexWrap: "wrap", gap: CAT_GAP },
-  catCard:       { borderRadius: ms(12), padding: ms(10), backgroundColor: "#FAFAFA", borderWidth: 1.5, borderColor: "#E8E0DC", gap: ms(4), position: "relative" },
+  catCard:       { borderRadius: ms(12), padding: ms(10), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border, gap: ms(4), position: "relative" },
   catIcon:       { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center", marginBottom: ms(2) },
-  catName:       { fontSize: fs(13), fontWeight: "800", color: "#2B1B1F" },
-  catSub:        { fontSize: fs(10), color: "#8A7F82", lineHeight: fs(13) },
+  catName:       { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  catSub:        { fontSize: fs(10), color: C.muted, lineHeight: fs(13) },
   catCheck:      { position: "absolute", top: ms(8), right: ms(8), width: ms(16), height: ms(16), borderRadius: ms(8), justifyContent: "center", alignItems: "center" },
 
-  infoBox:       { flexDirection: "row", alignItems: "flex-start", gap: ms(10), backgroundColor: "#EFF4FF", borderRadius: ms(12), padding: ms(10), marginBottom: ms(10), borderWidth: 1, borderColor: "#BFD0F5" },
-  infoT:         { fontSize: fs(12), color: "#2563A8", flex: 1, lineHeight: fs(16) },
+  infoBox:       { flexDirection: "row", alignItems: "flex-start", gap: ms(10), backgroundColor: C.blue + "0F", borderRadius: ms(12), padding: ms(10), marginBottom: ms(10), borderWidth: 1, borderColor: C.blue + "30" },
+  infoT:         { fontSize: fs(12), color: C.blue, flex: 1, lineHeight: fs(16) },
 
-  submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(12), marginBottom: ms(10) },
-  submitErrorT:  { fontSize: fs(13), color: "#C0392B", lineHeight: fs(18) },
+  submitError:   { backgroundColor: C.red + "0F", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(12), marginBottom: ms(10) },
+  submitErrorT:  { fontSize: fs(13), color: C.red, lineHeight: fs(18) },
   buttonGroup:   { gap: ms(12) },
 
-  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(255,251,240,0.96)", justifyContent: "center", alignItems: "center" },
-  loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: "#FFFFFF", borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F" },
-  loaderSub:     { fontSize: fs(12), color: "#8A7F82" },
+  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
+  loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
+  loaderTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  loaderSub:     { fontSize: fs(12), color: C.muted },
 
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
   successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.primary },
   successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(30), padding: ms(26), alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
 
@@ -409,10 +430,10 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   sparkleBR:    { position: "absolute", bottom: ms(10), right: ms(6) },
 
   successContent: { width: "100%", alignItems: "center" },
-  successTitle:   { fontSize: fs(23), fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
+  successTitle:   { fontSize: fs(23), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
   successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(24), textAlign: "center" },
   detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: C.border },
   doneBtnWrap:    { width: "100%" },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  doneBtnT:       { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
 });
