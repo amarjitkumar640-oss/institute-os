@@ -13,6 +13,7 @@ import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { C } from "../../theme";
+import { T } from "../../components/ui/typography";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FeeStructure">;
 
@@ -196,21 +197,27 @@ const makeLcStyles = (colors: ThemeColors) => StyleSheet.create({
   card:       { backgroundColor: C.card, borderRadius: ms(16), borderWidth: 1.5, borderColor: C.border, padding: ms(14), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: ms(6), elevation: 1 },
   header:     { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(14) },
   badge:      { width: ms(26), height: ms(26), borderRadius: ms(13), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  badgeNum:   { fontSize: fs(11.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  badgeNum:   { ...T.badgeText, color: "#fff" },
   moveRow:    { flexDirection: "row", gap: ms(10), flex: 1 },
   removeBtn:  { padding: ms(2) },
   field:      { marginBottom: ms(12) },
-  label:      { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 0.7, marginBottom: ms(6), textTransform: "uppercase" },
-  input:      { backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(12), paddingVertical: ms(10), fontSize: fs(13.5), color: C.text },
-  amountWrap: { flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(12), paddingVertical: ms(10), gap: ms(6) },
-  amountSym:  { fontSize: fs(17), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
-  amountInput:{ flex: 1, fontSize: fs(17), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, includeFontPadding: false, padding: 0 },
+  // Matches FormField's own per-field label style (components/ui/FormField.tsx)
+  // exactly — this screen hand-rolls its inputs instead of using FormField,
+  // but the label text should still read identically to every other form.
+  label:      { ...T.chipText, color: C.text, marginBottom: ms(7) },
+  input:      { backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, paddingHorizontal: ms(12), paddingVertical: ms(10), ...T.body, color: C.text },
+  amountWrap: { flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, paddingHorizontal: ms(12), paddingVertical: ms(10), gap: ms(6) },
+  amountSym:  { ...T.cardTitle, color: C.green },
+  amountInput:{ flex: 1, ...T.cardTitle, color: C.text, includeFontPadding: false, padding: 0 },
   chipRow:    { flexDirection: "row", gap: ms(6) },
   chip:       { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(7), borderRadius: ms(8), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
   chipOn:     { backgroundColor: colors.primary + "10", borderColor: colors.primary },
-  chipT:      { fontSize: fs(11.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
+  // Matches the dashboard StatTile's label font (T.caption) — same 11px size
+  // as chipText but a lighter weight (500 vs 600), so "On Admission"/"After
+  // Days"/"Monthly" sit more comfortably within each chip.
+  chipT:      { ...T.caption, color: C.muted },
   chipTOn:    { color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
-  amountTotal:{ fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  amountTotal:{ ...T.chipText, color: C.muted },
   twoCol:     { flexDirection: "row", gap: ms(10) },
 });
 
@@ -474,7 +481,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   safe:    { flex: 1, backgroundColor: colors.screenBg },
   flex:    { flex: 1 },
   loader:  { flex: 1, backgroundColor: colors.screenBg, justifyContent: "center", alignItems: "center", gap: ms(14) },
-  loaderT: { fontSize: fs(13), color: C.muted },
+  loaderT: { ...T.body, color: C.muted },
   scroll:  { flex: 1, backgroundColor: colors.screenBg },
   body:    { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(48) },
 
@@ -482,34 +489,35 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   courseCard:       { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginBottom: ms(20), borderWidth: 1, borderColor: C.border, shadowColor: C.text, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: ms(8), elevation: 2 },
   courseLeft:       { flexDirection: "row", alignItems: "center", gap: ms(10) },
   courseIcon:       { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: colors.primary + "12", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  courseName:       { fontSize: fs(14.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(3) },
-  courseDefaultFee: { fontSize: fs(11.5), color: C.muted },
+  courseName:       { ...T.cardTitle, color: C.text, marginBottom: ms(3) },
+  courseDefaultFee: { ...T.caption, color: C.muted },
   savedBadge:       { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.greenBg, borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(5), marginTop: ms(10) },
-  savedBadgeT:      { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.green },
+  savedBadgeT:      { ...T.chipText, color: C.green },
 
   // Section header
   sectionRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: ms(14) },
   sectionHead:   { flexDirection: "row", alignItems: "center", gap: ms(8) },
   sectionIconWrap:{ width: ms(28), height: ms(28), borderRadius: ms(8), backgroundColor: colors.primary + "12", justifyContent: "center", alignItems: "center" },
-  sectionTitle:  { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary, letterSpacing: 0.8 },
+  sectionTitle:  { ...T.sectionHeading, color: colors.primary, letterSpacing: 0.8 },
   totalPill:     { flexDirection: "row", alignItems: "center", backgroundColor: C.greenBg, borderRadius: ms(20), paddingHorizontal: ms(12), paddingVertical: ms(5) },
-  totalLabel:    { fontSize: fs(11.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  totalAmt:      { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
+  totalLabel:    { ...T.caption, color: C.muted },
+  totalAmt:      { ...T.chipText, color: C.green },
 
   // Empty
   emptyHint:  { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.bg, borderRadius: ms(12), padding: ms(14), marginBottom: ms(14) },
-  emptyHintT: { flex: 1, fontSize: fs(12.5), color: C.muted, lineHeight: fs(18) },
+  emptyHintT: { flex: 1, ...T.bodySmall, color: C.muted },
 
   // Add button
   addBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, borderStyle: "dashed", paddingVertical: ms(14), marginBottom: ms(20), backgroundColor: C.card },
-  addBtnT: { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
+  addBtnT: { ...T.buttonText, color: colors.primary },
 
   // Notes
   notesBlock: { marginBottom: ms(24) },
-  notesLabel: { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 0.7, marginBottom: ms(8), textTransform: "uppercase" },
-  notesInput: { backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(13), color: C.text, minHeight: ms(80) },
+  // Matches FormField's own per-field label style, same as lc.label above.
+  notesLabel: { ...T.chipText, color: C.text, marginBottom: ms(7) },
+  notesInput: { backgroundColor: C.inputBg, borderRadius: ms(12), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), ...T.body, color: C.text, minHeight: ms(80) },
 
   // Save button
   saveBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(16), paddingVertical: ms(16) },
-  saveBtnT: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  saveBtnT: { ...T.buttonText, color: "#fff" },
 });

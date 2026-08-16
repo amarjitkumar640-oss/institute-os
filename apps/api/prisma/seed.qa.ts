@@ -26,7 +26,7 @@ async function main() {
         fullName: "Admin",
         phone: "9999999999",
         email: adminEmail,
-        role: "admin",
+        roles: ["admin"],
         passwordHash: await bcrypt.hash(adminPassword, 10),
       },
     });

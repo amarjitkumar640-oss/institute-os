@@ -16,6 +16,7 @@ export interface Lead {
   notes: string | null;
   assignedTo: string | null;
   centerId: string;
+  center: { id: string; name: string } | null;
   tenantId: string;
   createdAt: string;
   targetExam: ExamCategory;

@@ -12,7 +12,8 @@ export interface Center {
 
 export interface CenterStaffMember {
   id: string;
-  role: "admin" | "teacher" | "frontdesk";
+  // A staff member can hold more than one role at once at the same center.
+  roles: ("admin" | "teacher" | "frontdesk")[];
   staffId: string;
   fullName: string;
   email: string;
@@ -45,8 +46,8 @@ export async function listCenterStaff(centerId: string): Promise<CenterStaffMemb
   return data;
 }
 
-export async function assignStaffToCenter(centerId: string, staffId: string, role: "admin" | "teacher" | "frontdesk"): Promise<unknown> {
-  const { data } = await apiClient.post(`/api/centers/${centerId}/staff`, { staffId, role });
+export async function assignStaffToCenter(centerId: string, staffId: string, roles: ("admin" | "teacher" | "frontdesk")[]): Promise<unknown> {
+  const { data } = await apiClient.post(`/api/centers/${centerId}/staff`, { staffId, roles });
   return data;
 }
 

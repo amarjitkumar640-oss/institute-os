@@ -12,6 +12,7 @@ import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
+import { T } from "../../components/ui/typography";
 import { updateSubject, type SubjectItem } from "../../api/subjects";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs, sw } from "../../utils/responsive";
@@ -201,6 +202,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
               onChangeText={(v) => { setName(v); setNameError(undefined); }}
               placeholder="e.g. Quantitative Aptitude"
               error={nameError}
+              required
               icon="book-outline"
               maxLength={120}
               clearable
@@ -361,7 +363,7 @@ function SectionHead({ icon, title, color }: { icon: string; title: string; colo
 const sh = StyleSheet.create({
   wrap:    { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(10) },
   iconBox: { width: ms(34), height: ms(34), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
-  label:   { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 1 },
+  label:   { ...T.sectionHeading, letterSpacing: 1 },
 });
 
 function DetailRow({ icon, label, value, color, last = false }: {
@@ -385,8 +387,8 @@ const dr = StyleSheet.create({
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(32), height: ms(32), borderRadius: ms(8), justifyContent: "center", alignItems: "center" },
   textWrap:  { flex: 1 },
-  label:     { fontSize: fs(10), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
-  value:     { fontSize: fs(13), color: C.text, fontFamily: "Inter_700Bold", fontWeight: "700" },
+  label:     { ...T.sectionHeading, color: C.muted, marginBottom: ms(1) },
+  value:     { ...T.listItemTitle, color: C.text },
 });
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
@@ -398,25 +400,25 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
 
   section:       { backgroundColor: C.card, borderRadius: ms(18), padding: SECTION_PAD, marginBottom: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 
-  catHint:       { fontSize: fs(12), color: C.muted, marginBottom: ms(8) },
+  catHint:       { ...T.bodySmall, color: C.muted, marginBottom: ms(8) },
   catGrid:       { flexDirection: "row", flexWrap: "wrap", gap: CAT_GAP },
   catCard:       { borderRadius: ms(12), padding: ms(10), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border, gap: ms(4), position: "relative" },
   catIcon:       { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center", marginBottom: ms(2) },
-  catName:       { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  catSub:        { fontSize: fs(10), color: C.muted, lineHeight: fs(13) },
+  catName:       { ...T.listItemTitle, color: C.text },
+  catSub:        { ...T.caption, color: C.muted },
   catCheck:      { position: "absolute", top: ms(8), right: ms(8), width: ms(16), height: ms(16), borderRadius: ms(8), justifyContent: "center", alignItems: "center" },
 
   infoBox:       { flexDirection: "row", alignItems: "flex-start", gap: ms(10), backgroundColor: C.blue + "0F", borderRadius: ms(12), padding: ms(10), marginBottom: ms(10), borderWidth: 1, borderColor: C.blue + "30" },
-  infoT:         { fontSize: fs(12), color: C.blue, flex: 1, lineHeight: fs(16) },
+  infoT:         { ...T.bodySmall, color: C.blue, flex: 1 },
 
   submitError:   { backgroundColor: C.red + "0F", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(12), marginBottom: ms(10) },
-  submitErrorT:  { fontSize: fs(13), color: C.red, lineHeight: fs(18) },
+  submitErrorT:  { ...T.body, color: C.red },
   buttonGroup:   { gap: ms(12) },
 
   loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
   loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  loaderSub:     { fontSize: fs(12), color: C.muted },
+  loaderTitle:   { ...T.cardTitle, color: C.text },
+  loaderSub:     { ...T.bodySmall, color: C.muted },
 
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
   successStatusBarBg: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.primary },
@@ -430,10 +432,10 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   sparkleBR:    { position: "absolute", bottom: ms(10), right: ms(6) },
 
   successContent: { width: "100%", alignItems: "center" },
-  successTitle:   { fontSize: fs(23), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
-  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(24), textAlign: "center" },
+  successTitle:   { ...T.displayMedium, color: C.text, marginBottom: ms(6) },
+  successSub:     { ...T.body, color: C.muted, marginBottom: ms(24), textAlign: "center" },
   detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: C.border },
   doneBtnWrap:    { width: "100%" },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  doneBtnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:       { ...T.buttonText, color: "#FFFFFF" },
 });

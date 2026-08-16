@@ -10,19 +10,22 @@ export const DEFAULT_ROUTING: Partial<Record<NotificationType, StaffRole[]>> = {
   new_enrollment:      ["admin"],
   installment_overdue: ["admin", "frontdesk"],
   batch_capacity:      ["frontdesk"],
+  new_application:     ["admin", "frontdesk"],
 };
 
 // Android channel ID + icon tint per type. Channel IDs must exactly match
 // the channels created client-side (apps/mobile/src/lib/pushNotifications.ts)
 // — colors mirror the in-app notification list's per-type palette.
 const TYPE_META: Record<NotificationType, { channelId: string; color: string }> = {
-  session_cancelled:   { channelId: "session_cancelled",   color: "#C0392B" },
-  session_rescheduled: { channelId: "session_rescheduled", color: "#F5B301" },
-  session_assigned:    { channelId: "session_assigned",    color: "#2CA6A4" },
+  session_cancelled:       { channelId: "session_cancelled",       color: "#C0392B" },
+  session_rescheduled:     { channelId: "session_rescheduled",     color: "#F5B301" },
+  session_assigned:        { channelId: "session_assigned",        color: "#2CA6A4" },
+  session_subject_changed: { channelId: "session_subject_changed", color: "#8E44AD" },
   class_reminder:      { channelId: "class_reminder",      color: "#2563A8" },
   new_enrollment:       { channelId: "new_enrollment",       color: "#1B9C63" },
   installment_overdue: { channelId: "installment_overdue", color: "#C0392B" },
   batch_capacity:      { channelId: "batch_capacity",      color: "#5B2D8E" },
+  new_application:     { channelId: "new_application",     color: "#2563A8" },
 };
 
 // Look up registered FCM tokens for the given staff IDs and fire one push
@@ -106,18 +109,25 @@ export async function notifyByRole(
   body:     string,
   data?:    Prisma.InputJsonValue,
   centerId?: string | null,
+  // Bypasses the configured routing rule / DEFAULT_ROUTING lookup and
+  // notifies exactly these roles instead — used by notifyByRoleCenterAware
+  // to split one notification type's configured roles across two delivery
+  // scopes (tenant-wide vs center-scoped) without hardcoding role lists at
+  // the call site.
+  rolesOverride?: StaffRole[],
 ) {
-  const rule  = await db.notificationRoutingRule.findUnique({ where: { tenantId_type: { tenantId, type } } });
-  const roles = rule ? rule.roles : (DEFAULT_ROUTING[type] ?? []);
+  const roles = rolesOverride
+    ?? (await db.notificationRoutingRule.findUnique({ where: { tenantId_type: { tenantId, type } } }))?.roles
+    ?? (DEFAULT_ROUTING[type] ?? []);
   if (roles.length === 0) return [];
 
   const recipientIds = centerId
     ? (await db.centerStaff.findMany({
-        where:  { centerId, role: { in: roles }, staff: { isActive: true } },
+        where:  { centerId, roles: { hasSome: roles }, staff: { isActive: true } },
         select: { staffId: true },
       })).map((cs) => cs.staffId)
     : (await db.staff.findMany({
-        where:  { tenantId, role: { in: roles }, isActive: true },
+        where:  { tenantId, roles: { hasSome: roles }, isActive: true },
         select: { id: true },
       })).map((s) => s.id);
 
@@ -128,6 +138,35 @@ export async function notifyByRole(
   });
   sendPush(db, recipientIds, type, title, body, data).catch(console.error);
   return recipientIds;
+}
+
+// Like notifyByRole, but splits the type's configured roles across two
+// delivery scopes: "admin" always reaches every admin tenant-wide (admins
+// oversee the whole institute, not one center), while every other
+// configured role is scoped to `centerId` — falling back to tenant-wide for
+// them too when no center is given. Used for events tied to a specific
+// center that isn't necessarily the recipient's own (e.g. a self-service
+// admission application naming a preferred center).
+export async function notifyByRoleCenterAware(
+  db:       PrismaClient,
+  tenantId: string,
+  type:     NotificationType,
+  title:    string,
+  body:     string,
+  data?:    Prisma.InputJsonValue,
+  centerId?: string | null,
+) {
+  const rule  = await db.notificationRoutingRule.findUnique({ where: { tenantId_type: { tenantId, type } } });
+  const roles = rule ? rule.roles : (DEFAULT_ROUTING[type] ?? []);
+
+  const adminRoles = roles.filter((r) => r === "admin");
+  const otherRoles = roles.filter((r) => r !== "admin");
+
+  const [adminRecipients, otherRecipients] = await Promise.all([
+    adminRoles.length ? notifyByRole(db, tenantId, type, title, body, data, null, adminRoles) : Promise.resolve([]),
+    otherRoles.length ? notifyByRole(db, tenantId, type, title, body, data, centerId, otherRoles) : Promise.resolve([]),
+  ]);
+  return [...adminRecipients, ...otherRecipients];
 }
 
 // Fired after a class session is patched — notifies the linked teacher when
@@ -167,10 +206,16 @@ export async function notifySessionChange(
 // schedule) and the incoming teacher gets "session_assigned". Silently
 // no-ops for whichever side has no linked staff login, or when the faculty
 // didn't actually change.
+//
+// oldSubjectName/newSubjectName are separate (not one shared subjectName)
+// because a single PATCH can change subject and faculty together — the
+// outgoing teacher lost the OLD subject, not whatever the session's subject
+// was changed to, and conflating the two previously showed the outgoing
+// teacher the wrong (new) subject name.
 export async function notifyFacultyReassignment(
   db:       PrismaClient,
   tenantId: string,
-  context: { batchId: string; batchName: string; subjectName: string | null },
+  context: { batchId: string; batchName: string; oldSubjectName: string | null; newSubjectName: string | null },
   previousFacultyId: string | null,
   newFacultyId:      string | null,
 ) {
@@ -185,12 +230,12 @@ export async function notifyFacultyReassignment(
   });
   const staffByFaculty = new Map(facultyRows.map((f) => [f.id, f.staffId]));
 
-  const subjectLabel = context.subjectName ?? "Class";
   const data = { screen: "BatchSchedule", batchId: context.batchId, batchName: context.batchName };
 
   if (previousFacultyId) {
     const staffId = staffByFaculty.get(previousFacultyId);
     if (staffId) {
+      const subjectLabel = context.oldSubjectName ?? "Class";
       await notify(db, staffId, tenantId, "session_cancelled",
         "Class reassigned", `${subjectLabel} — ${context.batchName} has been reassigned to another teacher`, data);
     }
@@ -198,10 +243,34 @@ export async function notifyFacultyReassignment(
   if (newFacultyId) {
     const staffId = staffByFaculty.get(newFacultyId);
     if (staffId) {
+      const subjectLabel = context.newSubjectName ?? "Class";
       await notify(db, staffId, tenantId, "session_assigned",
         "New class assigned", `You've been assigned ${subjectLabel} — ${context.batchName}`, data);
     }
   }
+}
+
+// Fired when a session's subjectId changes but its facultyId stays the same
+// — the assigned teacher keeps the class but now teaches a different
+// subject in that slot. Silently no-ops if the session has no assigned
+// faculty, or that faculty has no linked staff login.
+export async function notifySubjectChange(
+  db:       PrismaClient,
+  tenantId: string,
+  context: { batchId: string; batchName: string },
+  facultyId: string | null,
+  oldSubjectName: string | null,
+  newSubjectName: string | null,
+) {
+  if (!facultyId) return;
+  const faculty = await db.faculty.findUnique({ where: { id: facultyId }, select: { staffId: true } });
+  if (!faculty?.staffId) return;
+
+  const data = { screen: "BatchSchedule", batchId: context.batchId, batchName: context.batchName };
+  await notify(db, faculty.staffId, tenantId, "session_subject_changed",
+    "Class subject changed",
+    `${context.batchName}'s class has changed from ${oldSubjectName ?? "—"} to ${newSubjectName ?? "—"}`,
+    data);
 }
 
 // Fired after a successful enrollment (from any of its 3 call sites), once

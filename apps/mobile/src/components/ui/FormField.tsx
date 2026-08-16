@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { T } from "./typography";
 
 interface Props extends Pick<TextInputProps, "returnKeyType" | "onSubmitEditing" | "blurOnSubmit"> {
   label: string;
@@ -111,14 +112,14 @@ export function FormField({
 
 const s = StyleSheet.create({
   wrap:             { marginBottom: ms(20) },
-  label:            { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(7), letterSpacing: 0.3 },
-  asterisk:         { color: C.red, fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  label:            { ...T.chipText, color: C.text, marginBottom: ms(7) },
+  asterisk:         { color: C.red, fontFamily: "Inter_700Bold", fontWeight: "700" },
   inputRow:         {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: C.card,
+    backgroundColor: C.inputBg,
     borderRadius: ms(12),
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: C.border,
     paddingHorizontal: ms(14),
     paddingVertical: ms(12),
@@ -127,9 +128,9 @@ const s = StyleSheet.create({
   inputRowError:    { borderColor: C.red, backgroundColor: C.red + "08" },
   inputRowDisabled: { backgroundColor: C.bg, opacity: 0.7 },
   icon:             { flexShrink: 0 },
-  input:            { flex: 1, fontSize: fs(14), color: C.text, includeFontPadding: false, padding: 0 },
-  counter:          { fontSize: fs(10.5), color: C.placeholder, flexShrink: 0 },
+  input:            { flex: 1, ...T.body, color: C.text, includeFontPadding: false, padding: 0 },
+  counter:          { ...T.caption, color: C.placeholder, flexShrink: 0 },
   errorRow:         { flexDirection: "row", alignItems: "center", marginTop: ms(5), gap: ms(4) },
-  errorT:           { fontSize: fs(11.5), color: C.red, flex: 1 },
-  hint:             { fontSize: fs(11.5), color: C.muted, marginTop: ms(5) },
+  errorT:           { ...T.helperText, color: C.red, flex: 1 },
+  hint:             { ...T.helperText, color: C.muted, marginTop: ms(5) },
 });

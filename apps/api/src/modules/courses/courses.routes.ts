@@ -5,11 +5,12 @@ import {
   courseQuerySchema,
 } from "@institute-os/shared";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+import { requirePermission } from "../../middleware/permission";
 import { validateBody, validateQuery, validateUuidParam } from "../../middleware/validate";
 import type { Request } from "express";
 import {
   listCourses,
+  listCourseNames,
   getCourse,
   createCourse,
   updateCourse,
@@ -23,10 +24,10 @@ type ParsedQuery = z.infer<typeof courseQuerySchema>;
 type ReqWithQuery = Request & { parsedQuery: ParsedQuery };
 
 // ─── GET /api/courses ───────────────────────────────────────────────────────
-// Any authenticated staff can list courses.
 coursesRouter.get(
   "/",
   requireAuth,
+  requirePermission("courses", "read"),
   validateQuery(courseQuerySchema),
   async (req, res) => {
     const query = (req as ReqWithQuery).parsedQuery;
@@ -35,11 +36,22 @@ coursesRouter.get(
   }
 );
 
+// ─── GET /api/courses/names ─────────────────────────────────────────────────
+// Deliberately ahead of GET /:id and requireAuth-only (no requirePermission)
+// — id+name only, for populating course-filter chips on screens like the
+// student list, so a role without courses.read (e.g. teacher) can still
+// filter by course without gaining access to full course management.
+coursesRouter.get("/names", requireAuth, async (req, res) => {
+  const courses = await listCourseNames(req.auth!.tenantId);
+  res.json(courses);
+});
+
 // ─── GET /api/courses/:id ───────────────────────────────────────────────────
 // Returns full course detail including per-status batch breakdown.
 coursesRouter.get(
   "/:id",
   requireAuth,
+  requirePermission("courses", "read"),
   validateUuidParam("id"),
   async (req, res) => {
     const course = await getCourse(req.params.id, req.auth!.tenantId);
@@ -53,7 +65,7 @@ coursesRouter.get(
 coursesRouter.post(
   "/",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("courses", "write"),
   validateBody(createCourseSchema),
   async (req, res) => {
     const result = await createCourse(req.body, req.auth!.tenantId);
@@ -71,7 +83,7 @@ coursesRouter.post(
 coursesRouter.patch(
   "/:id",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("courses", "edit"),
   validateUuidParam("id"),
   validateBody(updateCourseSchema),
   async (req, res) => {
@@ -91,7 +103,7 @@ coursesRouter.patch(
 coursesRouter.delete(
   "/:id",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("courses", "delete"),
   validateUuidParam("id"),
   async (req, res) => {
     const result = await deleteCourse(req.params.id, req.auth!.tenantId);

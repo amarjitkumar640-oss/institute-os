@@ -6,6 +6,7 @@ import {
 } from "../illustrations/Scenes";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { T } from "./typography";
 import { useThemeColors } from "../../context/ThemeContext";
 
 export type EmptyScene =
@@ -78,16 +79,14 @@ const s = StyleSheet.create({
     marginBottom:    ms(8),
   },
   title: {
-    fontSize:   fs(16),
-    fontFamily: "Inter_700Bold", fontWeight: "700",
+    ...T.cardTitle,
     color:      C.text,
     textAlign:  "center",
   },
   sub: {
-    fontSize:   fs(13),
+    ...T.body,
     color:      C.muted,
     textAlign:  "center",
-    lineHeight: fs(20),
   },
   btn: {
     marginTop:         ms(14),
@@ -101,8 +100,7 @@ const s = StyleSheet.create({
     elevation:         3,
   },
   btnT: {
-    fontSize:   fs(14),
-    fontFamily: "Inter_700Bold", fontWeight: "700",
+    ...T.buttonText,
     color:      "white",
   },
 });

@@ -6,12 +6,14 @@ export interface Staff {
   email: string;
   phone: string;
   username: string | null;
-  role: "admin" | "teacher" | "frontdesk";
+  // A staff member can hold more than one role at once (e.g. admin +
+  // teacher at the same center).
+  roles: ("admin" | "teacher" | "frontdesk")[];
   isActive: boolean;
   createdAt: string;
   linkedFaculty?: { id: string } | null;
   centerAssignments: Array<{
-    role: "admin" | "teacher" | "frontdesk";
+    roles: ("admin" | "teacher" | "frontdesk")[];
     center: { id: string; name: string };
   }>;
 }
@@ -21,7 +23,7 @@ export interface CreateStaffPayload {
   email: string;
   phone: string;
   username?: string;
-  role: "admin" | "teacher" | "frontdesk";
+  roles: ("admin" | "teacher" | "frontdesk")[];
   password: string;
 }
 
@@ -29,7 +31,7 @@ export interface UpdateStaffPayload {
   fullName?: string;
   phone?: string;
   username?: string | null;
-  role?: "admin" | "teacher" | "frontdesk";
+  roles?: ("admin" | "teacher" | "frontdesk")[];
   isActive?: boolean;
 }
 

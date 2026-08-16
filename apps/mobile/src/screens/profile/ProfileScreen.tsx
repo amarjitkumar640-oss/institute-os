@@ -1,19 +1,23 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Switch, Modal, StatusBar, ActivityIndicator,
+  Switch, Modal, StatusBar, ActivityIndicator, Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
-import { useThemeColors, useThemedStyles, contrastColor, type ThemeColors } from "../../context/ThemeContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { ROLE_META } from "../../constants/roleMeta";
+import { T } from "../../components/ui/typography";
 import { useAuth } from "../../context/AuthContext";
 import { useAppLock } from "../../context/AppLockContext";
 import { useAlert } from "../../context/AlertContext";
+import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
+import { uploadMyPhoto, deleteMyPhoto } from "../../api/staff";
 import type { RootStackParamList } from "../../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -202,23 +206,75 @@ export function ProfileScreen() {
   const t = useThemedStyles(makeStyles);
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  const { staff, currentCenter, isAllCenters, logout, switchCenter } = useAuth();
+  const { staff, currentCenter, isAllCenters, logout, switchCenter, selectRole, updateProfilePhoto } = useAuth();
   const { hasPin, isBiometricEnabled, biometricType, setupPin, toggleBiometric, removePin } = useAppLock();
   const { showConfirm, showAlert } = useAlert();
 
   const [pinModal, setPinModal] = useState<"setup" | "change" | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
 
   const name = staff?.fullName ?? "";
   const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-  const role = staff?.role ?? "admin";
-  const roleMeta = ROLE_META[role];
+  // A staff member can hold more than one role at once — the hero card
+  // shows the currently ACTIVE role (falls back to admin display if somehow
+  // empty), while the pill row below shows every role they actually hold.
+  const roles = staff?.roles?.length ? staff.roles : (["admin"] as const);
+  const isAdmin = staff?.activeRole === "admin";
+  const roleMeta = ROLE_META[staff?.activeRole ?? roles[0]];
   const center = isAllCenters ? "All Centers" : currentCenter?.name ?? "—";
   const bioLabel = biometricType === "face" ? "Face ID" : biometricType === "fingerprint" ? "Fingerprint" : null;
 
   async function handleSwitchCenter() {
     try { await switchCenter(); }
     catch { showAlert("Error", "Could not load centers. Please try again.", "error"); }
+  }
+
+  async function pickAndUploadPhoto(fromCamera: boolean) {
+    setPhotoSheetOpen(false);
+    if (fromCamera) {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") { showAlert("Error", "Camera permission is required.", "error"); return; }
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") { showAlert("Error", "Gallery permission is required.", "error"); return; }
+    }
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+
+    setPhotoLoading(true);
+    const res = await uploadMyPhoto(asset.uri, asset.mimeType ?? "image/jpeg");
+    setPhotoLoading(false);
+    if (res.ok) await updateProfilePhoto(res.photoUrl);
+    else showAlert("Error", res.error, "error");
+  }
+
+  async function removePhoto() {
+    setPhotoSheetOpen(false);
+    setPhotoLoading(true);
+    const res = await deleteMyPhoto();
+    setPhotoLoading(false);
+    if (res.ok) await updateProfilePhoto(null);
+    else showAlert("Error", res.error, "error");
+  }
+
+  async function handleSelectRole(role: "admin" | "teacher" | "frontdesk") {
+    if (role === staff?.activeRole) { setRoleModalOpen(false); return; }
+    setSwitchingRole(true);
+    try {
+      await selectRole(role);
+      setRoleModalOpen(false);
+    } catch {
+      showAlert("Error", "Could not switch role. Please try again.", "error");
+    } finally {
+      setSwitchingRole(false);
+    }
   }
 
   async function handlePinDone(pin: string) {
@@ -246,19 +302,23 @@ export function ProfileScreen() {
 
   return (
     <View style={[t.root, { backgroundColor: colors.screenBg }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <StatusBar
+        barStyle={colors.headerText === "#FFFFFF" ? "light-content" : "dark-content"}
+        backgroundColor={colors.headerBg}
+        translucent
+      />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: ms(40) }} showsVerticalScrollIndicator={false}>
 
         {/* ── Header band ───────────────────────────────────────────────────── */}
-        <View style={[t.coloredBand, { backgroundColor: colors.bg, paddingTop: insets.top + ms(6) }]}>
+        <View style={[t.coloredBand, { backgroundColor: colors.headerBg, paddingTop: insets.top + ms(6) }]}>
           <View style={t.heroNav}>
             <TouchableOpacity
               style={t.backBtn}
               onPress={() => navigation.goBack()}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="arrow-back" size={ms(20)} color={contrastColor(colors.bg)} />
+              <Ionicons name="arrow-back" size={ms(20)} color={colors.headerText} />
             </TouchableOpacity>
             <Text style={t.heroNavTitle}>Profile</Text>
           </View>
@@ -266,19 +326,39 @@ export function ProfileScreen() {
 
         {/* ── Identity — avatar straddles the seam ─────────────────────────── */}
         <View style={t.identity}>
-          <View style={t.avatarRing}>
-            <View style={[t.avatarInner, { backgroundColor: colors.primary }]}>
-              <Text style={t.avatarText}>{initials}</Text>
+          <TouchableOpacity
+            style={t.avatarRing}
+            onPress={() => setPhotoSheetOpen(true)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
+          >
+            {staff?.photoUrl ? (
+              <Image source={{ uri: staff.photoUrl }} style={t.avatarImage} />
+            ) : (
+              <View style={[t.avatarInner, { backgroundColor: colors.primary }]}>
+                <Text style={t.avatarText}>{initials}</Text>
+              </View>
+            )}
+            <View style={[t.avatarEditBadge, { backgroundColor: colors.primary, borderColor: colors.screenBg }]}>
+              {photoLoading
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name="camera" size={ms(13)} color="#fff" />}
             </View>
-          </View>
+          </TouchableOpacity>
 
           <Text style={t.heroName}>{name}</Text>
 
           <View style={t.pillRow}>
-            <View style={[t.pill, { backgroundColor: roleMeta.color + "18" }]}>
-              <Ionicons name={roleMeta.icon as any} size={ms(11)} color={roleMeta.color} />
-              <Text style={[t.pillT, { color: roleMeta.color }]}>{roleMeta.label}</Text>
-            </View>
+            {roles.map((r) => {
+              const rm = ROLE_META[r];
+              return (
+                <View key={r} style={[t.pill, { backgroundColor: rm.color + "18" }]}>
+                  <Ionicons name={rm.icon as any} size={ms(11)} color={rm.color} />
+                  <Text style={[t.pillT, { color: rm.color }]}>{rm.label}</Text>
+                </View>
+              );
+            })}
             <View style={t.pillDot} />
             <View style={[t.pill, { backgroundColor: colors.primary + "12" }]}>
               <Ionicons name="business-outline" size={ms(11)} color={colors.primary} />
@@ -313,11 +393,21 @@ export function ProfileScreen() {
               title="Switch Center"
               subtitle={`Currently: ${center}`}
               onPress={handleSwitchCenter}
-              last
+              last={roles.length <= 1}
             />
+            {roles.length > 1 && (
+              <ActionRow
+                icon="repeat-outline"
+                iconColor={colors.purple}
+                title="Switch Role"
+                subtitle={`Acting as: ${roleMeta.label}`}
+                onPress={() => setRoleModalOpen(true)}
+                last
+              />
+            )}
           </Card>
 
-          {role === "admin" && (
+          {isAdmin && (
             <>
               <Card>
                 <ActionRow
@@ -413,6 +503,89 @@ export function ProfileScreen() {
         />
       )}
 
+      {/* Role switcher — mirrors the center picker's role, but a simple
+          in-place list since there are at most 3 options. Switching hits
+          the API (see AuthContext.selectRole) and re-scopes access control
+          everywhere in the app, not just this screen's display. */}
+      <Modal visible={roleModalOpen} transparent animationType="fade" onRequestClose={() => setRoleModalOpen(false)}>
+        <TouchableOpacity
+          style={rs.backdrop}
+          activeOpacity={1}
+          onPress={() => !switchingRole && setRoleModalOpen(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={[rs.sheet, { backgroundColor: colors.card }]}>
+            <View style={rs.header}>
+              <View style={[rs.headerIcon, { backgroundColor: colors.primary + "17" }]}>
+                <Ionicons name="swap-horizontal-outline" size={ms(21)} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[rs.title, { color: colors.text }]}>Switch Role</Text>
+                <Text style={[rs.subtitle, { color: colors.muted }]}>Choose which role is currently active</Text>
+              </View>
+              <TouchableOpacity
+                style={rs.closeBtn}
+                onPress={() => !switchingRole && setRoleModalOpen(false)}
+                disabled={switchingRole}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={ms(18)} color={C.muted} />
+              </TouchableOpacity>
+            </View>
+            {roles.map((r) => {
+              const m = ROLE_META[r];
+              const active = staff?.activeRole === r;
+              return (
+                <TouchableOpacity
+                  key={r}
+                  style={[rs.roleRow, active && { backgroundColor: m.bg }]}
+                  onPress={() => handleSelectRole(r)}
+                  disabled={switchingRole}
+                  activeOpacity={0.75}
+                >
+                  <View style={[rs.roleIcon, { backgroundColor: m.color }]}>
+                    <Ionicons name={m.icon as any} size={ms(16)} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[rs.roleLabel, { color: colors.text }]}>{m.label}</Text>
+                    <Text style={[rs.roleDesc, { color: colors.muted }]} numberOfLines={1}>{m.desc}</Text>
+                  </View>
+                  {active && <Ionicons name="checkmark-circle" size={20} color={m.color} />}
+                  {switchingRole && !active && <ActivityIndicator size="small" color={C.muted} />}
+                </TouchableOpacity>
+              );
+            })}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Profile photo picker */}
+      <BottomSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} maxHeight={SHEET_HEIGHT.short}>
+        <View style={ss.photoSheetInner}>
+          <Text style={ss.photoSheetTitle}>Update Profile Photo</Text>
+          <TouchableOpacity style={ss.photoSheetOption} onPress={() => pickAndUploadPhoto(true)} activeOpacity={0.8}>
+            <View style={[ss.photoSheetOptionIcon, { backgroundColor: colors.primary + "18" }]}>
+              <Ionicons name="camera-outline" size={ms(22)} color={colors.primary} />
+            </View>
+            <Text style={ss.photoSheetOptionLabel}>Take Photo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={ss.photoSheetOption} onPress={() => pickAndUploadPhoto(false)} activeOpacity={0.8}>
+            <View style={[ss.photoSheetOptionIcon, { backgroundColor: colors.primary + "18" }]}>
+              <Ionicons name="image-outline" size={ms(22)} color={colors.primary} />
+            </View>
+            <Text style={ss.photoSheetOptionLabel}>Choose from Gallery</Text>
+          </TouchableOpacity>
+          {staff?.photoUrl && (
+            <TouchableOpacity style={ss.photoSheetOption} onPress={removePhoto} activeOpacity={0.8}>
+              <View style={[ss.photoSheetOptionIcon, { backgroundColor: C.red + "18" }]}>
+                <Ionicons name="trash-outline" size={ms(22)} color={C.red} />
+              </View>
+              <Text style={[ss.photoSheetOptionLabel, { color: C.red }]}>Remove Photo</Text>
+            </TouchableOpacity>
+          )}
+          <View style={{ height: ms(20) }} />
+        </View>
+      </BottomSheet>
+
       {/* Logout overlay */}
       {loggingOut && (
         <View style={ss.overlay}>
@@ -432,16 +605,12 @@ const ss = StyleSheet.create({
   // Stats strip cells
   statCell: { flex: 1, alignItems: "center", gap: ms(3) },
   statValue: {
-    fontSize: fs(13),
-    fontFamily: "Inter_700Bold",
-    fontWeight: "700",
+    ...T.cardTitle,
     color: C.text,
     textAlign: "center",
   },
   statLabel: {
-    fontSize: fs(10.5),
-    fontFamily: "Inter_400Regular",
-    fontWeight: "400",
+    ...T.caption,
     color: C.muted,
     textAlign: "center",
   },
@@ -464,16 +633,12 @@ const ss = StyleSheet.create({
   },
   rowMid: { flex: 1 },
   rowTitle: {
-    fontSize: fs(14.5),
-    fontFamily: "Inter_600SemiBold",
-    fontWeight: "600",
+    ...T.listItemTitle,
     color: C.text,
     marginBottom: ms(2),
   },
   rowSub: {
-    fontSize: fs(12),
-    fontFamily: "Inter_400Regular",
-    fontWeight: "400",
+    ...T.bodySmall,
     color: C.muted,
   },
   rowRight: {
@@ -486,11 +651,7 @@ const ss = StyleSheet.create({
     paddingHorizontal: ms(9),
     paddingVertical: ms(4),
   },
-  badgeT: {
-    fontSize: fs(11),
-    fontFamily: "Inter_600SemiBold",
-    fontWeight: "600",
-  },
+  badgeT: { ...T.chipText },
 
   // Hairline divider
   divider: {
@@ -529,12 +690,31 @@ const ss = StyleSheet.create({
     alignItems: "center",
     gap: ms(14),
   },
-  overlayText: {
-    fontSize: fs(15),
-    fontFamily: "Inter_600SemiBold",
-    fontWeight: "600",
-    color: C.text,
-  },
+  overlayText: { ...T.cardTitle, color: C.text },
+
+  // Profile photo picker sheet — mirrors EditStudentScreen's own
+  // camera/gallery/remove sheet exactly.
+  photoSheetInner: { paddingHorizontal: ms(20), paddingTop: ms(8) },
+  photoSheetTitle: { ...T.cardTitle, color: C.text, marginBottom: ms(14) },
+  photoSheetOption: { flexDirection: "row", alignItems: "center", gap: ms(14), paddingVertical: ms(12) },
+  photoSheetOptionIcon: { width: ms(44), height: ms(44), borderRadius: ms(13), alignItems: "center", justifyContent: "center" },
+  photoSheetOptionLabel: { ...T.listItemTitle, color: C.text },
+});
+
+// ── Role switcher modal ──────────────────────────────────────────────────────
+
+const rs = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), padding: ms(20), gap: ms(4) },
+  header: { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(6) },
+  headerIcon: { width: ms(44), height: ms(44), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  closeBtn: { width: ms(34), height: ms(34), borderRadius: ms(10), backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  title: { ...T.cardTitle },
+  subtitle: { ...T.caption, marginTop: ms(2) },
+  roleRow: { flexDirection: "row", alignItems: "center", gap: ms(12), paddingVertical: ms(10), paddingHorizontal: ms(10), borderRadius: ms(12) },
+  roleIcon: { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
+  roleLabel: { ...T.listItemTitle },
+  roleDesc: { ...T.caption, marginTop: ms(1) },
 });
 
 // ── Themed styles ──────────────────────────────────────────────────────────────
@@ -552,26 +732,25 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     paddingVertical: ms(10),
   },
-  // Theme-derived, matching ScreenHeader's back button — tint/icon come from
-  // the contrast color against this band's own background (colors.bg),
-  // instead of the fixed C.card/C.border/C.text used before.
+  // Theme-derived, matching ScreenHeader's back button exactly — tint/icon
+  // come from colors.headerText (contrast against colors.headerBg, the same
+  // band background used here), not colors.bg — those two diverge whenever a
+  // tenant configures a header color distinct from their general background.
   backBtn: {
     width: ms(40),
     height: ms(40),
     borderRadius: ms(13),
-    backgroundColor: contrastColor(colors.bg) + "18",
+    backgroundColor: colors.headerText + "18",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: contrastColor(colors.bg) + "20",
+    borderColor: colors.headerText + "20",
   },
   heroNavTitle: {
     flex:       1,
     marginLeft: ms(12),
-    fontSize:   fs(17),
-    fontFamily: "Inter_700Bold",
-    fontWeight: "700",
-    color:      C.text,
+    ...T.screenTitle,
+    color:      colors.headerText,
   },
 
   // Identity section (screenBg, avatar pulls up into band)
@@ -600,19 +779,33 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  avatarImage: {
+    width: ms(84),
+    height: ms(84),
+    borderRadius: ms(42),
+  },
   avatarText: {
-    fontSize: fs(32),
-    fontFamily: "Inter_800ExtraBold",
-    fontWeight: "800",
+    ...T.displayLarge,
     color: "#fff",
     letterSpacing: 1,
   },
+  // Small camera badge pinned to the ring's edge — signals the avatar is
+  // tappable to change, the same affordance convention as EditStudentScreen's
+  // own photo-upload entry point.
+  avatarEditBadge: {
+    position: "absolute",
+    right: -ms(2),
+    bottom: -ms(2),
+    width: ms(28),
+    height: ms(28),
+    borderRadius: ms(14),
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   heroName: {
-    fontSize: fs(24),
-    fontFamily: "Inter_800ExtraBold",
-    fontWeight: "800",
+    ...T.displayMedium,
     color: C.text,
-    letterSpacing: -0.4,
     marginBottom: ms(8),
     textAlign: "center",
     paddingHorizontal: ms(24),
@@ -634,9 +827,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     flexShrink:        1,
   },
   pillT: {
-    fontSize:   fs(12),
-    fontFamily: "Inter_600SemiBold",
-    fontWeight: "600",
+    ...T.chipText,
     flexShrink: 1,
   },
   pillDot: {
@@ -651,11 +842,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  rolePillT: {
-    fontSize: fs(12.5),
-    fontFamily: "Inter_600SemiBold",
-    fontWeight: "600",
-  },
+  rolePillT: { ...T.chipText },
 
   // Stats strip
   statsStrip: {
@@ -692,8 +879,8 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: C.border,
   },
   cancelBtn: { width: ms(60) },
-  cancelT: { fontSize: fs(15), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  sheetTitle: { fontSize: fs(16), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  cancelT: { ...T.buttonText },
+  sheetTitle: { ...T.cardTitle, color: C.text },
 
   sheetBody: {
     flex: 1,
@@ -710,8 +897,8 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     marginBottom: ms(4),
   },
-  stepTitle: { fontSize: fs(20), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  stepSub: { fontSize: fs(13.5), color: C.muted, textAlign: "center" },
+  stepTitle: { ...T.displayMedium, color: C.text },
+  stepSub: { ...T.body, color: C.muted, textAlign: "center" },
 
   dots: { flexDirection: "row", gap: ms(18), marginTop: ms(20), marginBottom: ms(4) },
   dot: {
@@ -724,7 +911,7 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   dotFilled: { backgroundColor: colors.primary, borderColor: colors.primary },
   dotError: { backgroundColor: C.red, borderColor: C.red },
-  errMsg: { fontSize: fs(12.5), color: C.red, textAlign: "center", marginTop: ms(6) },
+  errMsg: { ...T.caption, color: C.red, textAlign: "center", marginTop: ms(6) },
 
   pad: { paddingHorizontal: ms(24), paddingBottom: ms(16), gap: ms(8) },
   padRow: { flexDirection: "row", justifyContent: "space-between", gap: ms(10) },

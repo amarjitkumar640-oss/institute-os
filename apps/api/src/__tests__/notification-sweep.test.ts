@@ -33,7 +33,7 @@ async function makeCourseAndBatch() {
 async function makeLinkedTeacher(batchId: string) {
   const passwordHash = await bcrypt.hash("secret123", 10);
   const staff = await prisma.staff.create({
-    data: { tenantId: TENANT_ID, fullName: "Teacher", phone: "9500000000", email: "teacher@x.test", role: "teacher", passwordHash },
+    data: { tenantId: TENANT_ID, fullName: "Teacher", phone: "9500000000", email: "teacher@x.test", roles: ["teacher"], passwordHash },
   });
   return prisma.faculty.create({
     data: {
@@ -139,7 +139,7 @@ describe("notification sweeps", () => {
       await makeTenant({ overdueGraceDays: 0 });
       const passwordHash = await bcrypt.hash("secret123", 10);
       const admin = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9600000000", email: "admin@x.test", role: "admin", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9600000000", email: "admin@x.test", roles: ["admin"], passwordHash },
       });
       const inst = await makeOverdueInstallment(5);
 
@@ -156,7 +156,7 @@ describe("notification sweeps", () => {
       await makeTenant({ overdueGraceDays: 10 });
       const passwordHash = await bcrypt.hash("secret123", 10);
       const admin = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9700000000", email: "admin2@x.test", role: "admin", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9700000000", email: "admin2@x.test", roles: ["admin"], passwordHash },
       });
       await makeOverdueInstallment(3); // 3 days overdue, but grace period is 10
 
@@ -169,7 +169,7 @@ describe("notification sweeps", () => {
     it("does not re-notify on a second sweep for the same installment", async () => {
       await makeTenant({ overdueGraceDays: 0 });
       await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9800000000", email: "admin3@x.test", role: "admin", passwordHash: await bcrypt.hash("secret123", 10) },
+        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9800000000", email: "admin3@x.test", roles: ["admin"], passwordHash: await bcrypt.hash("secret123", 10) },
       });
       await makeOverdueInstallment(5);
 

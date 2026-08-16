@@ -13,6 +13,9 @@ const DEFAULT_COLORS = {
   red: "#C0392B",
   purpleBg: "#F3EDFF",
   greenBg: "#EAF7F1",
+  redBg: "#FDECEA",
+  orangeBg: "#FDF1E8",
+  blueBg: "#EAF2FB",
   bg: "#F4F1EC",
   card: "#FFFFFF",
   text: "#2B1B1F",
@@ -22,7 +25,13 @@ const DEFAULT_COLORS = {
   inputBg: "#FAF6F4",
 } as const;
 
-export type ColorToken = keyof typeof DEFAULT_COLORS | "safeArea" | "screenBg" | "headerBg" | "headerText";
+export type ColorToken =
+  | keyof typeof DEFAULT_COLORS
+  | "safeArea" | "screenBg" | "headerBg" | "headerText"
+  // Semantic typography aliases — see apps/mobile/DESIGN_SYSTEM.md. Additive only:
+  // point at the same underlying tokens above, never remove/rename them.
+  | "textPrimary" | "textSecondary" | "textDisabled" | "textInverse"
+  | "success" | "warning" | "error";
 export type ThemeColors = Record<ColorToken, string>;
 
 // Returns "#FFFFFF" for dark backgrounds, "#2B1B1F" (C.text) for light ones.
@@ -80,12 +89,18 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 // start instead of always falling back to DEFAULT_COLORS while loading.
 const BRAND_CACHE_KEY = "tenant_branding_cache";
 
+// This build's real tenant color, inlined at bundle time (see .env) — used
+// as the starting state below instead of the generic DEFAULT_COLORS.primary,
+// so the JS splash screen (AppSplashScreen.tsx) never has to visibly correct
+// itself from a wrong color while the cached/live branding fetch is in flight.
+const BAKED_PRIMARY_COLOR = process.env.EXPO_PUBLIC_TENANT_PRIMARY_COLOR || DEFAULT_COLORS.primary;
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [brand, setBrand] = useState<{
     primary: string; secondary: string; accent: string;
     background: string; headerBg: string | null; logoUrl: string | null;
   }>({
-    primary: DEFAULT_COLORS.primary,
+    primary: BAKED_PRIMARY_COLOR,
     secondary: DEFAULT_COLORS.secondary,
     accent: DEFAULT_COLORS.accent,
     background: DEFAULT_COLORS.bg,
@@ -108,7 +123,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   function setBrandColors(branding?: TenantBranding | null) {
     setBrand({
-      primary:    branding?.primary    || DEFAULT_COLORS.primary,
+      primary:    branding?.primary    || BAKED_PRIMARY_COLOR,
       secondary:  branding?.secondary  || DEFAULT_COLORS.secondary,
       accent:     branding?.accent     || DEFAULT_COLORS.accent,
       background: branding?.background || DEFAULT_COLORS.bg,
@@ -136,6 +151,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     headerBg:   brand.headerBg || brand.background,
     // headerText: auto-derived contrast color — white on dark headers, dark on light
     headerText: contrastColor(brand.headerBg || brand.background),
+    // Semantic typography aliases — self-documenting names for the typography system
+    // (apps/mobile/DESIGN_SYSTEM.md) to read intent instead of a raw color name.
+    // Fixed regardless of brand, same as the tokens they point to.
+    textPrimary:   DEFAULT_COLORS.text,
+    textSecondary: DEFAULT_COLORS.muted,
+    textDisabled:  DEFAULT_COLORS.placeholder,
+    textInverse:   "#fff",
+    success:       DEFAULT_COLORS.green,
+    warning:       DEFAULT_COLORS.orange,
+    error:         DEFAULT_COLORS.red,
   }), [brand.primary, brand.secondary, brand.accent, brand.background, brand.headerBg]);
 
   const value = useMemo(() => ({ colors, logoUrl: brand.logoUrl, setBrandColors }), [colors, brand.logoUrl]);

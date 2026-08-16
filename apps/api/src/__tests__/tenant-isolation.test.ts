@@ -3,7 +3,7 @@ import request from "supertest";
 import { app } from "../app";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
-import { resetDb } from "./setup";
+import { resetDb, legacyPermissionsForRole } from "./setup";
 import type { AuthPayload } from "../middleware/auth";
 
 // Two separate institutes. Nothing created under Tenant A should ever be
@@ -12,7 +12,8 @@ const TENANT_A = "22222222-2222-2222-2222-222222222222";
 const TENANT_B = "33333333-3333-3333-3333-333333333333";
 
 function tokenFor(payload: AuthPayload): string {
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
+  const permissions = payload.permissions ?? legacyPermissionsForRole([payload.activeRole]);
+  return jwt.sign({ ...payload, permissions }, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
 }
 
 async function seedTenant(tenantId: string, label: string) {
@@ -35,7 +36,7 @@ async function seedTenant(tenantId: string, label: string) {
       // like Staff.email already was.
       phone:        tenantId.replace(/\D/g, "").slice(0, 10),
       email:        `admin@${label.toLowerCase()}.test`,
-      role:         "admin",
+      roles:        ["admin"],
       passwordHash: "unused-in-this-test",
     },
   });
@@ -50,7 +51,7 @@ async function seedTenant(tenantId: string, label: string) {
     },
   });
 
-  const token = tokenFor({ staffId: staff.id, role: "admin", centerId: null, tenantId });
+  const token = tokenFor({ staffId: staff.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId });
 
   return { center, staff, student, token };
 }

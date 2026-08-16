@@ -4,11 +4,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { T } from "./typography";
 import { useThemeColors } from "../../context/ThemeContext";
 
 export type BottomNavItem = {
   key: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  // Either a built-in Ionicons glyph, or a custom SVG renderer for concepts
+  // Ionicons has no glyph for (e.g. LeadIcon) — exactly one of the two is
+  // expected at a time.
+  icon?: keyof typeof Ionicons.glyphMap;
+  renderIcon?: (props: { size: number; color: string }) => React.ReactNode;
   label: string;
   active?: boolean;
   onPress: () => void;
@@ -20,22 +25,28 @@ export type BottomNavDialAction = {
   color: string;
   angle: number; // degrees around the FAB, measured from the +x axis
   onPress: () => void;
+  label?: string; // accessibilityLabel — dial buttons carry no visible text otherwise
 };
 
 const FAB_SZ  = ms(54);
 const DIAL_SZ = ms(46);
 const DIAL_R  = ms(96);
 
+function NavIcon({ item, size, color }: { item: BottomNavItem; size: number; color: string }) {
+  if (item.renderIcon) return <>{item.renderIcon({ size, color })}</>;
+  return <Ionicons name={item.icon!} size={size} color={color} />;
+}
+
 function NavBtn({ item, primaryColor }: { item: BottomNavItem; primaryColor: string }) {
   return (
     <TouchableOpacity style={nb.btn} onPress={item.onPress} activeOpacity={0.8}>
       {item.active ? (
         <View style={[nb.chip, { backgroundColor: primaryColor }]}>
-          <Ionicons name={item.icon} size={ms(16)} color="#fff" />
+          <NavIcon item={item} size={ms(16)} color="#fff" />
           <Text style={nb.chipT}>{item.label}</Text>
         </View>
       ) : (
-        <Ionicons name={item.icon} size={ms(22)} color={C.muted} />
+        <NavIcon item={item} size={ms(22)} color={C.muted} />
       )}
     </TouchableOpacity>
   );
@@ -61,7 +72,7 @@ function DialBtn({ anim, action }: { anim: Animated.Value; action: BottomNavDial
         ],
       }}
     >
-      <TouchableOpacity onPress={action.onPress} activeOpacity={0.85}>
+      <TouchableOpacity onPress={action.onPress} activeOpacity={0.85} accessibilityLabel={action.label} accessibilityRole="button">
         <View style={{
           width: DIAL_SZ, height: DIAL_SZ, borderRadius: DIAL_SZ / 2,
           backgroundColor: action.color,
@@ -203,7 +214,9 @@ const s = StyleSheet.create({
 });
 
 const nb = StyleSheet.create({
-  btn:   { flex: 1, alignItems: "center", justifyContent: "center", height: ms(50) },
+  // minWidth guarantees each tab meets the ~44pt/48dp minimum touch target even on
+  // narrow phones, regardless of how many items share the row.
+  btn:   { flex: 1, minWidth: ms(44), alignItems: "center", justifyContent: "center", height: ms(50) },
   chip:  { flexDirection: "row", alignItems: "center", gap: ms(5), borderRadius: ms(24), paddingHorizontal: ms(13), paddingVertical: ms(8) },
-  chipT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
+  chipT: { ...T.navigationLabel, color: "#fff" },
 });

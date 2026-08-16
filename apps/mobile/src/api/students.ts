@@ -37,7 +37,7 @@ export interface StudentItem {
   createdAt:          string;
   centerId?:          string | null;
   center?:            { id: string; name: string } | null;
-  activeEnrollment?:  { batchId: string; batchName: string } | null;
+  activeEnrollment?:  { id: string; batchId: string; batchName: string } | null;
 }
 
 export interface AdmitStudentPayload {
@@ -66,6 +66,7 @@ export interface AdmitStudentPayload {
   amountPaid?:        number | null;
   tcAcknowledged?:    boolean;
   centerId?:          string; // only needed when the session has no center pinned
+  applicationId?:     string; // set when carried through from a self-service AdmissionApplication
 }
 
 export interface AdmitStudentResult {
@@ -80,7 +81,7 @@ export type AdmitStudentResponse =
 
 export type UpdateStudentPayload = Partial<Omit<AdmitStudentPayload, "batchId">>;
 
-export async function listStudents(params?: { batchId?: string }): Promise<StudentItem[]> {
+export async function listStudents(params?: { batchId?: string; centerId?: string }): Promise<StudentItem[]> {
   const { data } = await apiClient.get<StudentItem[]>("/students", { params });
   return data;
 }

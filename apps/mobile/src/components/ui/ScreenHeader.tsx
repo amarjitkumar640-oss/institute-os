@@ -2,8 +2,9 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ms, fs } from "../../utils/responsive";
+import { ms } from "../../utils/responsive";
 import { useThemeColors } from "../../context/ThemeContext";
+import { T } from "./typography";
 
 interface Props {
   title:             string;
@@ -83,12 +84,9 @@ const s = StyleSheet.create({
     flexShrink:     0,
   },
   title: {
-    flex:          1,
-    fontSize:      fs(18),
-    fontFamily:    "Inter_800ExtraBold",
-    fontWeight:    "800",
-    minWidth:      0,
-    letterSpacing: -0.3,
+    ...T.screenTitle,
+    flex:     1,
+    minWidth: 0,
   },
   badge: {
     borderRadius:      ms(20),
@@ -96,5 +94,7 @@ const s = StyleSheet.create({
     paddingVertical:   ms(5),
     flexShrink:        0,
   },
-  badgeT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  // Chip Text, not Badge Text — this shows natural-case dynamic content ("42 total"),
+  // not a short static status word, so it shouldn't be forced uppercase.
+  badgeT: { ...T.chipText },
 });

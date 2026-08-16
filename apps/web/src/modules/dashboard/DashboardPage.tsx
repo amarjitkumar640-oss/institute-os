@@ -2,14 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Users, Layers, BookOpen, GraduationCap, TrendingUp,
-  DollarSign, Calendar, ArrowUpRight,
+  DollarSign, Calendar, ArrowUpRight, ChevronDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/context/AuthContext";
 import { getDashboardStats, getTeacherDashboard } from "@/api/dashboard";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { cn, formatCurrency, formatDateTime } from "@/lib/utils";
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   Area, AreaChart,
@@ -286,11 +290,24 @@ function DashboardSkeleton() {
 }
 
 export function DashboardPage() {
-  const { staff } = useAuth();
+  const { staff, selectRole } = useAuth();
+  const [switchingRole, setSwitchingRole] = useState(false);
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const dateStr = now.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+  // Which dashboard shows is driven entirely by staff.activeRole — a real,
+  // server-enforced session property (see AuthContext/select-role), not a
+  // local display toggle. Switching here changes what you can *do*
+  // everywhere else in the app too, not just this screen's content.
+  const showTeacherDashboard = staff?.activeRole === "teacher";
+
+  async function handleSelectRole(role: "admin" | "teacher" | "frontdesk") {
+    if (role === staff?.activeRole) return;
+    setSwitchingRole(true);
+    try { await selectRole(role); } finally { setSwitchingRole(false); }
+  }
 
   return (
     <div className="flex flex-col h-full overflow-auto">
@@ -303,17 +320,46 @@ export function DashboardPage() {
             </h1>
             <p className="text-sm text-gray-400 mt-0.5">{dateStr}</p>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-50 border border-violet-100">
-            <div className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          <div className="flex items-center gap-3">
+            {staff && staff.roles.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={switchingRole}
+                    className="flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-60"
+                  >
+                    <span className="capitalize">Acting as: {staff.activeRole}</span>
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Switch role</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {staff.roles.map((r) => (
+                    <DropdownMenuItem
+                      key={r}
+                      onClick={() => handleSelectRole(r)}
+                      className={cn("capitalize", staff.activeRole === r && "font-semibold")}
+                    >
+                      {r}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-50 border border-violet-100">
+              <div className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </div>
+              <span className="text-xs font-semibold text-violet-600">Live</span>
             </div>
-            <span className="text-xs font-semibold text-violet-600">Live</span>
           </div>
         </div>
       </div>
       <div className="flex-1 p-7">
-        {staff?.role === "teacher" ? <TeacherDashboard /> : <AdminDashboard />}
+        {showTeacherDashboard ? <TeacherDashboard /> : <AdminDashboard />}
       </div>
     </div>
   );

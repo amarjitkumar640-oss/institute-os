@@ -9,10 +9,12 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
+import { T } from "../../components/ui/typography";
 import { updateBatch, type BatchItem, type BatchStatus } from "../../api/batches";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { usePermission } from "../../hooks/usePermission";
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditBatch">;
 
@@ -138,21 +140,21 @@ function DatePickerModal({ visible, value, minYear = 2020, maxYear = 2035, onCon
 const makeDpStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
-  title:       { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(8), textAlign: "center" },
+  title:       { ...T.cardTitle, color: C.text, marginBottom: ms(8), textAlign: "center" },
   selectors:   { flexDirection: "row", height: ms(180), gap: ms(4) },
   selector:    { flex: 1 },
-  colLabel:    { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
+  colLabel:    { ...T.sectionHeading, color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
   col:         { flex: 1 },
   item:        { alignItems: "center", paddingVertical: ms(10) },
   itemActive:  { backgroundColor: colors.primary + "12", borderRadius: ms(8) },
-  itemT:       { fontSize: fs(15), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  itemActiveT: { color: colors.primary, fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  itemT:       { ...T.cardTitle, color: C.muted },
+  itemActiveT: { color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
   highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 1.5, borderColor: colors.primary + "30", backgroundColor: colors.primary + "06" },
   btnRow:      { flexDirection: "row", gap: ms(10), marginTop: ms(20) },
   cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg },
-  cancelT:     { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  cancelT:     { ...T.buttonText, color: C.muted },
   confirmBtn:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: colors.primary },
-  confirmT:    { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  confirmT:    { ...T.buttonText, color: "#fff" },
 });
 
 // ── Date display field ────────────────────────────────────────────────────────
@@ -198,16 +200,16 @@ function DateField({ label, value, placeholder, onPress, readOnly = false, error
 }
 
 const f = StyleSheet.create({
-  label:       { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(7), letterSpacing: 0.3 },
-  field:       { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: 1, borderColor: C.border, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: C.inputBg },
+  label:       { ...T.chipText, color: C.text, marginBottom: ms(7) },
+  field:       { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: C.inputBg },
   fieldReadOnly:{ backgroundColor: C.bg, borderColor: C.border },
   fieldError:  { borderColor: C.red, backgroundColor: C.red + "06" },
-  fieldT:      { flex: 1, fontSize: fs(14), color: C.text, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  fieldT:      { flex: 1, ...T.listItemTitle, color: C.text },
   placeholder: { color: C.placeholder, fontFamily: "Inter_400Regular", fontWeight: "400" },
   autoBadge:   { backgroundColor: C.green + "18", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  autoT:       { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
+  autoT:       { ...T.badgeText, color: C.green },
   errRow:      { flexDirection: "row", alignItems: "center", marginTop: ms(5), gap: ms(4) },
-  errT:        { fontSize: fs(11.5), color: C.red, flex: 1 },
+  errT:        { ...T.helperText, color: C.red, flex: 1 },
 });
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -217,6 +219,13 @@ export function EditBatchScreen({ navigation, route }: Props) {
   const s = useThemedStyles(makeSStyles);
   const { batch } = route.params;
   const scrollRef = useRef<ScrollView>(null);
+
+  // Nothing links here for a role without batches.edit today (the pencil
+  // icon that opens this screen is itself hidden), but nothing stops a
+  // direct navigation.navigate("EditBatch") either — RootNavigator registers
+  // every route unconditionally. Closes that deep-link gap at the destination.
+  const { canEdit } = usePermission("batches");
+  useEffect(() => { if (!canEdit) navigation.goBack(); }, [canEdit]);
 
   // RN auto-scrolls to keep a focused field visible above the keyboard but
   // never scrolls back on dismiss — undo that so the form returns to its
@@ -282,6 +291,8 @@ export function EditBatchScreen({ navigation, route }: Props) {
       setErrors({ submit: response.error });
     }
   }
+
+  if (!canEdit) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
@@ -526,19 +537,19 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cardHead:     { flexDirection: "row", alignItems: "center", gap: ms(10), padding: ms(14) },
   cardHeadIcon: { width: ms(32), height: ms(32), borderRadius: ms(9), alignItems: "center", justifyContent: "center" },
-  cardHeadT:    { flex: 1, fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  cardHeadT:    { flex: 1, ...T.listItemTitle, color: C.text },
   divider:      { height: 1, backgroundColor: C.border },
 
   // Lock chip
   lockChip:  { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.inputBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(4) },
-  lockChipT: { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  lockChipT: { ...T.badgeText, color: C.muted },
 
   // Course row
   courseRow:   { flexDirection: "row", alignItems: "center", gap: ms(12), padding: ms(14) },
   examBadge:   { borderRadius: ms(8), paddingHorizontal: ms(10), paddingVertical: ms(5) },
-  examBadgeT:  { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
-  courseName:  { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  courseSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
+  examBadgeT:  { ...T.badgeText },
+  courseName:  { ...T.listItemTitle, color: C.text },
+  courseSub:   { ...T.caption, color: C.muted, marginTop: ms(2) },
 
   // Fields padding wrapper
   fieldsPad: { paddingHorizontal: ms(14) },
@@ -546,13 +557,13 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   // Status
   statusGrid:   { flexDirection: "row", gap: ms(8), padding: ms(14) },
   statusChip:   { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6), paddingVertical: ms(10), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border },
-  statusChipT:  { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  statusChipT:  { ...T.chipText, color: C.muted },
   enrolledNote: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.blue + "12", borderRadius: ms(10), padding: ms(10), margin: ms(14), marginTop: 0 },
-  enrolledNoteT:{ fontSize: fs(12), color: C.blue, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  enrolledNoteT:{ ...T.chipText, color: C.blue },
 
   // Submit error
   submitErr:  { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.red + "12", borderRadius: ms(12), padding: ms(12) },
-  submitErrT: { fontSize: fs(13), color: C.red, flex: 1 },
+  submitErrT: { ...T.body, color: C.red, flex: 1 },
 
   // Save button
   saveBtn: {
@@ -569,7 +580,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
     shadowRadius:    ms(10),
     elevation:       6,
   },
-  saveBtnT: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+  saveBtnT: { ...T.buttonText, color: "#fff" },
 
   // Success overlay
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
@@ -588,18 +599,18 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   checkWrap:   { marginBottom: ms(20) },
   checkCircle: { width: ms(80), height: ms(80), borderRadius: ms(40), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
 
-  successTitle:   { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(8) },
+  successTitle:   { ...T.displayMedium, color: C.text, marginBottom: ms(8) },
   successNameRow: { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: colors.primary + "10", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(6), marginBottom: ms(6) },
-  successName:    { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary, flex: 1 },
-  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(20) },
+  successName:    { ...T.listItemTitle, color: colors.primary, flex: 1 },
+  successSub:     { ...T.body, color: C.muted, marginBottom: ms(20) },
 
   summaryGrid:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(14), marginBottom: ms(20), borderWidth: 1, borderColor: C.border, overflow: "hidden" },
   summaryRow:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(11), paddingHorizontal: ms(14), gap: ms(12) },
   summaryRowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   summaryIcon:      { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
-  summaryLabel:     { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
-  summaryValue:     { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  summaryLabel:     { ...T.sectionHeading, color: C.muted },
+  summaryValue:     { ...T.listItemTitle, color: C.text, marginTop: ms(1) },
 
   goBackBtn: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14) },
-  goBackT:   { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  goBackT:   { ...T.buttonText, color: "#fff" },
 });

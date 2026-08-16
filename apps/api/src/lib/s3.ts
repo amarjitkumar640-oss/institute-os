@@ -32,3 +32,13 @@ export async function getSignedPhotoUrl(key: string): Promise<string> {
 export async function deletePhoto(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
 }
+
+// Every uploaded object lives under {tenantId}/{centerId}/... so objects are
+// physically organized per institute and per branch, not just isolated by DB
+// query filters. centerId can be null (e.g. a student before center
+// assignment, or a staff member's session in all-centers mode), so a fixed
+// placeholder keeps the path shape consistent rather than making the
+// segment count vary.
+export function s3PathPrefix(tenantId: string, centerId: string | null): string {
+  return `${tenantId}/${centerId ?? "no-center"}`;
+}

@@ -27,6 +27,12 @@ enum BatchStatus {
   completed
 }
 
+enum ApplicationStatus {
+  pending
+  rejected
+  admitted
+}
+
 enum EnrollmentStatus {
   active
   paused
@@ -118,10 +124,12 @@ enum NotificationType {
   session_cancelled
   session_rescheduled
   session_assigned
+  session_subject_changed
   class_reminder
   new_enrollment
   installment_overdue
   batch_capacity
+  new_application
 }
 
 // ── Tenant (top-level SaaS boundary — one row per institute) ──────────────────
@@ -161,6 +169,8 @@ model Tenant {
   payments       PaymentTransaction[]
   notifications  Notification[]
   notificationRoutingRules NotificationRoutingRule[]
+  admissionApplications    AdmissionApplication[]
+  permissionGrants         PermissionGrant[]
 
   @@map("tenants")
 }
@@ -182,15 +192,19 @@ model Center {
   batches  Batch[]
   faculty  Faculty[]
   leads    Lead[]
+  admissionApplications AdmissionApplication[]
 
   @@map("centers")
 }
 
 model CenterStaff {
-  id       String    @id @default(uuid())
+  id       String      @id @default(uuid())
   centerId String
   staffId  String
-  role     StaffRole
+  // A staff member can hold more than one role at the same center at once
+  // (e.g. admin + teacher) — always non-empty by application logic, never
+  // validated as such at the DB level (see staff.routes.ts).
+  roles    StaffRole[]
 
   center Center @relation(fields: [centerId], references: [id], onDelete: Cascade)
   staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
@@ -207,7 +221,13 @@ model Staff {
   phone        String
   email        String    @unique
   username     String?
-  role         StaffRole
+  // Bare S3 object key (not a URL) — same storage convention as
+  // Student.photoUrl. Resolved to a short-lived signed URL at read time,
+  // never stored/returned as a plain URL.
+  photoUrl     String?
+  // Tenant-level fallback roles, used when a staff member is in "all
+  // centers" mode (no single CenterStaff row to read roles from).
+  roles        StaffRole[]
   passwordHash String
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
@@ -219,6 +239,11 @@ model Staff {
   linkedFaculty     Faculty?
   notifications     Notification[]
   pushTokens        PushToken[]
+  reviewedApplications AdmissionApplication[]
+  markedSessionAttendances SessionAttendance[]
+  markedFacultyAttendances FacultyAttendance[]
+  jobRuns                  JobRun[]
+  permissionGrantsUpdated  PermissionGrant[]
 
   @@unique([tenantId, phone])
   @@unique([tenantId, username])
@@ -274,6 +299,7 @@ model Faculty {
   teachingSubjects FacultySubject[]
   classSlots       ClassSlot[]
   classSessions    ClassSession[]
+  facultyAttendances FacultyAttendance[]
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, phone])
@@ -303,6 +329,7 @@ model Course {
   batches        Batch[]
   feeTemplate    CourseFeeTemplate?
   students       Student[]
+  admissionApplications AdmissionApplication[]
 
   @@unique([tenantId, name])
   @@map("courses")
@@ -379,6 +406,8 @@ model Student {
   enrollments    Enrollment[]
   leadsConverted Lead[]            @relation("LeadConvertedStudent")
   documents      StudentDocument[]
+  admissionApplication AdmissionApplication?
+  sessionAttendances SessionAttendance[]
 
   @@unique([tenantId, studentCode])
   @@map("students")
@@ -465,6 +494,55 @@ model Lead {
   createdAt          DateTime     @default(now())
 
   @@map("leads")
+}
+
+// Self-service admission form submissions — filled in by the prospective
+// student themselves on the public site, not a Lead (an unqualified inquiry
+// that may never admit). This is someone who already decided to apply.
+// Frontdesk reviews each one and either rejects it (spam/duplicate/bad data)
+// or carries it through the normal admit flow (POST /students/admit), which
+// stamps `status: admitted` + `studentId` back onto this row.
+model AdmissionApplication {
+  id                 String            @id @default(uuid())
+  tenantId           String
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+  fullName           String
+  phone              String
+  email              String?
+  dob                DateTime?
+  gender             String?
+  address            String?
+  fatherName         String?
+  motherName         String?
+  guardianPhone      String?
+  guardianEmail      String?
+  guardianOccupation String?
+  qualification      String?
+  passYear           String?
+  board              String?
+  courseId           String?
+  course             Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  coursePreference   String?
+  durationPreference String?
+  whatsapp           String?
+  // Student's preferred center — a preference frontdesk can still override
+  // at admit time, not a binding assignment (mirrors coursePreference).
+  centerId           String?
+  center             Center?           @relation(fields: [centerId], references: [id], onDelete: SetNull)
+  // The applicant's own acceptance of terms, captured at submission time —
+  // distinct from Student.tcAcknowledgedAt, which is frontdesk confirming
+  // (at admit time) that they informed the student of the terms.
+  tcAcceptedAt       DateTime?
+  status             ApplicationStatus @default(pending)
+  rejectionReason    String?
+  reviewedById       String?
+  reviewedBy         Staff?            @relation(fields: [reviewedById], references: [id])
+  reviewedAt         DateTime?
+  studentId          String?           @unique
+  student            Student?          @relation(fields: [studentId], references: [id])
+  createdAt          DateTime          @default(now())
+
+  @@map("admission_applications")
 }
 
 // ── Fee Template (course-level default plan) ──────────────────────────────────
@@ -617,6 +695,8 @@ model ClassSession {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  attendances SessionAttendance[]
+
   // Prevents generating the same slot twice on the same date.
   // NULL slotId (ad-hoc) is exempt: PostgreSQL treats NULLs as distinct in unique indexes.
   @@unique([slotId, scheduledDate])
@@ -665,4 +745,119 @@ model NotificationRoutingRule {
 
   @@unique([tenantId, type])
   @@map("notification_routing_rules")
+}
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+
+enum AttendanceStatus {
+  present
+  absent
+}
+
+// Per-student, per-class-session mark — a student can attend one subject's
+// session and skip another the same day, so this is scoped to the session,
+// not the day.
+model SessionAttendance {
+  id             String           @id @default(uuid())
+  classSessionId String
+  classSession   ClassSession     @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status         AttendanceStatus
+  markedById     String?
+  markedBy       Staff?           @relation(fields: [markedById], references: [id], onDelete: SetNull)
+  markedAt       DateTime         @default(now())
+
+  @@unique([classSessionId, studentId])
+  @@map("session_attendance")
+}
+
+// Per-faculty, per-day mark — unlike students, faculty attendance isn't tied
+// to a specific class (a teacher is "in" for the day, not per-session).
+model FacultyAttendance {
+  id         String           @id @default(uuid())
+  facultyId  String
+  faculty    Faculty          @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  date       DateTime         @db.Date
+  status     AttendanceStatus
+  markedById String?
+  markedBy   Staff?           @relation(fields: [markedById], references: [id], onDelete: SetNull)
+  markedAt   DateTime         @default(now())
+
+  @@unique([facultyId, date])
+  @@map("faculty_attendance")
+}
+
+// ── Background jobs ───────────────────────────────────────────────────────────
+// Platform-wide, not tenant-scoped — a sweep like batch-status or class-reminder
+// runs once across ALL tenants per tick, so a single run can't be attributed to
+// one tenant. This is the second-ever exception to "every model is tenant-scoped"
+// in this schema (the first is Tenant itself) — intentional, not an oversight.
+// See apps/api/src/modules/jobs/registry.ts for the code-side job registry this
+// pairs with (job label/description/handler live in code; only the admin-editable
+// schedule and the run history live here).
+
+enum JobRunStatus {
+  running
+  success
+  failure
+}
+
+model JobConfig {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  intervalMinutes Int
+  isEnabled       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  runs JobRun[]
+
+  @@map("job_configs")
+}
+
+model JobRun {
+  id            String       @id @default(uuid())
+  jobKey        String
+  jobConfig     JobConfig    @relation(fields: [jobKey], references: [key])
+  status        JobRunStatus @default(running)
+  // "scheduler" | "manual" — TS union in registry.ts, not a DB enum (only ever
+  // 2 values; a DB enum would need a migration to add a 3rd if that ever changes).
+  trigger       String
+  startedAt     DateTime     @default(now())
+  finishedAt    DateTime?
+  errorMessage  String?
+  resultSummary Json?
+  triggeredById String?
+  triggeredBy   Staff?       @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+
+  @@index([jobKey, startedAt])
+  @@map("job_runs")
+}
+
+// ── Access control ────────────────────────────────────────────────────────────
+// Tenant-scoped (unlike JobConfig/JobRun above) — different institutes must be
+// able to configure this differently. The set of valid screenKeys lives in
+// apps/api/src/modules/permissions/registry.ts; a missing (tenant, role,
+// screenKey) row means DENY, not "fall back to a default" — deliberately no
+// runtime fallback, unlike NotificationRoutingRule's DEFAULT_ROUTING. Ownership
+// scoping (a teacher only seeing their own batches/students/sessions) is a
+// separate, untouched concern — this table governs whether a role can reach a
+// screen at all, not which rows within it they see.
+model PermissionGrant {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  role        StaffRole
+  screenKey   String
+  canRead     Boolean   @default(false)
+  canWrite    Boolean   @default(false)
+  canEdit     Boolean   @default(false)
+  canDelete   Boolean   @default(false)
+  updatedAt   DateTime  @updatedAt
+  updatedById String?
+  updatedBy   Staff?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, role, screenKey])
+  @@map("permission_grants")
 }

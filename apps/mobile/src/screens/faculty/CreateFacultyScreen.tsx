@@ -13,6 +13,7 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
+import { T } from "../../components/ui/typography";
 import { createFaculty } from "../../api/faculty";
 import { listSubjects, type SubjectItem } from "../../api/subjects";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
@@ -178,13 +179,13 @@ function SubjectPicker({
 const sp = StyleSheet.create({
   wrap:        { gap: ms(16) },
   center:      { alignItems: "center", paddingVertical: ms(20), gap: ms(8) },
-  loadingT:    { fontSize: fs(12), color: C.muted },
+  loadingT:    { ...T.bodySmall, color: C.muted },
   group:       { gap: ms(10) },
   groupLabel:  { paddingLeft: ms(8) },
-  groupLabelT: { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
+  groupLabelT: { ...T.sectionHeading, letterSpacing: 0.5 },
   chipRow:     { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   chip:        { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(10), paddingVertical: ms(7), borderRadius: ms(8), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border },
-  chipT:       { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, flexShrink: 1 },
+  chipT:       { ...T.chipText, color: C.muted, flexShrink: 1 },
   chipTActive: { color: "#FFFFFF" },
 });
 
@@ -335,13 +336,13 @@ export function CreateFacultyScreen({ navigation }: Props) {
           <View style={s.section}>
             <SectionHead icon="person-outline" title="Personal Information" color={colors.primary} />
             <FormField label="FULL NAME" value={form.fullName} onChangeText={(v) => setField("fullName", v)}
-              placeholder="e.g. Dr. Priya Sharma" error={errors.fullName} icon="person-outline"
+              placeholder="e.g. Dr. Priya Sharma" error={errors.fullName} icon="person-outline" required
               maxLength={120} clearable returnKeyType="next" onSubmitEditing={() => phoneRef.current?.focus()} blurOnSubmit={false} />
             <FormField label="PHONE NUMBER" value={form.phone} onChangeText={(v) => setField("phone", v.replace(/\D/g, ""))}
-              placeholder="e.g. 9876543210" keyboardType="phone-pad" error={errors.phone} icon="call-outline"
+              placeholder="e.g. 9876543210" keyboardType="phone-pad" error={errors.phone} icon="call-outline" required
               returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} blurOnSubmit={false} />
             <FormField label="EMAIL ADDRESS" value={form.email} onChangeText={(v) => setField("email", v)}
-              placeholder="e.g. priya@institute.com" keyboardType="email-address" error={errors.email} icon="mail-outline"
+              placeholder="e.g. priya@institute.com" keyboardType="email-address" error={errors.email} icon="mail-outline" required
               returnKeyType="next" onSubmitEditing={() => qualRef.current?.focus()} blurOnSubmit={false} />
           </View>
 
@@ -349,15 +350,15 @@ export function CreateFacultyScreen({ navigation }: Props) {
           <View style={s.section}>
             <SectionHead icon="briefcase-outline" title="Professional Details" color={colors.primary} />
             <FormField label="QUALIFICATION" value={form.qualification} onChangeText={(v) => setField("qualification", v)}
-              placeholder="e.g. M.Sc Mathematics, B.Ed" error={errors.qualification} icon="school-outline"
+              placeholder="e.g. M.Sc Mathematics, B.Ed" error={errors.qualification} icon="school-outline" required
               maxLength={200} clearable returnKeyType="next" onSubmitEditing={() => expRef.current?.focus()} blurOnSubmit={false} />
             <FormField label="EXPERIENCE (YEARS)" value={form.experienceYears}
               onChangeText={(v) => setField("experienceYears", v.replace(/\D/g, ""))}
-              placeholder="e.g. 5" keyboardType="number-pad" error={errors.experienceYears} icon="briefcase-outline"
+              placeholder="e.g. 5" keyboardType="number-pad" error={errors.experienceYears} icon="briefcase-outline" required
               hint="Total years of teaching experience" returnKeyType="next" onSubmitEditing={() => dateRef.current?.focus()} blurOnSubmit={false} />
             <FormField label="JOINING DATE" value={form.joiningDate}
               onChangeText={(v) => setField("joiningDate", autoFormatDate(v))}
-              placeholder="DD/MM/YYYY" keyboardType="number-pad" error={errors.joiningDate}
+              placeholder="DD/MM/YYYY" keyboardType="number-pad" error={errors.joiningDate} required
               icon="calendar-outline" hint="Date faculty joined the institute"
               returnKeyType="done" onSubmitEditing={() => handleSubmit()} />
           </View>
@@ -460,7 +461,7 @@ function SectionHead({ icon, title, color }: { icon: string; title: string; colo
 const sh = StyleSheet.create({
   wrap:    { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(16) },
   iconBox: { width: ms(34), height: ms(34), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
-  label:   { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 1 },
+  label:   { ...T.sectionHeading, letterSpacing: 1 },
 });
 
 function DetailRow({ icon, label, value, color, last = false }: {
@@ -484,8 +485,8 @@ const dr = StyleSheet.create({
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(32), height: ms(32), borderRadius: ms(8), justifyContent: "center", alignItems: "center", flexShrink: 0 },
   textWrap:  { flex: 1 },
-  label:     { fontSize: fs(10), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
-  value:     { fontSize: fs(13), color: C.text, fontFamily: "Inter_700Bold", fontWeight: "700" },
+  label:     { ...T.sectionHeading, color: C.muted, marginBottom: ms(1) },
+  value:     { ...T.listItemTitle, color: C.text },
 });
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
@@ -496,25 +497,25 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
 
   section:       { backgroundColor: C.card, borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 
-  subjectHint:   { fontSize: fs(12), color: C.muted, marginBottom: ms(14) },
-  selectedCount: { fontSize: fs(12), color: C.green, fontFamily: "Inter_700Bold", fontWeight: "700", marginTop: ms(14), textAlign: "center" },
+  subjectHint:   { ...T.bodySmall, color: C.muted, marginBottom: ms(14) },
+  selectedCount: { ...T.chipText, color: C.green, marginTop: ms(14), textAlign: "center" },
 
   submitError:   { backgroundColor: C.red + "0F", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(14), marginBottom: ms(16) },
-  submitErrorT:  { fontSize: fs(13), color: C.red, lineHeight: fs(18) },
+  submitErrorT:  { ...T.body, color: C.red },
   buttonGroup:   { gap: ms(12) },
 
   loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
   loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginTop: ms(4) },
-  loaderSub:     { fontSize: fs(12), color: C.muted },
+  loaderTitle:   { ...T.cardTitle, color: C.text, marginTop: ms(4) },
+  loaderSub:     { ...T.bodySmall, color: C.muted },
 
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
   successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
   checkCircle:    { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
-  successTitle:   { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(6) },
-  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(24), textAlign: "center" },
+  successTitle:   { ...T.displayMedium, color: C.text, marginBottom: ms(6) },
+  successSub:     { ...T.body, color: C.muted, marginBottom: ms(24), textAlign: "center" },
   detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: C.border },
   doneBtnWrap:    { width: "100%" },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  doneBtnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:       { ...T.buttonText, color: "#FFFFFF" },
 });

@@ -54,6 +54,11 @@ module.exports = {
     version: "1.0.0",
     orientation: "portrait",
     icon: tenantAsset("icon.png", "./assets/icon.png"),
+    // Drives Android's generated colorPrimary (colors.xml) — otherwise it's
+    // left at Expo's own template default (#023c69, a dark blue) with no
+    // config field pointed at it, which is exactly what was flashing
+    // on screen before the real (maroon) splash took over.
+    primaryColor: SPLASH_COLOR,
     userInterfaceStyle: "light",
     ios: {
       supportsTablet: true,
@@ -67,7 +72,10 @@ module.exports = {
     },
     android: {
       adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
+        // Matches SPLASH_COLOR — the fallback android-icon-background.png
+        // below is now a plain fill of this same color, so the two stay in
+        // sync (this value only takes effect if backgroundImage is absent).
+        backgroundColor: SPLASH_COLOR,
         foregroundImage: tenantAsset("android-icon-foreground.png", "./assets/android-icon-foreground.png"),
         backgroundImage: tenantAsset("android-icon-background.png", "./assets/android-icon-background.png"),
         monochromeImage: tenantAsset("android-icon-monochrome.png", "./assets/android-icon-monochrome.png"),
@@ -88,6 +96,7 @@ module.exports = {
     plugins: [
       "expo-secure-store",
       "expo-local-authentication",
+      "@react-native-community/datetimepicker",
       [
         "expo-splash-screen",
         {
@@ -100,6 +109,10 @@ module.exports = {
           resizeMode: "contain",
         },
       ],
+      // Fills a gap expo-splash-screen's own plugin leaves open — see the
+      // plugin file for why this matters (eliminates a white flash between
+      // the native splash handing off and RN's first JS frame painting).
+      "./plugins/withSplashWindowBackground",
       [
         "expo-notifications",
         {
@@ -108,7 +121,7 @@ module.exports = {
           // notification type — see notification.service.ts's TYPE_META).
           // Was "#ffffff" — white-on-white made the icon invisible.
           icon: tenantAsset("android-icon-monochrome.png", "./assets/android-icon-monochrome.png"),
-          color: "#8B1E3F",
+          color: SPLASH_COLOR,
         },
       ],
       [

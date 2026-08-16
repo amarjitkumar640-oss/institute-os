@@ -3,8 +3,21 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/role";
+import { getSignedPhotoUrl } from "../../lib/s3";
 
 export const tenantsRouter = Router();
+
+// `logoUrl` is either a plain external URL (an admin pasted a link to an
+// already-public image) or an object key in our own private bucket (set via
+// the logo upload flow) — the bucket doesn't support public-read objects
+// (Oracle's S3-compat layer doesn't honor per-object ACLs the way AWS does),
+// so a stored key must be signed into a short-lived URL on every read,
+// exactly like student photos.
+async function resolveLogoUrl(logoUrl: string | null): Promise<string | null> {
+  if (!logoUrl) return null;
+  if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) return logoUrl;
+  return getSignedPhotoUrl(logoUrl);
+}
 
 // ── GET /api/tenants/:tenantId/public — unauthenticated org lookup ────────────
 // Called once at app launch (the tenant is baked into the build), before any
@@ -22,7 +35,7 @@ tenantsRouter.get("/:tenantId/public", async (req, res) => {
       accent:     tenant.brandAccent,
       background: tenant.brandBackground,
       headerBg:   tenant.brandHeaderBg,
-      logoUrl:    tenant.logoUrl,
+      logoUrl:    await resolveLogoUrl(tenant.logoUrl),
     },
   });
 });
@@ -46,7 +59,7 @@ tenantsRouter.get("/slug/:slug/public", async (req, res) => {
       accent:     tenant.brandAccent,
       background: tenant.brandBackground,
       headerBg:   tenant.brandHeaderBg,
-      logoUrl:    tenant.logoUrl,
+      logoUrl:    await resolveLogoUrl(tenant.logoUrl),
     },
   });
 });
@@ -66,7 +79,7 @@ tenantsRouter.get("/me", requireAuth, async (req, res) => {
       accent:     tenant.brandAccent,
       background: tenant.brandBackground,
       headerBg:   tenant.brandHeaderBg,
-      logoUrl:    tenant.logoUrl,
+      logoUrl:    await resolveLogoUrl(tenant.logoUrl),
     },
     classReminderMinutes: tenant.classReminderMinutes,
     overdueGraceDays:     tenant.overdueGraceDays,
@@ -111,7 +124,7 @@ tenantsRouter.patch("/me/settings", requireAuth, requireRole("admin"), async (re
     accent:               tenant.brandAccent,
     background:           tenant.brandBackground,
     headerBg:             tenant.brandHeaderBg,
-    logoUrl:              tenant.logoUrl,
+    logoUrl:              await resolveLogoUrl(tenant.logoUrl),
     loginMethod:          tenant.loginMethod,
     classReminderMinutes: tenant.classReminderMinutes,
     overdueGraceDays:     tenant.overdueGraceDays,

@@ -1,24 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, ScrollView, ActivityIndicator, RefreshControl, Modal, Image,
+  TextInput, ScrollView, ActivityIndicator, RefreshControl, Modal, Image, Linking,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
+import { SHEET_HEIGHT } from "../../components/ui/BottomSheet";
 import type { RootStackParamList } from "../../navigation/types";
-import { listStudents, type StudentItem, type CoursePreference } from "../../api/students";
+import { listStudents, type StudentItem } from "../../api/students";
 import { listBatches, type BatchItem } from "../../api/batches";
+import { listCourseNames, type CourseNameItem } from "../../api/courses";
 import { listStudentEnrollments, enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { useAuth } from "../../context/AuthContext";
+import { usePermission } from "../../hooks/usePermission";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { AVATAR_SIZE, AVATAR_RADIUS, getAvatarFill } from "../../components/ui/avatarStyle";
+import { T } from "../../components/ui/typography";
 import { COURSE_META } from "../../constants/courseMeta";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -30,16 +35,6 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
   upcoming: { label: "Upcoming", color: C.blue },
   completed: { label: "Completed", color: C.muted },
 };
-
-type FilterKey = "All" | CoursePreference;
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: "All", label: "All" },
-  { key: "ssc", label: "SSC" },
-  { key: "banking", label: "Banking" },
-  { key: "railway", label: "Railway" },
-  { key: "foundation", label: "Foundation" },
-  { key: "others", label: "Others" },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -120,7 +115,7 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
 
           {/* Result banner */}
           {result && (
-            <View style={[bm.resultBanner, { backgroundColor: result.ok ? C.greenBg : "#FEE2E2" }]}>
+            <View style={[bm.resultBanner, { backgroundColor: result.ok ? C.greenBg : C.redBg }]}>
               <Ionicons name={result.ok ? "checkmark-circle-outline" : "alert-circle-outline"} size={ms(15)} color={result.ok ? C.green : C.red} />
               <Text style={[bm.resultT, { color: result.ok ? C.green : C.red }]}>{result.msg}</Text>
             </View>
@@ -207,41 +202,44 @@ function BatchPickerModal({ student, onClose, onSuccess }: {
 
 const makeBmStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(16), maxHeight: "80%" },
+  sheet: { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(16), maxHeight: SHEET_HEIGHT.standard },
   handle: { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
   header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: ms(14) },
   closeBtn: { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
-  title: { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  sub: { fontSize: fs(12), color: C.muted, marginTop: ms(2) },
+  title: { ...T.cardTitle, color: C.text },
+  sub: { ...T.bodySmall, color: C.muted, marginTop: ms(2) },
   resultBanner: { flexDirection: "row", alignItems: "center", gap: ms(8), borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(10), marginBottom: ms(10) },
-  resultT: { fontSize: fs(12.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", flex: 1 },
+  resultT: { ...T.body, flex: 1 },
   loaderWrap: { alignItems: "center", paddingVertical: ms(40), gap: ms(12) },
-  loaderT: { fontSize: fs(13), color: C.muted },
+  loaderT: { ...T.body, color: C.muted },
   emptyWrap: { alignItems: "center", paddingVertical: ms(32), gap: ms(10) },
-  emptyT: { fontSize: fs(13), color: C.placeholder },
+  emptyT: { ...T.body, color: C.placeholder },
   batchRow: { flexDirection: "row", alignItems: "center", paddingVertical: ms(14), borderBottomWidth: 1, borderBottomColor: C.border, gap: ms(12) },
-  batchName: { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  batchName: { ...T.listItemTitle, color: C.text },
   batchMeta: { flexDirection: "row", alignItems: "center", gap: ms(5), marginTop: ms(5), flexWrap: "wrap", rowGap: ms(4) },
   courseBadge: { borderRadius: ms(7), paddingHorizontal: ms(7), paddingVertical: ms(2.5), flexShrink: 1, maxWidth: ms(140) },
-  courseBadgeT: { fontSize: fs(10.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  courseBadgeT: { ...T.badgeText },
   statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  batchMetaT: { fontSize: fs(11), color: C.muted },
-  sep: { fontSize: fs(11), color: C.placeholder },
+  batchMetaT: { ...T.caption, color: C.muted },
+  sep: { ...T.caption, color: C.placeholder },
   enrolledBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.greenBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
-  enrolledT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.green },
-  fullBadge: { backgroundColor: "#FEE2E2", borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
-  fullT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.red },
-  addBtn: { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: "#FEF4F4", justifyContent: "center", alignItems: "center" },
+  enrolledT: { ...T.chipText, color: C.green },
+  fullBadge: { backgroundColor: C.redBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5) },
+  fullT: { ...T.chipText, color: C.red },
+  // Was a stray reddish literal that didn't match its own colors.primary icon — paired
+  // correctly now (same recipe as BatchDetailScreen's AddStudentModal addBtn).
+  addBtn: { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: colors.primary + "10", justifyContent: "center", alignItems: "center" },
   doneBtn: { marginTop: ms(12), marginBottom: ms(24), borderRadius: ms(14) },
   doneGrad: { alignItems: "center", paddingVertical: ms(14), backgroundColor: colors.primary },
-  doneT: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  doneT: { ...T.buttonText, color: "#fff" },
 });
 
 // ── Student Card ──────────────────────────────────────────────────────────────
 
-function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
+function StudentCard({ student, showEnroll, canEdit, onEdit, onEnroll, isAllCenters }: {
   student: StudentItem;
   showEnroll: boolean;
+  canEdit: boolean;
   onEdit: () => void;
   onEnroll: () => void;
   isAllCenters?: boolean;
@@ -251,40 +249,82 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
   const courseLabel = student.course?.name ?? meta.label;
   const ini = initials(student.fullName);
   const accentColor = meta.color !== C.muted ? meta.color : C.muted;
+  const fill = getAvatarFill(accentColor);
   const isEnrolled = !!student.activeEnrollment;
 
   const genderColor = student.gender === "female" ? "#D96AAC" : student.gender === "male" ? C.blue : C.muted;
   const genderIcon = student.gender === "female" ? "female-outline" : student.gender === "male" ? "male-outline" : "person-outline";
   const genderLabel = student.gender === "female" ? "Female" : student.gender === "male" ? "Male" : "—";
 
+  const showCenterChip = isAllCenters && !!student.center;
+
   return (
     <View style={cs.card}>
-      {isAllCenters && student.center && (
-        <View style={cs.centerChip}>
-          <Ionicons name="business-outline" size={ms(10)} color={C.purple} />
-          <Text style={cs.centerChipT}>{student.center.name}</Text>
+      {(showCenterChip || canEdit) && (
+        <View style={cs.cardHeaderRow}>
+          {showCenterChip ? (
+            <View style={cs.centerChip}>
+              <Ionicons name="business-outline" size={ms(10)} color={C.purple} />
+              <Text style={cs.centerChipT}>{student.center!.name}</Text>
+            </View>
+          ) : <View />}
+          {canEdit && (
+            <View style={cs.cardTopActions}>
+              {showEnroll && (
+                <TouchableOpacity style={[cs.topActionBtn, { backgroundColor: C.greenBg }]} onPress={onEnroll} activeOpacity={0.75}>
+                  <Ionicons name="link-outline" size={ms(15)} color={C.green} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={[cs.topActionBtn, { backgroundColor: "#EEF3FB" }]} onPress={onEdit} activeOpacity={0.75}>
+                <Ionicons name="pencil-outline" size={ms(15)} color={C.blue} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
 
       {/* Top row */}
       <View style={cs.cardTop}>
-        <View style={[cs.iconBox, { backgroundColor: student.photoUrl ? C.border : accentColor }]}>
+        <View style={[
+          cs.iconBox,
+          student.photoUrl
+            ? { backgroundColor: C.border }
+            : { backgroundColor: fill.backgroundColor, borderWidth: fill.borderWidth, borderColor: fill.borderColor },
+        ]}>
           {student.photoUrl
             ? <Image source={{ uri: student.photoUrl }} style={cs.iconImg} />
-            : <Text style={cs.iconCode}>{ini}</Text>
+            : <Text style={[cs.iconCode, { color: fill.color }]}>{ini}</Text>
           }
         </View>
         <View style={cs.cardInfo}>
           <Text style={cs.studentName} numberOfLines={1}>{student.fullName}</Text>
-          <Text style={cs.rollT} numberOfLines={1}>
-            {student.studentCode}{student.phone ? ` · ${student.phone}` : ""}
-          </Text>
-        </View>
-        <View style={[cs.statusBadge, { backgroundColor: isEnrolled ? C.greenBg : C.inputBg }]}>
-          <View style={[cs.statusDot, { backgroundColor: isEnrolled ? C.green : C.placeholder }]} />
-          <Text style={[cs.statusT, { color: isEnrolled ? C.green : C.muted }]}>
-            {isEnrolled ? "Enrolled" : "No batch"}
-          </Text>
+          <View style={cs.rollRow}>
+            <Text style={cs.rollT} numberOfLines={1}>{student.studentCode}</Text>
+            {student.phone && (
+              <View style={cs.rollPhone}>
+                <Text style={cs.rollT}>·</Text>
+                {/* Calling is only ever offered where the real number is
+                    visible (canEdit already tracks the same admin/frontdesk-only
+                    gate the API uses to decide whether to mask the phone in
+                    the first place), so a teacher never sees this even though
+                    their phone field is already masked server-side anyway. */}
+                {canEdit ? (
+                  <TouchableOpacity
+                    style={cs.rollPhoneTap}
+                    onPress={() => Linking.openURL(`tel:${student.phone}`)}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }}
+                  >
+                    <View style={cs.callBtn}>
+                      <Ionicons name="call" size={ms(11)} color={C.green} />
+                    </View>
+                    <Text style={cs.rollT} numberOfLines={1}>{student.phone}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={cs.rollT} numberOfLines={1}>{student.phone}</Text>
+                )}
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
@@ -319,24 +359,6 @@ function StudentCard({ student, showEnroll, onEdit, onEnroll, isAllCenters }: {
           </View>
         </>
       )}
-
-      {/* Action row */}
-      <View style={cs.divider} />
-      <View style={cs.actionBtns}>
-        {showEnroll && (
-          <>
-            <TouchableOpacity style={[cs.actionBtn, cs.enrollActionBtn]} onPress={onEnroll} activeOpacity={0.75}>
-              <Ionicons name="link-outline" size={ms(13)} color={C.green} />
-              <Text style={[cs.actionBtnT, { color: C.green }]}>Enroll</Text>
-            </TouchableOpacity>
-            <View style={cs.actionDivider} />
-          </>
-        )}
-        <TouchableOpacity style={[cs.actionBtn, cs.editActionBtn]} onPress={onEdit} activeOpacity={0.75}>
-          <Ionicons name="pencil-outline" size={ms(13)} color={C.blue} />
-          <Text style={[cs.actionBtnT, { color: C.blue }]}>Edit</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -383,6 +405,87 @@ function StudentEmpty({ search }: { search: string }) {
 }
 
 
+// ── Batch filter bottom sheet (mirrors FeesScreen's BatchSheet) ───────────────
+
+function BatchSheet({
+  visible, batches, selected, onSelect, onClose, colors,
+}: {
+  visible:  boolean;
+  batches:  BatchItem[];
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  onClose:  () => void;
+  colors:   ThemeColors;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={bs.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={[bs.panel, { paddingBottom: insets.bottom + ms(8) }]}>
+        <View style={bs.handle} />
+        <Text style={bs.title}>Filter by Batch</Text>
+
+        <ScrollView showsVerticalScrollIndicator={false} style={bs.scroll}>
+          <TouchableOpacity
+            style={[bs.row, selected === null && { backgroundColor: colors.primary + "0F" }]}
+            onPress={() => { onSelect(null); onClose(); }}
+            activeOpacity={0.7}
+          >
+            <View style={[bs.rowIcon, { backgroundColor: colors.primary + "16" }]}>
+              <Ionicons name="layers-outline" size={ms(17)} color={colors.primary} />
+            </View>
+            <Text style={[bs.rowLabel, selected === null && { color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" }]}>
+              All Batches
+            </Text>
+            {selected === null && <Ionicons name="checkmark-circle" size={ms(18)} color={colors.primary} />}
+          </TouchableOpacity>
+
+          <View style={bs.divider} />
+
+          {batches.map((b) => {
+            const active = selected === b.id;
+            return (
+              <TouchableOpacity
+                key={b.id}
+                style={[bs.row, active && { backgroundColor: colors.primary + "0F" }]}
+                onPress={() => { onSelect(b.id); onClose(); }}
+                activeOpacity={0.7}
+              >
+                <View style={[bs.rowIcon, { backgroundColor: active ? colors.primary + "16" : C.inputBg }]}>
+                  <Ionicons name="layers-outline" size={ms(17)} color={active ? colors.primary : C.muted} />
+                </View>
+                <Text style={[bs.rowLabel, active && { color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" }]} numberOfLines={1}>
+                  {b.name}
+                </Text>
+                {active && <Ionicons name="checkmark-circle" size={ms(18)} color={colors.primary} />}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+const bs = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
+  panel: {
+    backgroundColor:      C.card,
+    borderTopLeftRadius:  ms(24),
+    borderTopRightRadius: ms(24),
+    maxHeight:            SHEET_HEIGHT.short,
+    paddingTop:           ms(10),
+    paddingHorizontal:    ms(0),
+  },
+  handle: { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(14) },
+  title: { ...T.cardTitle, color: C.text, paddingHorizontal: ms(20), marginBottom: ms(8) },
+  scroll:  { flexGrow: 0 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginHorizontal: ms(20), marginVertical: ms(4) },
+  row: { flexDirection: "row", alignItems: "center", gap: ms(12), paddingHorizontal: ms(20), paddingVertical: ms(13) },
+  rowIcon: { width: ms(38), height: ms(38), borderRadius: ms(11), alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  rowLabel: { flex: 1, ...T.listItemTitle, color: C.text },
+});
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function StudentListScreen({ navigation, route }: Props) {
@@ -390,6 +493,7 @@ export function StudentListScreen({ navigation, route }: Props) {
   const cs = useThemedStyles(makeCsStyles);
   const nav = useNavigation<Nav>();
   const { isAllCenters } = useAuth();
+  const { canWrite, canEdit } = usePermission("students");
   const batchId = route?.params?.batchId;
   const batchName = route?.params?.batchName;
 
@@ -398,8 +502,15 @@ export function StudentListScreen({ navigation, route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterKey>("All");
+  const [courseFilter, setCourseFilter] = useState<string>("All");
+  const [batchFilter, setBatchFilter] = useState<string | null>(null);
+  const [batchSheetOpen, setBatchSheetOpen] = useState(false);
   const [enrollTarget, setEnrollTarget] = useState<StudentItem | null>(null);
+
+  // Course/batch filter chips reflect this tenant's actual catalog — not a
+  // fixed list, since every institute's courses and batches differ.
+  const [courses, setCourses] = useState<CourseNameItem[]>([]);
+  const [batches, setBatches] = useState<BatchItem[]>([]);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -420,15 +531,29 @@ export function StudentListScreen({ navigation, route }: Props) {
 
   useRefetchOnReconnect(() => load(true));
 
+  useEffect(() => {
+    listCourseNames().then(setCourses).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // Already scoped to one batch via navigation (e.g. from a batch's own
+    // roster) — no need to also offer an in-screen batch filter there.
+    if (batchId) return;
+    listBatches().then(setBatches).catch(() => {});
+  }, [batchId]);
+
   const filtered = useMemo(() => {
     return students.filter((s) => {
       const q = search.toLowerCase();
       const matchSearch = !q || s.fullName.toLowerCase().includes(q) || s.studentCode.toLowerCase().includes(q) || s.phone.includes(q);
       if (!matchSearch) return false;
-      if (filter !== "All") return s.coursePreference === filter;
+      if (courseFilter !== "All" && s.courseId !== courseFilter) return false;
+      if (batchFilter && s.activeEnrollment?.batchId !== batchFilter) return false;
       return true;
     });
-  }, [students, search, filter]);
+  }, [students, search, courseFilter, batchFilter]);
+
+  const selectedBatch = batches.find((b) => b.id === batchFilter) ?? null;
 
   return (
     <SafeAreaView style={cs.safe} edges={["bottom"]}>
@@ -452,27 +577,53 @@ export function StudentListScreen({ navigation, route }: Props) {
             <Banner students={students} />
 
             <View style={cs.searchWrap}>
-              <View style={cs.searchRow}>
-                <Ionicons name="search-outline" size={ms(16)} color={C.muted} />
-                <TextInput
-                  style={cs.searchInput}
-                  placeholder="Search by name, roll, or phone…"
-                  placeholderTextColor={C.placeholder}
-                  value={search}
-                  onChangeText={setSearch}
-                />
-                {!!search && (
-                  <TouchableOpacity onPress={() => setSearch("")}>
-                    <Ionicons name="close-circle" size={ms(16)} color={C.muted} />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: ms(10) }}>
+                <View style={[cs.searchRow, { flex: 1 }]}>
+                  <Ionicons name="search-outline" size={ms(16)} color={C.muted} />
+                  <TextInput
+                    style={cs.searchInput}
+                    placeholder="Search by name, roll, or phone…"
+                    placeholderTextColor={C.placeholder}
+                    value={search}
+                    onChangeText={setSearch}
+                  />
+                  {!!search && (
+                    <TouchableOpacity onPress={() => setSearch("")}>
+                      <Ionicons name="close-circle" size={ms(16)} color={C.muted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {!batchId && batches.length > 0 && (
+                  <TouchableOpacity
+                    style={cs.batchBtn}
+                    onPress={() => setBatchSheetOpen(true)}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="layers-outline" size={ms(15)} color={C.muted} />
+                    {!!batchFilter && <View style={[cs.batchDot, { backgroundColor: colors.primary }]} />}
+                    <Ionicons name="chevron-down" size={ms(12)} color={C.muted} />
                   </TouchableOpacity>
                 )}
               </View>
+
+              {selectedBatch && (
+                <View style={cs.activeBatchRow}>
+                  <View style={[cs.activeBatchChip, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
+                    <Ionicons name="layers-outline" size={ms(11)} color={colors.primary} />
+                    <Text style={[cs.activeBatchT, { color: colors.primary }]} numberOfLines={1}>{selectedBatch.name}</Text>
+                    <TouchableOpacity onPress={() => setBatchFilter(null)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Ionicons name="close-circle" size={ms(14)} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={cs.filterScroll} contentContainerStyle={cs.filterRow}>
-              {FILTERS.map((f) => (
-                <TouchableOpacity key={f.key} style={[cs.chip, filter === f.key && cs.chipOn]} onPress={() => setFilter(f.key)}>
-                  <Text style={[cs.chipT, filter === f.key && cs.chipTOn]}>{f.label}</Text>
+              {[{ id: "All", name: "All" }, ...courses].map((c) => (
+                <TouchableOpacity key={c.id} style={[cs.chip, courseFilter === c.id && cs.chipOn]} onPress={() => setCourseFilter(c.id)}>
+                  <Text style={[cs.chipT, courseFilter === c.id && cs.chipTOn]}>{c.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -484,6 +635,7 @@ export function StudentListScreen({ navigation, route }: Props) {
                 <StudentCard
                   student={item}
                   showEnroll={!batchId}
+                  canEdit={canEdit}
                   onEdit={() => navigation.navigate("EditStudent", { student: item })}
                   onEnroll={() => setEnrollTarget(item)}
                   isAllCenters={isAllCenters}
@@ -499,9 +651,11 @@ export function StudentListScreen({ navigation, route }: Props) {
           </>
         )}
 
-        <TouchableOpacity style={cs.fab} onPress={() => nav.navigate("NewAdmission")} activeOpacity={0.85}>
-          <Ionicons name="add" size={ms(26)} color="#fff" />
-        </TouchableOpacity>
+        {canWrite && (
+          <TouchableOpacity style={cs.fab} onPress={() => nav.navigate("NewAdmission")} activeOpacity={0.85}>
+            <Ionicons name="add" size={ms(26)} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Batch Picker Modal */}
@@ -512,6 +666,16 @@ export function StudentListScreen({ navigation, route }: Props) {
           onSuccess={() => load()}
         />
       )}
+
+      {/* Batch Filter Sheet */}
+      <BatchSheet
+        visible={batchSheetOpen}
+        batches={batches}
+        selected={batchFilter}
+        onSelect={setBatchFilter}
+        onClose={() => setBatchSheetOpen(false)}
+        colors={colors}
+      />
     </SafeAreaView>
   );
 }
@@ -524,64 +688,76 @@ const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
   fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(56), height: ms(56), borderRadius: ms(28), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(12), elevation: 10 },
 
   loader: { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(14) },
-  loaderT: { fontSize: fs(14), color: C.muted },
+  loaderT: { ...T.body, color: C.muted },
 
   // Banner
   banner: { flexDirection: "row", backgroundColor: C.card, marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
-  bannerNum: { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary },
-  bannerLbl: { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600", marginTop: ms(1) },
+  bannerNum: { ...T.displayMedium, color: colors.primary },
+  bannerLbl: { ...T.caption, color: C.muted, marginTop: ms(1) },
   bannerDiv: { width: 1, backgroundColor: C.border, marginHorizontal: ms(6) },
 
   // Search + filter
   searchWrap: { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
   searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
-  searchInput: { flex: 1, fontSize: fs(13.5), color: C.text, padding: 0, includeFontPadding: false },
+  searchInput: { flex: 1, ...T.body, color: C.text, padding: 0, includeFontPadding: false },
+
+  batchBtn: {
+    flexDirection: "row", alignItems: "center", gap: ms(5),
+    paddingHorizontal: ms(13), paddingVertical: ms(10),
+    backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1, borderColor: C.border,
+    shadowColor: C.text, shadowOffset: { width: 0, height: ms(1) }, shadowOpacity: 0.06, shadowRadius: ms(6), elevation: 2,
+    position: "relative",
+  },
+  // Sits right on the button's border line at the corner — a slight
+  // overlap, not floating past it and not tucked away inside it.
+  batchDot: { position: "absolute", top: -ms(2), right: -ms(2), width: ms(8), height: ms(8), borderRadius: ms(4) },
+
+  activeBatchRow: { marginTop: ms(8) },
+  activeBatchChip: { flexDirection: "row", alignItems: "center", gap: ms(6), alignSelf: "flex-start", borderRadius: ms(20), paddingHorizontal: ms(12), paddingVertical: ms(6), borderWidth: 1 },
+  activeBatchT: { ...T.chipText, maxWidth: ms(180) },
+
   filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
   filterRow: { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
   chip: { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipT: { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, includeFontPadding: false, lineHeight: fs(16) },
+  chipT: { ...T.chipText, color: C.muted, includeFontPadding: false },
   chipTOn: { color: "#FFFFFF" },
   listContent: { paddingTop: ms(12), paddingBottom: ms(96) },
 
   // Card (matches CourseCard pattern)
   card: { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginHorizontal: ms(16), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
-  centerChip: { flexDirection: "row", alignItems: "center", gap: ms(4), alignSelf: "flex-start", backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3), marginBottom: ms(8) },
-  centerChipT: { fontSize: fs(11), color: C.purple, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  cardHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: ms(8) },
+  centerChip: { flexDirection: "row", alignItems: "center", gap: ms(4), alignSelf: "flex-start", backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
+  centerChipT: { ...T.chipText, color: C.purple },
 
   // Top row
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: ms(10), marginBottom: ms(10) },
-  iconBox: { width: ms(46), height: ms(46), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0, overflow: "hidden" },
-  iconImg: { width: ms(46), height: ms(46) },
-  iconCode: { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.3, includeFontPadding: false },
+  iconBox: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_RADIUS, justifyContent: "center", alignItems: "center", flexShrink: 0, overflow: "hidden" },
+  iconImg: { width: AVATAR_SIZE, height: AVATAR_SIZE },
+  iconCode: { ...T.listItemTitle, includeFontPadding: false },
   cardInfo: { flex: 1, minWidth: 0 },
-  studentName: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(3) },
-  rollT: { fontSize: fs(11), color: C.muted },
-  statusBadge: { flexDirection: "row", alignItems: "center", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(4), gap: ms(4), flexShrink: 0 },
-  statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  statusT: { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  studentName: { ...T.listItemTitle, color: C.text, marginBottom: ms(3) },
+  rollRow: { flexDirection: "row", alignItems: "center", gap: ms(4) },
+  rollPhone: { flexDirection: "row", alignItems: "center", gap: ms(4), flexShrink: 1, minWidth: 0 },
+  rollPhoneTap: { flexDirection: "row", alignItems: "center", gap: ms(4), flexShrink: 1, minWidth: 0 },
+  rollT: { ...T.caption, color: C.muted, flexShrink: 1 },
+  callBtn: { width: ms(20), height: ms(20), borderRadius: ms(6), backgroundColor: C.greenBg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  cardTopActions: { flexDirection: "row", alignItems: "center", gap: ms(6), flexShrink: 0 },
+  topActionBtn: { width: ms(30), height: ms(30), borderRadius: ms(8), justifyContent: "center", alignItems: "center" },
 
   // Stats row
   divider: { height: 1, backgroundColor: C.border, marginBottom: ms(10) },
   statsRow: { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
   statItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(4) },
-  statLabel: { fontSize: fs(11), color: C.text, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  statLabel: { ...T.chipText, color: C.text },
   statDivider: { width: 1, height: ms(16), backgroundColor: C.border },
 
   // Batch hint row (enrolled only)
   batchHint: { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(2), paddingBottom: ms(10), marginTop: ms(-2) },
-  batchHintT: { fontSize: fs(11), color: C.green, fontFamily: "Inter_600SemiBold", fontWeight: "600", flex: 1 },
-
-  // Action row
-  actionBtns: { flexDirection: "row", alignItems: "center" },
-  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(7), borderRadius: ms(8) },
-  enrollActionBtn: { backgroundColor: C.greenBg },
-  editActionBtn: { backgroundColor: "#EEF3FB" },
-  actionBtnT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700" },
-  actionDivider: { width: ms(8) },
+  batchHintT: { ...T.caption, color: C.green, flex: 1 },
 
   empty: { alignItems: "center", paddingTop: ms(60), gap: ms(8), paddingHorizontal: ms(32) },
-  emptyTitle: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.placeholder, textAlign: "center" },
-  emptySubT: { fontSize: fs(12), color: C.placeholder, textAlign: "center" },
+  emptyTitle: { ...T.cardTitle, color: C.placeholder, textAlign: "center" },
+  emptySubT: { ...T.bodySmall, color: C.placeholder, textAlign: "center" },
 });

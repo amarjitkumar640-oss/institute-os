@@ -21,6 +21,7 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { SelectChips } from "../../components/ui/SelectChips";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
+import { T } from "../../components/ui/typography";
 import { createCourse } from "../../api/courses";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
@@ -227,10 +228,7 @@ export function CreateCourseScreen({ navigation }: Props) {
         >
           {/* Basic Info */}
           <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <View style={s.sectionDot} />
-              <Text style={s.sectionTitle}>Basic Information</Text>
-            </View>
+            <SectionHead icon="document-text-outline" title="Basic Information" color={colors.primary} />
 
             <FormField
               label="COURSE NAME"
@@ -238,6 +236,7 @@ export function CreateCourseScreen({ navigation }: Props) {
               onChangeText={(v) => setField("name", v)}
               placeholder="e.g. SSC CGL Complete Course"
               error={errors.name}
+              required
               maxLength={120}
               clearable
               icon="book-outline"
@@ -261,10 +260,7 @@ export function CreateCourseScreen({ navigation }: Props) {
 
           {/* Schedule & Fee */}
           <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <View style={s.sectionDot} />
-              <Text style={s.sectionTitle}>Schedule & Fee</Text>
-            </View>
+            <SectionHead icon="calendar-outline" title="Schedule & Fee" color={colors.primary} />
 
             <FormField
               label="DURATION (MONTHS)"
@@ -273,6 +269,7 @@ export function CreateCourseScreen({ navigation }: Props) {
               placeholder="e.g. 12"
               keyboardType="number-pad"
               error={errors.durationMonths}
+              required
               icon="time-outline"
               hint="Enter number of months (1 – 60)"
               returnKeyType="next"
@@ -287,6 +284,7 @@ export function CreateCourseScreen({ navigation }: Props) {
               placeholder="e.g. 15000"
               keyboardType="decimal-pad"
               error={errors.defaultFee}
+              required
               icon="wallet-outline"
               hint="This fee will be the default for new enrollments"
               returnKeyType="done"
@@ -299,25 +297,25 @@ export function CreateCourseScreen({ navigation }: Props) {
               <Text style={s.submitErrorT}>{errors.submit}</Text>
             </View>
           )}
-
-          <View style={s.buttonGroup}>
-            <PrimaryButton
-              label="Create Course"
-              onPress={handleSubmit}
-              loading={loading}
-              disabled={loading}
-              icon="checkmark-circle-outline"
-            />
-            {isDirty && !loading && (
-              <PrimaryButton
-                label="Reset Form"
-                onPress={handleReset}
-                variant="outline"
-                icon="refresh-outline"
-              />
-            )}
-          </View>
         </ScrollView>
+
+        <View style={s.footer}>
+          <PrimaryButton
+            label="Create Course"
+            onPress={handleSubmit}
+            loading={loading}
+            disabled={loading}
+            icon="checkmark-circle-outline"
+          />
+          {isDirty && !loading && (
+            <PrimaryButton
+              label="Reset Form"
+              onPress={handleReset}
+              variant="outline"
+              icon="refresh-outline"
+            />
+          )}
+        </View>
       </KeyboardAvoidingView>
 
       {/* ── Full-screen loader overlay ─────────────────────────────── */}
@@ -360,14 +358,10 @@ export function CreateCourseScreen({ navigation }: Props) {
 
             {/* CTA button */}
             <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-              <LinearGradient
-                colors={[colors.primary, "#A52341"]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={s.doneBtn}
-              >
+              <View style={[s.doneBtn, { backgroundColor: colors.primary }]}>
                 <Ionicons name="list-outline" size={ms(18)} color="#fff" />
                 <Text style={s.doneBtnT}>View All Courses</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
           </Animated.View>
@@ -376,6 +370,23 @@ export function CreateCourseScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 }
+
+function SectionHead({ icon, title, color }: { icon: string; title: string; color: string }) {
+  return (
+    <View style={sh.wrap}>
+      <View style={[sh.iconBox, { backgroundColor: color + "18" }]}>
+        <Ionicons name={icon as any} size={ms(16)} color={color} />
+      </View>
+      <Text style={[sh.label, { color }]}>{title.toUpperCase()}</Text>
+    </View>
+  );
+}
+
+const sh = StyleSheet.create({
+  wrap:    { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(12) },
+  iconBox: { width: ms(34), height: ms(34), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
+  label:   { ...T.sectionHeading, letterSpacing: 1 },
+});
 
 function DetailRow({
   icon, label, value, color, last = false,
@@ -400,8 +411,8 @@ const dr = StyleSheet.create({
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(32), height: ms(32), borderRadius: ms(8), justifyContent: "center", alignItems: "center", flexShrink: 0 },
   textWrap:  { flex: 1 },
-  label:     { fontSize: fs(10), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
-  value:     { fontSize: fs(13), color: C.text, fontFamily: "Inter_700Bold", fontWeight: "700" },
+  label:     { ...T.sectionHeading, color: C.muted, marginBottom: ms(1) },
+  value:     { ...T.listItemTitle, color: C.text },
 });
 
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
@@ -411,20 +422,17 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(20) },
 
   section:       { backgroundColor: C.card, borderRadius: ms(18), padding: ms(14), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(12) },
-  sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2), backgroundColor: colors.primary },
-  sectionTitle:  { fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 1, textTransform: "uppercase" },
 
   submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },
-  submitErrorT:  { fontSize: fs(13), color: C.red, lineHeight: fs(18) },
+  submitErrorT:  { ...T.body, color: C.red },
 
-  buttonGroup:   { gap: ms(12) },
+  footer:        { gap: ms(12), paddingHorizontal: ms(20), paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
 
   // Full-screen loader
   loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
   loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginTop: ms(4) },
-  loaderSub:     { fontSize: fs(12), color: C.muted },
+  loaderTitle:   { ...T.cardTitle, color: C.text, marginTop: ms(4) },
+  loaderSub:     { ...T.bodySmall, color: C.muted },
 
   // Full-screen success
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
@@ -433,12 +441,12 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   checkWrap:     { marginBottom: ms(20) },
   checkCircle:   { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
 
-  successTitle:  { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(6) },
-  successSub:    { fontSize: fs(13), color: C.muted, marginBottom: ms(24), textAlign: "center" },
+  successTitle:  { ...T.displayMedium, color: C.text, marginBottom: ms(6) },
+  successSub:    { ...T.body, color: C.muted, marginBottom: ms(24), textAlign: "center" },
 
   detailBox:     { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: C.border },
 
   doneBtnWrap:   { width: "100%" },
   doneBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  doneBtnT:      { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:      { ...T.buttonText, color: "#FFFFFF" },
 });

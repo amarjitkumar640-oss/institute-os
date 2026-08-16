@@ -46,7 +46,7 @@ async function resetToFresh() {
 
     // Non-admin staff — keep admins so login still works
     const nonAdminStaff = await tx.staff.findMany({
-      where: { role: { not: "admin" } },
+      where: { NOT: { roles: { has: "admin" } } },
       select: { id: true },
     });
     const nonAdminIds = nonAdminStaff.map((s) => s.id);
@@ -114,7 +114,7 @@ async function resetToFresh() {
 
   // Report kept admin accounts so the user knows what login still works
   const admins = await prisma.staff.findMany({
-    where: { role: "admin" },
+    where: { roles: { has: "admin" } },
     select: { fullName: true, phone: true, email: true, username: true },
   });
 

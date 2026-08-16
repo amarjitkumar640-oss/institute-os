@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth, type CenterInfo } from "../../context/AuthContext";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { T } from "../../components/ui/typography";
 import { useThemeColors, useThemedStyles, contrastColor, type ThemeColors } from "../../context/ThemeContext";
 import { ROLE_META, type Role } from "../../constants/roleMeta";
 import { useAlert } from "../../context/AlertContext";
@@ -37,21 +38,31 @@ function CenterCard({
   disabled: boolean;
 }) {
   const colors = useThemeColors();
-  const rm = ROLE_META[center.role as Role] ?? ROLE_META.frontdesk;
+  // A staff member can hold more than one role at this center — the avatar
+  // tint uses the first (most-privileged, since roles are ordered admin →
+  // teacher → frontdesk server-side... actually order isn't guaranteed, so
+  // just use whichever role sorts first in ROLE_META for a stable tint),
+  // while every held role gets its own chip below.
+  const roleMetas = center.roles.map((r) => ROLE_META[r as Role] ?? ROLE_META.frontdesk);
+  const primaryMeta = roleMetas[0] ?? ROLE_META.frontdesk;
   return (
     <TouchableOpacity style={ss.card} onPress={onPress} disabled={disabled} activeOpacity={0.72}>
-      <View style={[ss.avatar, { backgroundColor: rm.bg }]}>
-        <Text style={[ss.avatarT, { color: rm.color }]}>{initials(center.name)}</Text>
+      <View style={[ss.avatar, { backgroundColor: primaryMeta.bg }]}>
+        <Text style={[ss.avatarT, { color: primaryMeta.color }]}>{initials(center.name)}</Text>
       </View>
       <View style={ss.cardBody}>
         <Text style={[ss.cardName, { color: colors.text }]} numberOfLines={1}>{center.name}</Text>
         <View style={ss.chipRow}>
-          <Ionicons name={rm.icon as any} size={ms(11)} color={rm.color} />
-          <Text style={[ss.chipT, { color: rm.color }]}>{rm.label}</Text>
+          {roleMetas.map((rm, i) => (
+            <View key={center.roles[i]} style={[ss.roleChip, { backgroundColor: rm.bg }]}>
+              <Ionicons name={rm.icon as any} size={ms(11)} color={rm.color} />
+              <Text style={[ss.chipT, { color: rm.color }]}>{rm.label}</Text>
+            </View>
+          ))}
         </View>
       </View>
       {loading
-        ? <ActivityIndicator size="small" color={rm.color} style={ss.arrow} />
+        ? <ActivityIndicator size="small" color={primaryMeta.color} style={ss.arrow} />
         : <Ionicons name="chevron-forward" size={ms(18)} color={C.muted} style={ss.arrow} />}
     </TouchableOpacity>
   );
@@ -175,12 +186,9 @@ const ss = StyleSheet.create({
   list:         { paddingHorizontal: ms(16), paddingBottom: ms(36), paddingTop: ms(16) },
   listHeader:   { gap: ms(4), marginBottom: ms(4) },
   sectionLabel: {
-    fontSize:      fs(10.5),
-    fontFamily:    "Inter_700Bold",
-    fontWeight:    "700",
+    ...T.sectionHeading,
     color:         C.muted,
     letterSpacing: 1,
-    textTransform: "uppercase",
     paddingHorizontal: ms(4),
     paddingTop:    ms(12),
     paddingBottom: ms(4),
@@ -212,12 +220,20 @@ const ss = StyleSheet.create({
     justifyContent:  "center",
     flexShrink:      0,
   },
-  avatarT:  { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  avatarT:  { ...T.listItemTitle },
   cardBody: { flex: 1, paddingVertical: ms(16), paddingLeft: ms(12), paddingRight: ms(4) },
-  cardName: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", marginBottom: ms(5) },
-  chipRow:  { flexDirection: "row", alignItems: "center", gap: ms(4) },
-  chipT:    { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700" },
-  allSub:   { fontSize: fs(11.5), color: C.muted, marginTop: ms(3) },
+  cardName: { ...T.cardTitle, marginBottom: ms(5) },
+  chipRow:  { flexDirection: "row", alignItems: "center", gap: ms(6), flexWrap: "wrap" },
+  roleChip: {
+    flexDirection:     "row",
+    alignItems:        "center",
+    gap:               ms(4),
+    borderRadius:      ms(8),
+    paddingHorizontal: ms(8),
+    paddingVertical:   ms(3),
+  },
+  chipT:    { ...T.chipText },
+  allSub:   { ...T.caption, color: C.muted, marginTop: ms(3) },
   arrow:    { paddingLeft: ms(8), flexShrink: 0 },
 });
 
@@ -258,20 +274,16 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom:   ms(16),
   },
   heroGreet: {
-    fontSize:      fs(12),
-    fontFamily:    "Inter_600SemiBold",
-    fontWeight:    "600",
+    ...T.sectionHeading,
     color:         C.muted,
     letterSpacing: 0.8,
-    textTransform: "uppercase",
     marginBottom:  ms(4),
   },
   heroName: {
-    fontSize:      fs(26),
-    fontFamily:    "Inter_800ExtraBold",
-    fontWeight:    "800",
+    // Matches the Profile screen's own name style, not the app's largest
+    // display size — this is a welcome line, not the screen's hero figure.
+    ...T.displayMedium,
     color:         colors.text,
-    letterSpacing: -0.4,
     marginBottom:  ms(12),
     textAlign:     "center",
   },
@@ -283,9 +295,5 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: ms(12),
     paddingVertical:   ms(6),
   },
-  heroPillT: {
-    fontSize:   fs(12),
-    fontFamily: "Inter_600SemiBold",
-    fontWeight: "600",
-  },
+  heroPillT: { ...T.chipText },
 });

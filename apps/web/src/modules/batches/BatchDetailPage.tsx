@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Edit, Calendar, Users, Plus, Trash2, RefreshCw, Pencil } from "lucide-react";
+import { ArrowLeft, Edit, Calendar, Users, Plus, Trash2, RefreshCw, Pencil, Repeat, MoreVertical, CheckCircle2, XCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { updateBatchSchema } from "@institute-os/shared";
@@ -22,6 +22,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField } from "@/components/FormField";
 import { DataTable } from "@/components/DataTable";
@@ -29,6 +32,8 @@ import { toast } from "@/components/ui/use-toast";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { type ColumnDef } from "@tanstack/react-table";
 import type { Student } from "@/api/students";
+import { SessionReassignDialog } from "@/modules/schedule/SessionReassignDialog";
+import { useAuth } from "@/context/AuthContext";
 
 type UpdateBatchForm = z.infer<typeof updateBatchSchema>;
 
@@ -361,8 +366,31 @@ function AdHocSessionForm({ batchId, onSuccess }: { batchId: string; onSuccess: 
 
 // ── Schedule tab ───────────────────────────────────────────────────────────────
 
+// Mirrors the API's own sessionHasEnded() check in schedule.service.ts — a
+// session can't be marked completed until it's actually ended (same-day
+// session before its end time, or any future day). Cancelling a not-yet-
+// ended session is still allowed; only "completed" is time-restricted. This
+// is a UX nicety to hide the option up front — the API is the real
+// enforcement, and compares against the server's clock, not the browser's.
+function sessionHasEnded(scheduledDate: string, endTime: string): boolean {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const scheduledDateStr = scheduledDate.slice(0, 10);
+  if (scheduledDateStr < todayStr) return true;
+  if (scheduledDateStr > todayStr) return false;
+  const nowHHMM = now.toTimeString().slice(0, 5);
+  return nowHHMM >= endTime;
+}
+
 function ScheduleTab({ batchId }: { batchId: string }) {
   const qc = useQueryClient();
+  const { staff } = useAuth();
+  // Cancelling and reassigning are a step above the ordinary edit available
+  // here for a teacher (marking their own ended session complete) — only
+  // admin/frontdesk may cancel a class or reassign its subject/faculty.
+  // Matches the API's own checks.
+  const canCancel   = staff?.activeRole === "admin" || staff?.activeRole === "frontdesk";
+  const canReassign = canCancel;
   const today = new Date().toISOString().slice(0, 10);
   const thirtyDaysLater = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
@@ -373,6 +401,7 @@ function ScheduleTab({ batchId }: { batchId: string }) {
   const [slotDialog,     setSlotDialog]     = useState<{ open: boolean; slot?: ClassSlot }>({ open: false });
   const [showAddSession, setShowAddSession] = useState(false);
   const [deletingSlotId, setDeletingSlotId] = useState<string | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<ClassSession | null>(null);
 
   const { data: slots, isLoading: slotsLoading } = useQuery({
     queryKey: ["slots", batchId],
@@ -460,16 +489,46 @@ function ScheduleTab({ batchId }: { batchId: string }) {
     {
       id: "actions",
       header: "",
-      cell: ({ row }) => row.original.status === "scheduled" ? (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => patchMutation.mutate({ id: row.original.id, payload: { status: "completed" } })}>
-            Complete
-          </Button>
-          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => patchMutation.mutate({ id: row.original.id, payload: { status: "cancelled" } })}>
-            Cancel
-          </Button>
-        </div>
-      ) : null,
+      cell: ({ row }) => {
+        if (row.original.status !== "scheduled") return null;
+        const canComplete = sessionHasEnded(row.original.scheduledDate, row.original.endTime);
+        // A teacher whose session hasn't ended yet can't reassign, complete,
+        // or cancel — nothing here they can do, so no menu at all rather
+        // than a "..." button that opens empty.
+        if (!canReassign && !canComplete && !canCancel) return null;
+        return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canReassign && (
+              <DropdownMenuItem onClick={() => setReassignTarget(row.original)}>
+                <Repeat className="mr-2 h-3.5 w-3.5" /> Reassign
+              </DropdownMenuItem>
+            )}
+            {canComplete && (
+              <DropdownMenuItem onClick={() => patchMutation.mutate({ id: row.original.id, payload: { status: "completed" } })}>
+                <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Mark Complete
+              </DropdownMenuItem>
+            )}
+            {canCancel && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                  onClick={() => patchMutation.mutate({ id: row.original.id, payload: { status: "cancelled" } })}
+                >
+                  <XCircle className="mr-2 h-3.5 w-3.5" /> Cancel Session
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        );
+      },
     },
   ];
 
@@ -586,6 +645,10 @@ function ScheduleTab({ batchId }: { batchId: string }) {
           }} />
         </DialogContent>
       </Dialog>
+
+      {reassignTarget && (
+        <SessionReassignDialog session={reassignTarget} onClose={() => setReassignTarget(null)} />
+      )}
     </div>
   );
 }

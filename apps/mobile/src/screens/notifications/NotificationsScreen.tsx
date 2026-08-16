@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { ListErrorState } from "../../components/ui/ListErrorState";
+import { T } from "../../components/ui/typography";
 import {
   fetchNotifications, markNotificationRead, markAllNotificationsRead,
   type NotificationItem, type NotificationType,
@@ -14,6 +15,7 @@ import {
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 import { useThemeColors, type ThemeColors } from "../../context/ThemeContext";
+import { useNotificationBadge } from "../../context/NotificationBadgeContext";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -28,6 +30,7 @@ function typeMeta(colors: ThemeColors): Record<NotificationType, { icon: string;
     new_enrollment:       { icon: "person-add-outline",     color: colors.green,     label: "Enrollment" },
     installment_overdue: { icon: "cash-outline",           color: colors.red,       label: "Fees"       },
     batch_capacity:      { icon: "layers-outline",         color: colors.purple,    label: "Capacity"   },
+    new_application:     { icon: "document-text-outline",  color: colors.blue,      label: "Application" },
   };
 }
 
@@ -60,6 +63,7 @@ function itemTime(iso: string, label: string): string {
 export function NotificationsScreen() {
   const colors = useThemeColors();
   const navigation = useNavigation<Nav>();
+  const { refreshUnread } = useNotificationBadge();
 
   const [items, setItems]           = useState<NotificationItem[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -87,7 +91,12 @@ export function NotificationsScreen() {
   async function handlePress(item: NotificationItem) {
     if (!item.readAt) {
       setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, readAt: new Date().toISOString() } : n)));
-      markNotificationRead(item.id).catch(() => {});
+      try { await markNotificationRead(item.id); } catch {}
+      // The bell badge (NotificationBadgeContext) only refreshes on
+      // login/push/app-foreground otherwise — without this, reading a
+      // notification here leaves the bell showing a stale unread count
+      // until one of those other triggers happens to fire.
+      refreshUnread();
     }
     const screen = item.data?.screen as keyof RootStackParamList | undefined;
     if (screen) navigation.navigate(screen as any, item.data as any);
@@ -95,7 +104,8 @@ export function NotificationsScreen() {
 
   async function handleMarkAllRead() {
     setItems((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })));
-    markAllNotificationsRead().catch(() => {});
+    try { await markAllNotificationsRead(); } catch {}
+    refreshUnread();
   }
 
   return (
@@ -179,11 +189,11 @@ const s = StyleSheet.create({
   scrollBody:  { paddingHorizontal: ms(16), paddingTop: ms(12) },
 
   emptyBlock: { alignItems: "center", paddingVertical: ms(64), gap: ms(10) },
-  emptyT:     { fontSize: fs(13), color: C.placeholder, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  emptyT:     { ...T.body, color: C.placeholder },
 
   dayLabel: {
-    fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700",
-    color: C.placeholder, textTransform: "uppercase", letterSpacing: 0.7,
+    ...T.sectionHeading,
+    color: C.placeholder, letterSpacing: 0.7,
     marginTop: ms(14), marginBottom: ms(8), marginLeft: ms(4),
   },
 
@@ -196,14 +206,14 @@ const s = StyleSheet.create({
   icon: { width: ms(38), height: ms(38), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0 },
 
   topLine:  { flexDirection: "row", alignItems: "center", gap: ms(6), marginBottom: ms(2) },
-  title:    { flex: 0, flexShrink: 1, fontSize: fs(13.5), fontFamily: "Inter_500Medium", fontWeight: "500", color: C.muted },
+  title:    { flex: 0, flexShrink: 1, ...T.body, color: C.muted },
   titleUnread: { fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
   unreadDot: { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: "#F5B301", flexShrink: 0 },
 
-  body: { fontSize: fs(12), color: C.muted, marginBottom: ms(5), lineHeight: fs(17) },
+  body: { ...T.bodySmall, color: C.muted, marginBottom: ms(5) },
 
   metaLine: { flexDirection: "row", alignItems: "center", gap: ms(6) },
-  time:     { fontSize: fs(10.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.placeholder },
+  time:     { ...T.caption, color: C.placeholder },
   typeTag:  { borderRadius: ms(5), paddingHorizontal: ms(6), paddingVertical: ms(1.5) },
-  typeTagT: { fontSize: fs(9.5), fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.3, textTransform: "uppercase" },
+  typeTagT: { ...T.badgeText, letterSpacing: 0.3 },
 });

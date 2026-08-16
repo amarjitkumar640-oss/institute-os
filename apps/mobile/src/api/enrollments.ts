@@ -34,3 +34,26 @@ export async function enrollStudent(studentId: string, batchId: string): Promise
     return { ok: false, error: msg };
   }
 }
+
+export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+// Student is discontinuing this batch — soft status change, fee records untouched.
+export async function dropEnrollment(enrollmentId: string): Promise<ActionResult<EnrollmentItem>> {
+  try {
+    const { data } = await apiClient.post<EnrollmentItem>(`/enrollments/${enrollmentId}/drop`);
+    return { ok: true, data };
+  } catch (err: any) {
+    return { ok: false, error: err?.response?.data?.error ?? "Could not remove student from batch" };
+  }
+}
+
+// Student is moving to a different batch — creates the new enrollment and
+// drops the old one atomically on the server.
+export async function transferEnrollment(enrollmentId: string, toBatchId: string): Promise<ActionResult<EnrollmentItem>> {
+  try {
+    const { data } = await apiClient.post<EnrollmentItem>(`/enrollments/${enrollmentId}/transfer`, { toBatchId });
+    return { ok: true, data };
+  } catch (err: any) {
+    return { ok: false, error: err?.response?.data?.error ?? "Could not move student to the new batch" };
+  }
+}

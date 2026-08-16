@@ -8,7 +8,7 @@ import {
 } from "@institute-os/shared";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+import { requirePermission } from "../../middleware/permission";
 import { validateBody } from "../../middleware/validate";
 
 export const subjectsRouter = Router();
@@ -36,7 +36,7 @@ function serialize(s: {
 
 // ── GET / ──────────────────────────────────────────────────────────────────────
 
-subjectsRouter.get("/", requireAuth, async (req, res) => {
+subjectsRouter.get("/", requireAuth, requirePermission("subjects", "read"), async (req, res) => {
   const query = subjectQuerySchema.safeParse(req.query);
   const { examCategoryId, search } = query.success
     ? query.data
@@ -59,7 +59,7 @@ subjectsRouter.get("/", requireAuth, async (req, res) => {
 
 // ── GET /:id ───────────────────────────────────────────────────────────────────
 
-subjectsRouter.get("/:id", requireAuth, async (req, res) => {
+subjectsRouter.get("/:id", requireAuth, requirePermission("subjects", "read"), async (req, res) => {
   const subject = await prisma.subject.findFirst({
     where: { id: req.params.id, tenantId: req.auth!.tenantId },
     include: SUBJECT_INCLUDE,
@@ -73,7 +73,7 @@ subjectsRouter.get("/:id", requireAuth, async (req, res) => {
 subjectsRouter.post(
   "/",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("subjects", "write"),
   validateBody(createSubjectSchema),
   async (req, res) => {
     const { name, examCategoryIds } = req.body as CreateSubjectInput;
@@ -106,7 +106,7 @@ subjectsRouter.post(
 subjectsRouter.patch(
   "/:id",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("subjects", "edit"),
   validateBody(updateSubjectSchema),
   async (req, res) => {
     const tenantId = req.auth!.tenantId;
@@ -151,7 +151,7 @@ subjectsRouter.patch(
 subjectsRouter.delete(
   "/:id",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("subjects", "delete"),
   async (req, res) => {
     const subject = await prisma.subject.findFirst({
       where: { id: req.params.id, tenantId: req.auth!.tenantId },

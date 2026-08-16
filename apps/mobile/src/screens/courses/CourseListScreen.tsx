@@ -17,6 +17,8 @@ import { listCourses, deleteCourse, type CourseItem } from "../../api/courses";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { AVATAR_SIZE, AVATAR_RADIUS, getAvatarFill } from "../../components/ui/avatarStyle";
+import { T } from "../../components/ui/typography";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
@@ -55,6 +57,7 @@ function CourseCard({
   const { showAlert } = useAlert();
   const cs = useThemedStyles(makeCsStyles);
   const meta = courseMeta(course);
+  const fill = getAvatarFill(meta.color);
   const isActive = course.activeBatches > 0;
   const locked = course.batchCount > 0;
 
@@ -78,18 +81,39 @@ function CourseCard({
     <View style={cs.card}>
       {/* Top row */}
       <View style={cs.cardTop}>
-        <View style={[cs.iconBox, { backgroundColor: meta.color }]}>
-          <Text style={cs.iconCode}>{meta.code}</Text>
+        <View style={[cs.iconBox, { backgroundColor: fill.backgroundColor, borderWidth: fill.borderWidth, borderColor: fill.borderColor }]}>
+          <Text style={[cs.iconCode, { color: fill.color }]}>{meta.code}</Text>
         </View>
         <View style={cs.cardInfo}>
           <Text style={cs.courseName} numberOfLines={2}>{course.name}</Text>
-          <Text style={cs.categoryT}>{meta.label} · {course.durationMonths} months</Text>
+          <View style={cs.categoryRow}>
+            <Text style={cs.categoryT}>{meta.label} · {course.durationMonths} months</Text>
+            <View style={[cs.statusBadge, { backgroundColor: isActive ? C.greenBg : C.inputBg }]}>
+              <View style={[cs.statusDot, { backgroundColor: isActive ? C.green : C.placeholder }]} />
+              <Text style={[cs.statusT, { color: isActive ? C.green : C.muted }]}>
+                {isActive ? "Active" : "No batch"}
+              </Text>
+            </View>
+          </View>
         </View>
-        <View style={[cs.statusBadge, { backgroundColor: isActive ? C.greenBg : C.inputBg }]}>
-          <View style={[cs.statusDot, { backgroundColor: isActive ? C.green : C.placeholder }]} />
-          <Text style={[cs.statusT, { color: isActive ? C.green : C.muted }]}>
-            {isActive ? "Active" : "No batch"}
-          </Text>
+        <View style={cs.topActions}>
+          <TouchableOpacity
+            style={[cs.iconActionBtn, cs.editBtn, locked && cs.actionBtnLocked]}
+            onPress={handleEdit}
+            activeOpacity={locked ? 0.6 : 0.75}
+          >
+            <Ionicons name="pencil-outline" size={ms(15)} color={locked ? C.placeholder : C.blue} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[cs.iconActionBtn, cs.deleteBtn, locked && cs.actionBtnLocked]}
+            onPress={handleDelete}
+            activeOpacity={locked ? 0.6 : 0.75}
+            disabled={deleting}
+          >
+            {deleting
+              ? <ActivityIndicator size="small" color={C.red} />
+              : <Ionicons name="trash-outline" size={ms(15)} color={locked ? C.placeholder : C.red} />}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -130,45 +154,6 @@ function CourseCard({
           >
             <Ionicons name="cash-outline" size={ms(13)} color={C.green} />
             <Text style={[cs.actionBtnT, { color: C.green }]}>Fee Structure</Text>
-          </TouchableOpacity>
-
-          <View style={cs.actionDivider} />
-
-          {/* Edit button */}
-          <TouchableOpacity
-            style={[cs.actionBtn, cs.editBtn, locked && cs.actionBtnLocked]}
-            onPress={handleEdit}
-            activeOpacity={locked ? 0.6 : 0.75}
-          >
-            <Ionicons
-              name="pencil-outline"
-              size={ms(13)}
-              color={locked ? C.placeholder : C.blue}
-            />
-            <Text style={[cs.actionBtnT, { color: locked ? C.placeholder : C.blue }]}>Edit</Text>
-          </TouchableOpacity>
-
-          <View style={cs.actionDivider} />
-
-          {/* Delete button */}
-          <TouchableOpacity
-            style={[cs.actionBtn, cs.deleteBtn, locked && cs.actionBtnLocked]}
-            onPress={handleDelete}
-            activeOpacity={locked ? 0.6 : 0.75}
-            disabled={deleting}
-          >
-            {deleting ? (
-              <ActivityIndicator size="small" color={C.red} />
-            ) : (
-              <>
-                <Ionicons
-                  name="trash-outline"
-                  size={ms(13)}
-                  color={locked ? C.placeholder : C.red}
-                />
-                <Text style={[cs.actionBtnT, { color: locked ? C.placeholder : C.red }]}>Delete</Text>
-              </>
-            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -402,20 +387,20 @@ const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
   content: { flex: 1, backgroundColor: colors.screenBg },
   banner: { flexDirection: "row", backgroundColor: C.card, marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
-  bannerNum: { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary },
-  bannerLbl: { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600", marginTop: ms(1) },
+  bannerNum: { ...T.cardTitle, color: colors.primary },
+  bannerLbl: { ...T.caption, color: C.muted, marginTop: ms(1) },
   bannerDiv: { width: 1, backgroundColor: C.border, marginHorizontal: ms(6) },
   searchWrap: { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
   searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
-  searchInput: { flex: 1, fontSize: fs(13.5), color: C.text, padding: 0, includeFontPadding: false },
+  searchInput: { flex: 1, ...T.body, color: C.text, padding: 0, includeFontPadding: false },
   filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0, marginBottom: ms(12) },
   filterRow: { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
   chip: { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipT: { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, includeFontPadding: false, lineHeight: fs(16) },
+  chipT: { ...T.chipText, color: C.muted, includeFontPadding: false },
   chipTOn: { color: "#FFFFFF" },
   listContent: { paddingBottom: ms(96) },
-  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(12), backgroundColor: colors.bg + "EE" },
+  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(12), backgroundColor: colors.screenBg },
 
   fab: {
     position: "absolute", bottom: ms(24), right: ms(20),
@@ -429,23 +414,26 @@ const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
   // Card
   card: { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginHorizontal: ms(16), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: ms(10), marginBottom: ms(10) },
-  iconBox: { width: ms(46), height: ms(46), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  iconCode: { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.5, includeFontPadding: false },
+  iconBox: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_RADIUS, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  iconCode: { ...T.badgeText, letterSpacing: 0.5, includeFontPadding: false },
   cardInfo: { flex: 1, minWidth: 0 },
-  courseName: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(3) },
-  categoryT: { fontSize: fs(11), color: C.muted },
+  courseName: { ...T.listItemTitle, color: C.text, marginBottom: ms(3) },
+  categoryRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: ms(6) },
+  categoryT: { ...T.caption, color: C.muted, flexShrink: 1 },
   statusBadge: { flexDirection: "row", alignItems: "center", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(4), gap: ms(4), flexShrink: 0 },
   statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  statusT: { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  statusT: { ...T.badgeText },
+  topActions: { flexDirection: "row", alignItems: "center", gap: ms(6), flexShrink: 0 },
+  iconActionBtn: { width: ms(30), height: ms(30), borderRadius: ms(9), justifyContent: "center", alignItems: "center" },
   divider: { height: 1, backgroundColor: C.border, marginBottom: ms(10) },
   statsRow: { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
   statItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(4) },
-  statLabel: { fontSize: fs(11), color: C.text, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  statLabel: { ...T.caption, color: C.text },
   statDivider: { width: 1, height: ms(16), backgroundColor: C.border },
 
   // Action row
   lockHint:   { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(2), paddingBottom: ms(8) },
-  lockHintT:  { fontSize: fs(10.5), color: C.placeholder, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  lockHintT:  { ...T.caption, color: C.placeholder },
   actionRow:  { flexDirection: "row", alignItems: "center" },
   actionBtns: { flexDirection: "row", alignItems: "center", flex: 1 },
   actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(7), borderRadius: ms(8) },
@@ -453,10 +441,9 @@ const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
   editBtn:  { backgroundColor: "#EEF3FB" },
   deleteBtn:{ backgroundColor: "#FEF0EE" },
   actionBtnLocked: { backgroundColor: C.inputBg, opacity: 0.7 },
-  actionBtnT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700" },
-  actionDivider: { width: ms(8) },
+  actionBtnT: { ...T.chipText },
 
   // Empty / error
   empty: { alignItems: "center", paddingTop: ms(60), paddingHorizontal: ms(16), gap: ms(12) },
-  emptyT: { fontSize: fs(14), color: C.placeholder, textAlign: "center" },
+  emptyT: { ...T.body, color: C.placeholder, textAlign: "center" },
 });

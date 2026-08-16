@@ -7,9 +7,10 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { ms, fs } from "../../utils/responsive";
+import { ms } from "../../utils/responsive";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { C } from "../../theme";
+import { T } from "./typography";
 
 interface Props {
   label: string;
@@ -28,8 +29,8 @@ const makeStyles = (colors: ThemeColors) => ({
   disabledSolid: { opacity: 0.55 },
   disabledOutline:{ opacity: 0.55 },
   inner:         { flexDirection: "row" as const, alignItems: "center" as const, gap: ms(8) },
-  solidT:        { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700" as const, color: "#fff", includeFontPadding: false },
-  outlineT:      { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700" as const, color: colors.primary, includeFontPadding: false },
+  solidT:        { ...T.buttonText, color: colors.textInverse, includeFontPadding: false },
+  outlineT:      { ...T.buttonText, color: colors.primary, includeFontPadding: false },
 });
 
 export function PrimaryButton({

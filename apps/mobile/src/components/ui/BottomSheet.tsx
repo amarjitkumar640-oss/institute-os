@@ -5,6 +5,16 @@ import {
 import { ms } from "../../utils/responsive";
 import { C } from "../../theme";
 
+// Three intentional height tiers instead of every sheet picking its own number —
+// "short" for a handful of fields/a single action, "standard" for most pickers and
+// forms (the default), "tall" for dense grids/lists that benefit from showing more
+// before the user has to scroll.
+export const SHEET_HEIGHT = {
+  short:    "65%",
+  standard: "85%",
+  tall:     "92%",
+} as const;
+
 interface Props {
   visible:    boolean;
   onClose:    () => void;
@@ -12,7 +22,7 @@ interface Props {
   maxHeight?: number | `${number}%`;
 }
 
-export function BottomSheet({ visible, onClose, children, maxHeight = "85%" }: Props) {
+export function BottomSheet({ visible, onClose, children, maxHeight = SHEET_HEIGHT.standard }: Props) {
   const [show, setShow] = useState(false);
 
   const translateY = useRef(new Animated.Value(700)).current;

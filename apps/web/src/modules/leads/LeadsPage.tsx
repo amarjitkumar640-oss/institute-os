@@ -163,6 +163,7 @@ function ConvertLeadDialog({ lead, open, onClose }: { lead: Lead; open: boolean;
 const STATUSES = ["new", "contacted", "visited", "converted", "lost"] as const;
 
 export function LeadsPage() {
+  const { isAllCenters } = useAuth();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
@@ -176,6 +177,14 @@ export function LeadsPage() {
     return matchSearch && matchStatus;
   });
 
+  // Only meaningful when viewing more than one center's data at once —
+  // redundant (every row would show the same name) when scoped to one.
+  const centerColumn: ColumnDef<Lead> = {
+    id: "center",
+    header: "Center",
+    cell: ({ row }) => row.original.center?.name ?? "—",
+  };
+
   const columns: ColumnDef<Lead>[] = [
     { accessorKey: "name", header: "Name" },
     { accessorKey: "phone", header: "Phone" },
@@ -185,6 +194,7 @@ export function LeadsPage() {
       cell: ({ row }) => <Badge variant="info">{row.original.targetExam.label}</Badge>,
     },
     { accessorKey: "source", header: "Source" },
+    ...(isAllCenters ? [centerColumn] : []),
     {
       accessorKey: "status",
       header: "Status",

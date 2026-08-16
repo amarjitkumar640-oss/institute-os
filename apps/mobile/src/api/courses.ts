@@ -53,6 +53,20 @@ export async function createCourse(
   }
 }
 
+export interface CourseNameItem {
+  id: string;
+  name: string;
+}
+
+// Deliberately open to any authenticated staff (unlike listCourses(), which
+// requires courses.read) — for populating course-filter chips on screens
+// like the student list, so a role without access to the full Courses
+// management screen (e.g. teacher) can still filter by course.
+export async function listCourseNames(): Promise<CourseNameItem[]> {
+  const { data } = await apiClient.get<CourseNameItem[]>("/courses/names");
+  return data;
+}
+
 export async function listCourses(params?: {
   examCategoryId?: string;
   search?: string;

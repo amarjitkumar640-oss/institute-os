@@ -40,7 +40,7 @@ async function seedMainCenter(tenantId: string) {
     await prisma.centerStaff.upsert({
       where:  { centerId_staffId: { centerId: center.id, staffId: staff.id } },
       update: {},
-      create: { centerId: center.id, staffId: staff.id, role: staff.role },
+      create: { centerId: center.id, staffId: staff.id, roles: staff.roles },
     });
   }
   if (allStaff.length > 0) {
@@ -324,7 +324,7 @@ async function main() {
         fullName:     "Admin",
         phone:        "9999999999",
         email:        adminEmail,
-        role:         "admin",
+        roles:        ["admin"],
         passwordHash: await bcrypt.hash(adminPassword, 10),
       },
     });

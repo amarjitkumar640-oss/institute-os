@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma";
 import type { CreateFacultyInput, UpdateFacultyInput } from "@institute-os/shared";
 import { facultyQuerySchema } from "@institute-os/shared";
 import { z } from "zod";
+import { getSignedPhotoUrl } from "../../lib/s3";
 
 type FacultyQuery = z.infer<typeof facultyQuerySchema>;
 
@@ -21,13 +22,20 @@ function serializeFaculty<
     updatedAt: Date;
     joiningDate: Date;
     teachingSubjects: Array<{ subject: SubjectWithCategories }>;
+    staff: { photoUrl: string | null } | null;
   }
 >(f: T) {
-  const { teachingSubjects, ...rest } = f;
+  const { teachingSubjects, staff, ...rest } = f;
   return {
     ...rest,
     joiningDate: rest.joiningDate.toISOString().slice(0, 10),
     subjects: teachingSubjects.map((ts) => serializeSubject(ts.subject)),
+    // Bare S3 key here (not yet signed) — resolved to a short-lived signed
+    // URL by the caller (listFaculty/getFaculty), same two-step pattern as
+    // Student.photoUrl/Staff.photoUrl. Faculty has no photo of its own; this
+    // surfaces the linked staff login's photo, if any, since the faculty
+    // list/detail screens are displaying that same person.
+    photoUrl: staff?.photoUrl ?? null,
   };
 }
 
@@ -76,6 +84,7 @@ export async function listFaculty(query: FacultyQuery, tenantId: string, centerI
       include: { subject: { select: { id: true, name: true, examCategories: { include: { examCategory: true } } } } },
       orderBy: { subject: { name: "asc" as const } },
     },
+    staff: { select: { photoUrl: true } },
   };
 
   const [total, rows] = await prisma.$transaction([
@@ -89,8 +98,15 @@ export async function listFaculty(query: FacultyQuery, tenantId: string, centerI
     }),
   ]);
 
+  const data = await Promise.all(
+    rows.map(serializeFaculty).map(async (f) => ({
+      ...f,
+      photoUrl: f.photoUrl ? await getSignedPhotoUrl(f.photoUrl) : null,
+    }))
+  );
+
   return {
-    data: rows.map(serializeFaculty),
+    data,
     total,
     page,
     limit,
@@ -108,9 +124,12 @@ export async function getFaculty(id: string, tenantId: string) {
         include: { subject: { select: { id: true, name: true, examCategories: { include: { examCategory: true } } } } },
         orderBy: { subject: { name: "asc" } },
       },
+      staff: { select: { photoUrl: true } },
     },
   });
-  return f ? serializeFaculty(f) : null;
+  if (!f) return null;
+  const serialized = serializeFaculty(f);
+  return { ...serialized, photoUrl: serialized.photoUrl ? await getSignedPhotoUrl(serialized.photoUrl) : null };
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -147,10 +166,12 @@ export async function createFaculty(data: CreateFacultyInput, tenantId: string, 
         include: { subject: { select: { id: true, name: true, examCategories: { include: { examCategory: true } } } } },
         orderBy: { subject: { name: "asc" } },
       },
+      staff: { select: { photoUrl: true } },
     },
   });
 
-  return { ok: true, faculty: serializeFaculty(faculty) };
+  const serialized = serializeFaculty(faculty);
+  return { ok: true, faculty: { ...serialized, photoUrl: serialized.photoUrl ? await getSignedPhotoUrl(serialized.photoUrl) : null } };
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -181,7 +202,7 @@ export async function updateFaculty(
   }
   if (data.staffId !== undefined && data.staffId !== existing.staffId) {
     if (data.staffId !== null) {
-      const staff = await prisma.staff.findFirst({ where: { id: data.staffId, tenantId, role: "teacher" } });
+      const staff = await prisma.staff.findFirst({ where: { id: data.staffId, tenantId, roles: { has: "teacher" } } });
       if (!staff) return { ok: false, staffNotFound: true };
       const clash = await prisma.faculty.findUnique({ where: { staffId: data.staffId } });
       if (clash) return { ok: false, staffConflict: true };
@@ -213,11 +234,13 @@ export async function updateFaculty(
           include: { subject: { select: { id: true, name: true, examCategories: { include: { examCategory: true } } } } },
           orderBy: { subject: { name: "asc" } },
         },
+        staff: { select: { photoUrl: true } },
       },
     });
   });
 
-  return { ok: true, faculty: serializeFaculty(faculty) };
+  const serialized = serializeFaculty(faculty);
+  return { ok: true, faculty: { ...serialized, photoUrl: serialized.photoUrl ? await getSignedPhotoUrl(serialized.photoUrl) : null } };
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -233,4 +256,58 @@ export async function deleteFaculty(id: string, tenantId: string): Promise<Delet
   // FacultySubject rows cascade-delete via schema (onDelete: Cascade)
   await prisma.faculty.delete({ where: { id } });
   return { ok: true };
+}
+
+// ─── Attendance (per-day register, not per-session — see schema comment) ──────
+// Marked by admin/frontdesk, same day-to-day-operations role gate as fee
+// collection (fees.routes.ts), not admin-only like faculty CRUD above.
+
+export async function getFacultyAttendanceRoster(tenantId: string, centerIds: string[], date: string) {
+  const [faculty, marks] = await Promise.all([
+    prisma.faculty.findMany({
+      where: { tenantId, centerId: { in: centerIds }, isActive: true },
+      select: { id: true, fullName: true, employeeCode: true },
+      orderBy: { fullName: "asc" },
+    }),
+    prisma.facultyAttendance.findMany({
+      where: { date: new Date(date), faculty: { tenantId, centerId: { in: centerIds } } },
+      select: { facultyId: true, status: true },
+    }),
+  ]);
+
+  const markMap = new Map(marks.map((m) => [m.facultyId, m.status]));
+  return faculty.map((f) => ({
+    facultyId:    f.id,
+    fullName:     f.fullName,
+    employeeCode: f.employeeCode,
+    status:       markMap.get(f.id) ?? null,
+  }));
+}
+
+export async function setFacultyAttendance(
+  tenantId: string,
+  centerIds: string[],
+  date: string,
+  marks: { facultyId: string; status: "present" | "absent" }[],
+  markedById: string | null,
+) {
+  // Only faculty actually in scope for this tenant/center may be marked —
+  // silently drop anything else rather than trusting client-supplied IDs.
+  const inScope = new Set(
+    (await prisma.faculty.findMany({
+      where: { tenantId, centerId: { in: centerIds }, id: { in: marks.map((m) => m.facultyId) } },
+      select: { id: true },
+    })).map((f) => f.id),
+  );
+
+  await Promise.all(
+    marks.filter((m) => inScope.has(m.facultyId)).map((m) =>
+      prisma.facultyAttendance.upsert({
+        where:  { facultyId_date: { facultyId: m.facultyId, date: new Date(date) } },
+        update: { status: m.status, markedById, markedAt: new Date() },
+        create: { facultyId: m.facultyId, date: new Date(date), status: m.status, markedById },
+      }),
+    ),
+  );
+  return getFacultyAttendanceRoster(tenantId, centerIds, date);
 }

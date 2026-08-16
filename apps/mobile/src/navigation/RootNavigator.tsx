@@ -34,6 +34,7 @@ import { EditCourseScreen }    from "../screens/courses/EditCourseScreen";
 import { FacultyListScreen }   from "../screens/faculty/FacultyListScreen";
 import { CreateFacultyScreen } from "../screens/faculty/CreateFacultyScreen";
 import { EditFacultyScreen }   from "../screens/faculty/EditFacultyScreen";
+import { FacultyAttendanceScreen } from "../screens/faculty/FacultyAttendanceScreen";
 import { SubjectListScreen }   from "../screens/subjects/SubjectListScreen";
 import { CreateSubjectScreen } from "../screens/subjects/CreateSubjectScreen";
 import { EditSubjectScreen }   from "../screens/subjects/EditSubjectScreen";
@@ -45,6 +46,7 @@ import { FeeScheduleDetailScreen } from "../screens/fees/FeeScheduleDetailScreen
 import { FeeStructureScreen }      from "../screens/fees/FeeStructureScreen";
 import { LeadsScreen }       from "../screens/leads/LeadsScreen";
 import { AddLeadScreen }     from "../screens/leads/AddLeadScreen";
+import { AdmissionApplicationsScreen } from "../screens/admissionApplications/AdmissionApplicationsScreen";
 import { StudentsScreen }    from "../screens/students/StudentsScreen";
 import { BatchScheduleScreen } from "../screens/schedule/BatchScheduleScreen";
 import { SessionDetailScreen } from "../screens/schedule/SessionDetailScreen";
@@ -52,7 +54,7 @@ import { NotificationsScreen } from "../screens/notifications/NotificationsScree
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function RootNavigatorInner() {
+function RootNavigatorInner({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { staff, isLoading, pendingCenters, noCentersAssigned } = useAuth();
   const { name: orgName, isLoading: orgLoading } = useOrg();
   const navRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
@@ -77,10 +79,11 @@ function RootNavigatorInner() {
     return () => { sub?.remove(); };
   }, []);
 
-  // Waits on both auth session restore and the tenant's org/branding fetch,
-  // so this is the point the splash actually has real colors/logo/name to
-  // show rather than the ThemeContext defaults used before either resolves.
-  if (isLoading || orgLoading) {
+  // Waits on fonts, auth session restore, and the tenant's org/branding
+  // fetch — the single gate for the splash, so AppSplashScreen mounts once
+  // (not once here and once more in App.tsx while fonts were loading) and
+  // stays mounted continuously until all three are ready.
+  if (!fontsLoaded || isLoading || orgLoading) {
     return <AppSplashScreen orgName={orgName} />;
   }
 
@@ -112,6 +115,7 @@ function RootNavigatorInner() {
         <Stack.Screen name="FacultyList"    component={FacultyListScreen} />
         <Stack.Screen name="CreateFaculty"  component={CreateFacultyScreen} options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="EditFaculty"    component={EditFacultyScreen}   options={{ animation: "slide_from_bottom" }} />
+        <Stack.Screen name="FacultyAttendance" component={FacultyAttendanceScreen} />
         <Stack.Screen name="SubjectList"    component={SubjectListScreen} />
         <Stack.Screen name="CreateSubject"  component={CreateSubjectScreen} options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="EditSubject"    component={EditSubjectScreen}   options={{ animation: "slide_from_bottom" }} />
@@ -122,6 +126,9 @@ function RootNavigatorInner() {
         {/* Leads */}
         <Stack.Screen name="Leads"   component={LeadsScreen} />
         <Stack.Screen name="AddLead" component={AddLeadScreen} options={{ animation: "slide_from_bottom" }} />
+
+        {/* Admission Applications (self-service) */}
+        <Stack.Screen name="AdmissionApplications" component={AdmissionApplicationsScreen} />
 
         {/* Fees */}
         <Stack.Screen name="FeesList"          component={FeesScreen}             />
@@ -151,8 +158,12 @@ function AppLockGate({ children }: { children: React.ReactNode }) {
   const { staff } = useAuth();
   const { hasPin, isLocked, pinLoaded } = useAppLock();
 
-  // Wait for SecureStore check before deciding — prevents flash of lock screen
-  if (!pinLoaded) return null;
+  // Wait for SecureStore check before deciding — prevents flash of lock screen.
+  // Renders the same branded splash as RootNavigatorInner's own loading gate
+  // (not null) — this check runs concurrently with fonts/org/auth loading,
+  // so a blank render here showed as the logo disappearing mid-boot once the
+  // native splash handoff itself stopped leaving a blank gap of its own.
+  if (!pinLoaded) return <AppSplashScreen />;
 
   // Only lock when a PIN has been configured AND the app is currently locked
   const showLock = !!staff && hasPin && isLocked;
@@ -166,14 +177,14 @@ function ThemedStatusBar() {
   return <StatusBar barStyle={barStyle} translucent backgroundColor={colors.headerBg} />;
 }
 
-export function RootNavigator() {
+export function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   return (
     <NetworkProvider>
       <AlertProvider>
         <ThemedStatusBar />
         <AppLockProvider>
           <AppLockGate>
-            <RootNavigatorInner />
+            <RootNavigatorInner fontsLoaded={fontsLoaded} />
           </AppLockGate>
           <NetworkBanner />
         </AppLockProvider>

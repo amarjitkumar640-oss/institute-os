@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+import { requirePermission } from "../../middleware/permission";
 import { validateBody, validateQuery } from "../../middleware/validate";
 import { assignedCenterIds } from "../../lib/centerFilter";
 import {
@@ -31,6 +31,7 @@ export const feesRouter = Router();
 feesRouter.get(
   "/templates/:courseId",
   requireAuth,
+  requirePermission("fees", "read"),
   async (req, res) => {
     const template = await getFeeTemplate(prisma, req.params.courseId, req.auth!.tenantId);
     if (!template) return res.status(404).json({ error: "No template for this course" });
@@ -41,7 +42,7 @@ feesRouter.get(
 feesRouter.post(
   "/templates/:courseId",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("fees", "edit"),
   validateBody(upsertFeeTemplateSchema),
   async (req, res) => {
     try {
@@ -61,6 +62,7 @@ feesRouter.post(
 feesRouter.get(
   "/schedules",
   requireAuth,
+  requirePermission("fees", "read"),
   validateQuery(
     z.object({
       search:  z.string().optional(),
@@ -97,6 +99,7 @@ feesRouter.get(
 feesRouter.get(
   "/schedules/:enrollmentId",
   requireAuth,
+  requirePermission("fees", "read"),
   async (req, res) => {
     const schedule = await getScheduleDetail(prisma, req.params.enrollmentId, req.auth!.tenantId);
     if (!schedule) return res.status(404).json({ error: "No fee schedule for this enrollment" });
@@ -107,7 +110,7 @@ feesRouter.get(
 feesRouter.post(
   "/schedules/:enrollmentId/generate",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("fees", "write"),
   validateBody(generateScheduleSchema),
   async (req, res) => {
     try {
@@ -131,7 +134,7 @@ feesRouter.post(
 feesRouter.patch(
   "/schedules/:scheduleId/discount",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("fees", "edit"),
   validateBody(applyDiscountSchema),
   async (req, res) => {
     try {
@@ -154,7 +157,7 @@ feesRouter.patch(
 feesRouter.patch(
   "/installments/:id",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("fees", "edit"),
   validateBody(editInstallmentSchema),
   async (req, res) => {
     try {
@@ -174,7 +177,7 @@ feesRouter.patch(
 feesRouter.post(
   "/payments",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("fees", "write"),
   validateBody(recordPaymentSchema),
   async (req, res) => {
     try {
@@ -196,6 +199,7 @@ feesRouter.post(
 feesRouter.get(
   "/payments",
   requireAuth,
+  requirePermission("fees", "read"),
   validateQuery(
     z.object({
       scheduleId: z.string().uuid().optional(),
@@ -228,6 +232,7 @@ feesRouter.get(
 feesRouter.get(
   "/summary",
   requireAuth,
+  requirePermission("fees", "read"),
   async (req, res) => {
     const summary = await getFeeSummary(prisma, req.auth!.tenantId, await assignedCenterIds(req));
     res.json({

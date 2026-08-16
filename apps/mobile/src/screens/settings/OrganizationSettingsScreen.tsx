@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
+import { T } from "../../components/ui/typography";
 import { useAlert } from "../../context/AlertContext";
 import { getTenantSettings, updateLoginMethod, updateNotificationTiming, updateBrandingBackground, type TenantSettings, type LoginMethod } from "../../api/tenants";
 import {
@@ -16,6 +17,7 @@ import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, useSetBrandColors, type ThemeColors } from "../../context/ThemeContext";
 import { ROLES, ROLE_META, type Role } from "../../constants/roleMeta";
+import { useAuth } from "../../context/AuthContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "OrganizationSettings">;
 
@@ -28,6 +30,7 @@ const NOTIFICATION_TYPE_LABELS: Partial<Record<NotificationType, string>> = {
   new_enrollment:      "New Enrollment",
   installment_overdue: "Installment Overdue",
   batch_capacity:      "Batch Reaching Capacity",
+  new_application:     "New Admission Application",
 };
 
 export function OrganizationSettingsScreen({ navigation }: Props) {
@@ -35,6 +38,17 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
   const s = useThemedStyles(makeStyles);
   const { showAlert } = useAlert();
   const setBrandColors = useSetBrandColors();
+  const { staff } = useAuth();
+  const isAdmin = staff?.activeRole === "admin";
+
+  // Nothing links here for a non-admin today (both entry points — Profile's
+  // and Dashboard's Admin cards — are already role-gated), but nothing
+  // stopped a direct navigation.navigate("OrganizationSettings") either —
+  // RootNavigator registers every route unconditionally. Hardcoded role
+  // check, not usePermission: this screen configures tenant branding, login
+  // method, and notification routing, the same self-lockout-hazard category
+  // as Settings itself — deliberately excluded from the configurable system.
+  useEffect(() => { if (!isAdmin) navigation.goBack(); }, [isAdmin]);
 
   const [settings, setSettings]   = useState<TenantSettings | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -121,6 +135,8 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
     : [];
 
   const bgPreviewColor = /^#[0-9A-Fa-f]{6}$/.test(bgColor.trim()) ? bgColor.trim() : colors.bg;
+
+  if (!isAdmin) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
@@ -257,7 +273,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   loader: { flex: 1, backgroundColor: colors.screenBg, alignItems: "center", justifyContent: "center" },
   body:   { flex: 1, backgroundColor: colors.screenBg, paddingHorizontal: ms(16), paddingTop: ms(16), paddingBottom: ms(20) },
 
-  sectionLabel: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted, letterSpacing: 1.1, marginBottom: ms(8), marginTop: ms(4) },
+  sectionLabel: { ...T.sectionHeading, color: C.muted, letterSpacing: 1.1, marginBottom: ms(8), marginTop: ms(4) },
   card: {
     backgroundColor: C.card, borderRadius: ms(16), marginBottom: ms(20),
     overflow: "hidden", borderWidth: 1, borderColor: C.border, padding: ms(14),
@@ -266,29 +282,29 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   swatchRow: { flexDirection: "row", gap: ms(20) },
   swatchItem: { alignItems: "center", gap: ms(6) },
   swatch:     { width: ms(40), height: ms(40), borderRadius: ms(12), borderWidth: 1, borderColor: C.border },
-  swatchLabel:{ fontSize: fs(11), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  hint:       { fontSize: fs(11), color: C.placeholder, marginTop: ms(12) },
+  swatchLabel:{ ...T.caption, color: C.muted },
+  hint:       { ...T.caption, color: C.placeholder, marginTop: ms(12) },
   bgRow:      { flexDirection: "row", alignItems: "center", gap: ms(10), marginTop: ms(4) },
   bgPreview:  { width: ms(44), height: ms(44), borderRadius: ms(12), borderWidth: 1, borderColor: C.border, flexShrink: 0 },
 
   optionRow: { flexDirection: "row", alignItems: "center", gap: ms(12), paddingVertical: ms(10) },
   optionRowBorder: { borderTopWidth: 1, borderTopColor: C.border, marginTop: ms(10), paddingTop: ms(14) },
   optionIcon: { width: ms(38), height: ms(38), borderRadius: ms(11), alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  optionLabel: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  optionSub:   { fontSize: fs(11.5), color: C.muted, marginTop: ms(1) },
+  optionLabel: { ...T.listItemTitle, color: C.text },
+  optionSub:   { ...T.caption, color: C.muted, marginTop: ms(1) },
   radio:      { width: ms(20), height: ms(20), borderRadius: ms(10), borderWidth: 2, borderColor: C.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   radioDot:   { width: ms(10), height: ms(10), borderRadius: ms(5) },
 
-  fieldLabel: { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(8) },
+  fieldLabel: { ...T.chipText, color: C.text, marginBottom: ms(8) },
   numberInput: {
-    backgroundColor: C.inputBg, borderRadius: ms(12), borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: ms(14), paddingVertical: ms(11), fontSize: fs(14), color: C.text, width: ms(100),
+    backgroundColor: C.inputBg, borderRadius: ms(12), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
+    paddingHorizontal: ms(14), paddingVertical: ms(11), ...T.body, color: C.text, width: ms(100),
   },
 
   routingRow:  { paddingVertical: ms(10) },
   routingHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: ms(10) },
   roleChipRow: { flexDirection: "row", gap: ms(8), flexWrap: "wrap" },
   roleChip:    { paddingHorizontal: ms(12), paddingVertical: ms(7), borderRadius: ms(20), borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card },
-  roleChipT:   { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700" },
-  mutedHint:   { fontSize: fs(11), color: C.placeholder, marginTop: ms(8), fontStyle: "italic" },
+  roleChipT:   { ...T.chipText },
+  mutedHint:   { ...T.caption, color: C.placeholder, marginTop: ms(8), fontStyle: "italic" },
 });

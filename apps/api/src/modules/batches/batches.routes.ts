@@ -2,7 +2,7 @@ import { Router } from "express";
 import { createBatchSchema, updateBatchSchema } from "@institute-os/shared";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+import { requirePermission } from "../../middleware/permission";
 import { validateBody } from "../../middleware/validate";
 import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
 
@@ -26,13 +26,13 @@ const INCLUDE = {
 
 // When a teacher calls this route, only return batches they have a slot in.
 function teacherBatchFilter(req: any) {
-  if (req.auth!.role === "teacher" && req.auth!.facultyId) {
+  if (req.auth!.activeRole === "teacher" && req.auth!.facultyId) {
     return { classSlots: { some: { facultyId: req.auth!.facultyId } } };
   }
   return {};
 }
 
-batchesRouter.get("/", requireAuth, async (req, res) => {
+batchesRouter.get("/", requireAuth, requirePermission("batches", "read"), async (req, res) => {
   const batches = await prisma.batch.findMany({
     where:   { ...(await centerFilter(req)), ...teacherBatchFilter(req) },
     include: INCLUDE,
@@ -41,7 +41,7 @@ batchesRouter.get("/", requireAuth, async (req, res) => {
   res.json(batches.map(serialize));
 });
 
-batchesRouter.get("/:id", requireAuth, async (req, res) => {
+batchesRouter.get("/:id", requireAuth, requirePermission("batches", "read"), async (req, res) => {
   const batch = await prisma.batch.findFirst({
     where: { id: req.params.id, tenantId: req.auth!.tenantId, ...teacherBatchFilter(req) },
     include: INCLUDE,
@@ -53,7 +53,7 @@ batchesRouter.get("/:id", requireAuth, async (req, res) => {
 batchesRouter.post(
   "/",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("batches", "write"),
   validateBody(createBatchSchema),
   async (req, res) => {
     const course = await prisma.course.findFirst({ where: { id: req.body.courseId, tenantId: req.auth!.tenantId } });
@@ -73,7 +73,7 @@ batchesRouter.post(
 batchesRouter.patch(
   "/:id",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("batches", "edit"),
   validateBody(updateBatchSchema),
   async (req, res) => {
     const batch = await prisma.batch.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
@@ -88,7 +88,7 @@ batchesRouter.patch(
   }
 );
 
-batchesRouter.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
+batchesRouter.delete("/:id", requireAuth, requirePermission("batches", "delete"), async (req, res) => {
   const batch = await prisma.batch.findFirst({
     where: { id: req.params.id, tenantId: req.auth!.tenantId },
     include: { _count: { select: { enrollments: true } } },

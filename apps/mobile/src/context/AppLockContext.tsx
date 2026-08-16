@@ -4,7 +4,7 @@ import React, {
 import { AppState } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import * as LocalAuthentication from "expo-local-authentication";
-import { useAuth } from "./AuthContext";
+import { useAuth, STAFF_KEY } from "./AuthContext";
 
 const PIN_KEY       = "app_lock_pin";
 const BIOMETRIC_KEY = "app_lock_biometric";
@@ -51,32 +51,37 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // Load PIN + biometric preference on mount
+  // Load PIN + biometric preference on mount. Checks for a persisted
+  // session directly (the same SecureStore key AuthContext restores from)
+  // rather than reading `staff` from context — this runs once, synchronously
+  // at process start, before the user could possibly have reached a login
+  // screen yet, so a persisted session here can only mean "resuming a
+  // previous session", never "just logged in". Reading `staff` instead would
+  // race AuthContext's own (also-async) restore and always see it as null.
   useEffect(() => {
     (async () => {
-      const [pinVal, bioVal] = await Promise.all([
+      const [pinVal, bioVal, persistedStaff] = await Promise.all([
         SecureStore.getItemAsync(PIN_KEY),
         SecureStore.getItemAsync(BIOMETRIC_KEY),
+        SecureStore.getItemAsync(STAFF_KEY),
       ]);
       const pinSet = !!pinVal;
       setHasPin(pinSet);
       setIsBiometricEnabled(bioVal === "1");
-      if (pinSet && staff) setIsLocked(true);
+      if (pinSet && persistedStaff) setIsLocked(true);
       setPinLoaded(true);
     })();
   }, []);
 
-  // Lock state tracks staff login/logout
-  const prevStaff = useRef(staff);
+  // Unlock automatically on logout, so a stale lock screen never sticks
+  // around on top of the login screen. Deliberately does NOT re-lock on the
+  // opposite transition (staff going from null to set) — that would also
+  // fire right after an interactive password login, immediately demanding
+  // the PIN again despite the password just having proven identity. Locking
+  // for a *resumed* session is handled separately: cold-start restore (the
+  // mount effect above) and background→foreground (below).
   useEffect(() => {
-    if (!staff) {
-      setIsLocked(false);
-    } else if (!prevStaff.current && staff) {
-      SecureStore.getItemAsync(PIN_KEY).then((v) => {
-        if (v) setIsLocked(true);
-      });
-    }
-    prevStaff.current = staff;
+    if (!staff) setIsLocked(false);
   }, [staff]);
 
   // Background → foreground re-lock

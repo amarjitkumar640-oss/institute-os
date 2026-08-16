@@ -124,10 +124,12 @@ Routing is configurable: `NotificationRoutingRule(tenantId, type) → roles[]`, 
 ### Mobile theming
 **Two-layer color system:**
 - `C` from `src/theme.ts` — structural colors only (`bg`, `card`, `text`, `muted`, `border`, etc.). These never vary by tenant. Import and use freely.
-- `useThemeColors()` from `ThemeContext.tsx` — brand-configurable colors (`primary`, `secondary`, `accent`, `safeArea`) plus everything in `C`. Use this for any UI element that should respect the org's brand palette.
+- `useThemeColors()` from `ThemeContext.tsx` — brand-configurable colors (`primary`, `secondary`, `accent`, `safeArea`) plus its own fixed tokens (`card`, `text`, `muted`, `border`, `inputBg`, semantic `green`/`red`/`orange`/`blue`/`purple` + `Bg` tints).
 - `useThemedStyles(factory)` — memoized version of `useThemeColors` for StyleSheet factories.
 
 Never use `C.primary`, `C.secondary`, or `C.accent` — those keys don't exist on `C`.
+
+**Known drift, not a design choice**: `C`'s fixed tokens and `useThemeColors()`'s fixed tokens are two separately-maintained objects (`theme.ts`'s `C` vs `ThemeContext.tsx`'s `DEFAULT_COLORS`) and do **not** currently hold identical values for the same key names (e.g. `C.border` is `#E5E5EA`, `colors.border` is `#EDE8E3`). New or edited popup/screen code should prefer `colors.x` exclusively over mixing in `C.x`, to avoid adding to this drift — see `apps/mobile/DESIGN_SYSTEM.md` for the full ruleset (color tokens, bottom-sheet height tiers, header/close/search conventions) that every modal, dialog, and action sheet must follow.
 
 ### Mobile app config
 `apps/mobile/app.config.js` is dynamic: reads `TENANT_SLUG`, `TENANT_NAME`, `TENANT_IOS_BUNDLE_ID`, `TENANT_ANDROID_PACKAGE` env vars at build time to produce per-org branded builds. `EXPO_PUBLIC_API_URL` sets the API base URL.

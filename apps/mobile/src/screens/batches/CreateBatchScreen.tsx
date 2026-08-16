@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated, ActivityIndicator, FlatList,
   Modal, TextInput, Keyboard,
 } from "react-native";
-import { BottomSheet } from "../../components/ui/BottomSheet";
+import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,11 +11,13 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
+import { T } from "../../components/ui/typography";
 import { listCourses, type CourseItem } from "../../api/courses";
 import { createBatch, type BatchItem } from "../../api/batches";
 import { createSlot, DAY_LABELS, DAY_ORDER, type DayOfWeek } from "../../api/classSchedule";
 import { ms, fs } from "../../utils/responsive";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { usePermission } from "../../hooks/usePermission";
 import { C } from "../../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateBatch">;
@@ -179,21 +181,21 @@ function DatePickerModal({ visible, value, minYear = 2024, maxYear = 2032, onCon
 const makeDpStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetPad:    { paddingTop: ms(12), paddingHorizontal: ms(20), paddingBottom: ms(32) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
-  title:       { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(8), textAlign: "center" },
+  title:       { ...T.cardTitle, color: C.text, marginBottom: ms(8), textAlign: "center" },
   selectors:   { flexDirection: "row", height: ms(180), gap: ms(4) },
   selector:    { flex: 1 },
-  colLabel:    { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
+  colLabel:    { ...T.sectionHeading, color: C.muted, letterSpacing: 1, textAlign: "center", marginBottom: ms(4) },
   col:         { flex: 1 },
   item:        { alignItems: "center", paddingVertical: ms(10) },
   itemActive:  { backgroundColor: colors.primary + "12", borderRadius: ms(8) },
-  itemT:       { fontSize: fs(15), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  itemActiveT: { color: colors.primary, fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  itemT:       { ...T.cardTitle, color: C.muted },
+  itemActiveT: { color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
   highlight:   { position: "absolute", left: ms(20), right: ms(20), top: ms(138), height: ms(44), borderRadius: ms(10), borderWidth: 2, borderColor: colors.primary + "20", backgroundColor: colors.primary + "06" },
   btnRow:      { flexDirection: "row", gap: ms(10), marginTop: ms(20) },
   cancelBtn:   { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border },
-  cancelT:     { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  cancelT:     { ...T.buttonText, color: C.muted },
   confirmBtn:  { flex: 1, borderRadius: ms(14), alignItems: "center", paddingVertical: ms(14), backgroundColor: colors.primary },
-  confirmT:    { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  confirmT:    { ...T.buttonText, color: "#fff" },
 });
 
 // ── Time Picker Modal (Hour / Minute / AM-PM wheels) ──────────────────────────
@@ -389,31 +391,31 @@ function CoursePickerModal({ visible, courses, loading, selectedId, onSelect, on
 
 const pm = StyleSheet.create({
   backdrop:    { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
-  panel:       { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), maxHeight: "92%", paddingTop: ms(10) },
+  panel:       { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), maxHeight: SHEET_HEIGHT.tall, paddingTop: ms(10) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(12) },
   headerRow:   { flexDirection: "row", alignItems: "center", gap: ms(12), paddingHorizontal: ms(16), paddingBottom: ms(14), borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   headerIco:   { width: ms(40), height: ms(40), borderRadius: ms(13), alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  headerTitle: { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  headerSub:   { fontSize: fs(12), color: C.muted, marginTop: ms(2) },
+  headerTitle: { ...T.cardTitle, color: C.text },
+  headerSub:   { ...T.caption, color: C.muted, marginTop: ms(2) },
   closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
   searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(4) },
-  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.inputBg, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), borderWidth: 1, borderColor: C.border },
-  searchInput: { flex: 1, fontSize: fs(14), color: C.text, includeFontPadding: false, padding: 0 },
+  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.inputBg, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border },
+  searchInput: { flex: 1, ...T.body, color: C.text, includeFontPadding: false, padding: 0 },
   list:        { flexGrow: 0 },
   listContent: { paddingHorizontal: ms(16), paddingTop: ms(14), paddingBottom: ms(40) },
   empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(32) },
-  emptyT:      { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
-  emptySub:    { fontSize: fs(12), color: C.placeholder },
+  emptyT:      { ...T.listItemTitle, color: C.muted },
+  emptySub:    { ...T.bodySmall, color: C.placeholder },
   grid:        { flexDirection: "row", flexWrap: "wrap", gap: ms(10) },
   gridCard:    { width: "47%", backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
   gridTop:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(10), paddingVertical: ms(8) },
   gridCatPill: { flexDirection: "row", alignItems: "center", gap: ms(5), borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
   gridDot:     { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  gridCat:     { fontSize: fs(9.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
-  gridName:    { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(4), lineHeight: fs(18) },
+  gridCat:     { ...T.chipText },
+  gridName:    { ...T.cardTitle, color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(4) },
   gridMeta:    { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(10), paddingBottom: ms(10) },
-  gridDur:     { fontSize: fs(10.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  gridFee:     { fontSize: fs(10.5), color: C.green, fontFamily: "Inter_700Bold", fontWeight: "700" },
+  gridDur:     { ...T.caption, color: C.muted },
+  gridFee:     { ...T.caption, color: C.green },
 });
 
 // ── Date field button ─────────────────────────────────────────────────────────
@@ -462,6 +464,13 @@ export function CreateBatchScreen({ navigation }: Props) {
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
   const scrollRef = useRef<ScrollView>(null);
+
+  // Nothing links here for a role without batches.write today (the FAB that
+  // opens this screen is itself hidden), but nothing stops a direct
+  // navigation.navigate("CreateBatch") either — RootNavigator registers
+  // every route unconditionally. Closes that deep-link gap at the destination.
+  const { canWrite } = usePermission("batches");
+  useEffect(() => { if (!canWrite) navigation.goBack(); }, [canWrite]);
 
   // RN auto-scrolls to keep a focused field visible above the keyboard but
   // never scrolls back on dismiss — undo that so the form returns to its
@@ -578,6 +587,8 @@ export function CreateBatchScreen({ navigation }: Props) {
   const examLabel = selectedCourse
     ? (selectedCourse.examCategories.length ? selectedCourse.examCategories.map((ec) => ec.label).join(", ") : "General")
     : "";
+
+  if (!canWrite) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
@@ -835,56 +846,56 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   card:        { backgroundColor: C.card, borderRadius: ms(18), paddingHorizontal: ms(14), paddingTop: ms(14), paddingBottom: ms(2), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(12) },
   sectionIcon: { width: ms(32), height: ms(32), borderRadius: ms(9), justifyContent: "center", alignItems: "center" },
-  sectionLabel:{ fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.8 },
+  sectionLabel:{ ...T.sectionHeading, letterSpacing: 0.8 },
 
   coursePickerWrap:     { marginBottom: ms(16) },
-  courseSel:            { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(14) },
+  courseSel:            { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(14) },
   courseSelErr:         { borderColor: C.red, backgroundColor: C.red + "08" },
   courseSelDot:         { width: ms(10), height: ms(10), borderRadius: ms(5), flexShrink: 0 },
-  courseSelValue:       { flex: 1, fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  courseSelPlaceholder: { flex: 1, fontSize: fs(14), color: C.placeholder },
+  courseSelValue:       { flex: 1, ...T.listItemTitle, color: C.text },
+  courseSelPlaceholder: { flex: 1, ...T.body, color: C.placeholder },
   inlineError:          { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(6) },
-  inlineErrorT:         { fontSize: fs(11.5), color: C.red, flex: 1 },
+  inlineErrorT:         { ...T.helperText, color: C.red, flex: 1 },
 
   dateFieldWrap:      { marginBottom: ms(16) },
-  fieldLabel:         { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, letterSpacing: 0.8, marginBottom: ms(8) },
-  asterisk:           { color: C.red, fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
-  dateField:          { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: 1.5, borderColor: C.border, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: C.inputBg },
+  fieldLabel:         { ...T.sectionHeading, color: C.text, letterSpacing: 0.8, marginBottom: ms(8) },
+  asterisk:           { color: C.red, fontFamily: "Inter_700Bold", fontWeight: "700" },
+  dateField:          { flexDirection: "row", alignItems: "center", gap: ms(10), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(13), backgroundColor: C.inputBg },
   dateFieldReadOnly:  { backgroundColor: C.bg, borderColor: C.border },
   dateFieldError:     { borderColor: C.red },
-  dateFieldT:         { flex: 1, fontSize: fs(13.5), color: C.text, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  dateFieldT:         { flex: 1, ...T.listItemTitle, color: C.text },
   dateFieldPlaceholder: { color: C.placeholder, fontFamily: "Inter_400Regular", fontWeight: "400" },
   autoCalcBadge:      { backgroundColor: C.greenBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  autoCalcT:          { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
+  autoCalcT:          { ...T.badgeText, color: C.green },
 
   dayRow:      { flexDirection: "row", gap: ms(6) },
   dayChip:     { flex: 1, alignItems: "center", paddingVertical: ms(10), borderRadius: ms(10), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
   dayChipOn:   { backgroundColor: colors.primary, borderColor: colors.primary },
-  dayChipT:    { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  dayChipT:    { ...T.chipText, color: C.muted },
   dayChipTOn:  { color: "#fff" },
 
   timingRow:   { flexDirection: "row", gap: ms(10) },
 
-  errT:        { fontSize: fs(11.5), color: C.red, marginTop: ms(4) },
+  errT:        { ...T.helperText, color: C.red, marginTop: ms(4) },
   submitWrap:  { marginTop: ms(4) },
   submitBtn:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16), backgroundColor: colors.primary },
-  submitT:     { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+  submitT:     { ...T.buttonText, color: "#fff" },
   submitErr:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.red + "18", borderRadius: ms(10), padding: ms(12), marginBottom: ms(12) },
-  submitErrT:  { fontSize: fs(13), color: C.red, flex: 1 },
+  submitErrT:  { ...T.body, color: C.red, flex: 1 },
 
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
   successScroll:  { flexGrow: 1, justifyContent: "center", paddingHorizontal: ms(20), paddingVertical: ms(32) },
   successCard:    { backgroundColor: C.card, borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
   checkCircle:    { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
-  successTitle:   { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(6) },
-  successSub:     { fontSize: fs(13), color: C.muted, marginBottom: ms(20), textAlign: "center" },
+  successTitle:   { ...T.displayMedium, color: C.text, marginBottom: ms(6) },
+  successSub:     { ...T.body, color: C.muted, marginBottom: ms(20), textAlign: "center" },
   detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(20), borderWidth: 1, borderColor: C.border },
   detailRow:      { flexDirection: "row", alignItems: "center", paddingVertical: ms(12), gap: ms(12) },
   detailRowBorder:{ borderBottomWidth: 1, borderBottomColor: C.border },
   detailIcon:     { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
-  detailLabel:    { fontSize: fs(10.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  detailValue:    { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  detailLabel:    { ...T.sectionHeading, color: C.muted },
+  detailValue:    { ...T.listItemTitle, color: C.text, marginTop: ms(1) },
   viewAllBtn:     { width: "100%", borderRadius: ms(16), backgroundColor: colors.primary },
   viewAllGrad:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), paddingVertical: ms(16) },
-  viewAllT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+  viewAllT:       { ...T.buttonText, color: "#fff" },
 });

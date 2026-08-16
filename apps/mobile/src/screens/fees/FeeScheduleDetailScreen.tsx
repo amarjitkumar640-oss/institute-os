@@ -7,12 +7,14 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
-import { useAuth } from "../../context/AuthContext";
+import { usePermission } from "../../hooks/usePermission";
 import { useAlert } from "../../context/AlertContext";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { SHEET_HEIGHT } from "../../components/ui/BottomSheet";
+import { T } from "../../components/ui/typography";
 import {
   getScheduleDetail, recordPayment,
   installmentOutstanding, scheduleTotalPaid, scheduleTotalOutstanding,
@@ -387,7 +389,6 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
   const sc = useThemedStyles(makeScStyles);
   const { enrollmentId, studentName } = route.params;
   const insets = useSafeAreaInsets();
-  const { staff } = useAuth();
 
   const [schedule,          setSchedule]          = useState<StudentFeeSchedule | null>(null);
   const [loading,           setLoading]           = useState(true);
@@ -432,7 +433,7 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
   const student = schedule?.enrollment?.student;
   const batch   = schedule?.enrollment?.batch;
 
-  const canRecord = staff?.role === "admin" || staff?.role === "frontdesk";
+  const canRecord = usePermission("fees").canWrite;
 
   // Separate pending/partial/overdue from done
   const pendingInst  = (schedule?.installments ?? []).filter((i) => i.status !== "paid" && i.status !== "waived");
@@ -679,12 +680,12 @@ const ir = StyleSheet.create({
     gap:            ms(10),
   },
   info:     { flex: 1, minWidth: 0, gap: ms(3) },
-  label:    { fontSize: fs(13.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
-  sub:      { fontSize: fs(11), color: C.muted },
-  lateFeeT: { fontSize: fs(10.5), color: "#946200", fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  waivedT:  { fontSize: fs(10.5), color: C.green, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  label:    { ...T.listItemTitle, color: C.text },
+  sub:      { ...T.caption, color: C.muted },
+  lateFeeT: { ...T.caption, color: "#946200" },
+  waivedT:  { ...T.caption, color: C.green },
   right:    { alignItems: "flex-end", flexShrink: 0, gap: ms(4) },
-  amount:   { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  amount:   { ...T.listItemTitle },
   badge: {
     flexDirection:     "row",
     alignItems:        "center",
@@ -693,9 +694,9 @@ const ir = StyleSheet.create({
     paddingHorizontal: ms(7),
     paddingVertical:   ms(2),
   },
-  badgeT:      { fontSize: fs(9.5), fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.2 },
+  badgeT:      { ...T.badgeText, letterSpacing: 0.2 },
   collectHint: { flexDirection: "row", alignItems: "center", gap: ms(2) },
-  collectHintT: { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  collectHintT: { ...T.chipText },
 });
 
 const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
@@ -714,7 +715,7 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth:       1,
     borderColor:       colors.primary + "30",
   },
-  payFabT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  payFabT: { ...T.chipText },
 
   // ── Summary card ──
   summaryCard: {
@@ -748,8 +749,8 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems:      "center",
     flexShrink:      0,
   },
-  avatarT:     { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", includeFontPadding: false },
-  studentName: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(4) },
+  avatarT:     { ...T.listItemTitle, includeFontPadding: false },
+  studentName: { ...T.cardTitle, color: C.text, marginBottom: ms(4) },
   batchPill: {
     flexDirection:     "row",
     alignItems:        "center",
@@ -762,7 +763,7 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth:       1,
     borderColor:       C.border,
   },
-  batchPillT: { fontSize: fs(11), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  batchPillT: { ...T.chipText, color: C.muted },
 
   // ── 3-stat strip ──
   feeStrip: {
@@ -773,15 +774,11 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   stripItem:    { flex: 1, alignItems: "center" },
   stripLbl:     {
-    fontSize:      fs(9),
+    ...T.sectionHeading,
     color:         C.muted,
-    fontFamily:    "Inter_700Bold",
-    fontWeight:    "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
     marginBottom:  ms(4),
   },
-  stripVal:     { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  stripVal:     { ...T.cardTitle, color: C.text },
   stripDivider: { width: 1, height: ms(32), backgroundColor: C.border, marginHorizontal: ms(4) },
 
   // ── Progress bar ──
@@ -803,16 +800,13 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     height:       ms(5),
     borderRadius: ms(4),
   },
-  progressLbl: { fontSize: fs(11), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", flexShrink: 0 },
+  progressLbl: { ...T.caption, color: C.muted, flexShrink: 0 },
 
   // ── Body ──
   scroll:       { paddingTop: ms(8), paddingBottom: ms(60) },
   sectionTitle: {
-    fontSize:         fs(12),
-    fontFamily: "Inter_700Bold", fontWeight: "700",
+    ...T.sectionHeading,
     color:            C.muted,
-    textTransform:    "uppercase",
-    letterSpacing:    0.7,
     marginHorizontal: ms(16),
     marginBottom:     ms(8),
     marginTop:        ms(18),
@@ -834,7 +828,7 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: ms(10),
     paddingVertical:   ms(5),
   },
-  infoChipT: { fontSize: fs(11), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  infoChipT: { ...T.chipText },
 
   // ── Payment history ──
   historyCard: {
@@ -863,15 +857,15 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     flexShrink:     0,
   },
   histBody:    { flex: 1, minWidth: 0 },
-  histLabel:   { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
-  histMeta:    { fontSize: fs(10.5), color: C.muted, marginTop: ms(2) },
-  histReceipt: { fontSize: fs(10), color: C.placeholder, marginTop: ms(2) },
-  histAmt:     { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green, flexShrink: 0 },
+  histLabel:   { ...T.listItemTitle, color: C.text },
+  histMeta:    { ...T.caption, color: C.muted, marginTop: ms(2) },
+  histReceipt: { ...T.caption, color: C.placeholder, marginTop: ms(2) },
+  histAmt:     { ...T.listItemTitle, color: C.green, flexShrink: 0 },
   histDivider: { height: 1, backgroundColor: C.bg, marginHorizontal: ms(14) },
 
   centered:  { flex: 1, justifyContent: "center", alignItems: "center", paddingTop: ms(60) },
-  emptyT:    { fontSize: fs(14), color: C.muted, marginTop: ms(12) },
-  errorT:    { fontSize: fs(14), color: C.red, textAlign: "center", paddingHorizontal: ms(24) },
+  emptyT:    { ...T.body, color: C.muted, marginTop: ms(12) },
+  errorT:    { ...T.body, color: C.red, textAlign: "center", paddingHorizontal: ms(24) },
   retryBtn:  {
     marginTop:         ms(16),
     paddingHorizontal: ms(20),
@@ -879,7 +873,7 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor:   colors.primary,
     borderRadius:      ms(10),
   },
-  retryBtnT: { color: "#fff", fontFamily: "Inter_700Bold", fontWeight: "700", fontSize: fs(14) },
+  retryBtnT: { ...T.buttonText, color: "#fff" },
 });
 
 const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
@@ -891,6 +885,7 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     borderTopRightRadius: ms(24),
     paddingHorizontal:    ms(20),
     paddingTop:           ms(8),
+    maxHeight:            SHEET_HEIGHT.short,
   },
   drag: {
     width:           ms(36),
@@ -910,8 +905,8 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems:      "center",
     flexShrink:      0,
   },
-  headTitle: { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  headSub:   { fontSize: fs(12), color: C.muted, marginTop: ms(2) },
+  headTitle: { ...T.cardTitle, color: C.text },
+  headSub:   { ...T.caption, color: C.muted, marginTop: ms(2) },
   closeBtn: {
     width:           ms(32),
     height:          ms(32),
@@ -923,7 +918,7 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   divider: { height: 1, backgroundColor: C.border, marginBottom: ms(8) },
 
-  label:    { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: ms(8) },
+  label:    { ...T.sectionHeading, color: C.muted, marginBottom: ms(8) },
   optional: { fontFamily: "Inter_400Regular", fontWeight: "400", textTransform: "none" },
 
   amtField: {
@@ -935,15 +930,15 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom:      ms(16),
     gap:               ms(6),
   },
-  amtPrefix: { fontSize: fs(18), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  amtInput:  { flex: 1, fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, padding: ms(12), includeFontPadding: false },
+  amtPrefix: { ...T.displayMedium, color: C.text },
+  amtInput:  { flex: 1, ...T.displayMedium, color: C.text, padding: ms(12), includeFontPadding: false },
   fullBtn: {
     backgroundColor:   colors.primary,
     borderRadius:      ms(8),
     paddingHorizontal: ms(10),
     paddingVertical:   ms(5),
   },
-  fullBtnT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
+  fullBtnT: { ...T.chipText, color: "#fff" },
 
   modeRow: { flexDirection: "row", gap: ms(8), marginBottom: ms(16), paddingBottom: ms(2) },
   modeChip: {
@@ -958,20 +953,20 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor:       "transparent",
   },
   modeChipOn:  { backgroundColor: colors.primary + "0D", borderColor: colors.primary + "50" },
-  modeChipT:   { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
+  modeChipT:   { ...T.chipText, color: C.muted },
   modeChipTOn: { color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
 
   textField: {
     backgroundColor:   C.inputBg,
     borderRadius:      ms(12),
     padding:           ms(12),
-    fontSize:          fs(13.5),
+    ...T.body,
     color:             C.text,
     marginBottom:      ms(16),
   },
 
   allocBox: {
-    backgroundColor:   "#EEF4FF",
+    backgroundColor:   C.blueBg,
     borderRadius:      ms(10),
     paddingHorizontal: ms(12),
     paddingVertical:   ms(10),
@@ -979,11 +974,11 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     gap:               ms(6),
   },
   allocHeader: { flexDirection: "row", alignItems: "center", gap: ms(5), marginBottom: ms(4) },
-  allocTitle:  { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.blue, textTransform: "uppercase", letterSpacing: 0.4 },
+  allocTitle:  { ...T.sectionHeading, color: C.blue },
   allocRow:    { flexDirection: "row", alignItems: "center", gap: ms(8) },
   allocDot:    { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: C.blue, flexShrink: 0 },
-  allocLabel:  { flex: 1, fontSize: fs(12), color: C.text, fontFamily: "Inter_500Medium", fontWeight: "500" },
-  allocAmt:    { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.blue },
+  allocLabel:  { flex: 1, ...T.caption, color: C.text },
+  allocAmt:    { ...T.chipText, color: C.blue },
 
   submitBtn: {
     flexDirection:   "row",
@@ -994,5 +989,5 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: ms(15),
     marginBottom:    ms(8),
   },
-  submitT: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
+  submitT: { ...T.buttonText, color: "#fff" },
 });

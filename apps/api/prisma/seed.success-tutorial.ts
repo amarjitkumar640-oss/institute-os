@@ -46,12 +46,12 @@ async function main() {
         fullName:     "Admin",
         phone:        "9000000002",
         email:        adminEmail,
-        role:         "admin",
+        roles:        ["admin"],
         passwordHash: await bcrypt.hash(adminPassword, 10),
       },
     });
     await prisma.centerStaff.create({
-      data: { centerId: center.id, staffId: staff.id, role: "admin" },
+      data: { centerId: center.id, staffId: staff.id, roles: ["admin"] },
     });
     console.log(`Admin staff: ${adminEmail} / ${adminPassword}`);
   } else {

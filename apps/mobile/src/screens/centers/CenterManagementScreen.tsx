@@ -6,12 +6,14 @@ import {
   Keyboard, TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { ms, fs } from "../../utils/responsive";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { SHEET_HEIGHT } from "../../components/ui/BottomSheet";
+import { AVATAR_SIZE, AVATAR_RADIUS, getAvatarFill } from "../../components/ui/avatarStyle";
+import { T } from "../../components/ui/typography";
 import {
   fetchAllCenters, createCenter, updateCenter,
   fetchCenterStaff, assignStaffToCenter, removeStaffFromCenter,
@@ -19,9 +21,10 @@ import {
   type CenterItem, type CenterStaffItem, type AllStaffItem,
 } from "../../api/centers";
 import { C } from "../../theme";
-import { useThemeColors, useThemedStyles, lighten, type ThemeColors } from "../../context/ThemeContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
+import { usePermission } from "../../hooks/usePermission";
 
 const ROLE_LABELS: Record<string, string> = {
   admin:     "Admin",
@@ -36,6 +39,12 @@ function roleColors(colors: ThemeColors): Record<string, string> {
     frontdesk: C.orange,
   };
 }
+
+const ROLE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  admin:     "shield-checkmark-outline",
+  teacher:   "school-outline",
+  frontdesk: "storefront-outline",
+};
 
 // ── Create / Edit center modal ────────────────────────────────────────────────
 
@@ -123,7 +132,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
       <View style={m.overlay}>
         <TouchableOpacity style={m.backdrop} activeOpacity={1} onPress={onClose} />
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <Animated.View style={[m.sheet, { paddingBottom: Animated.add(ms(36), keyboardPad) }]}>
+        <Animated.View style={[m.sheet, { maxHeight: SHEET_HEIGHT.short, paddingBottom: Animated.add(ms(36), keyboardPad) }]}>
 
           {/* Drag handle */}
           <View style={m.drag} />
@@ -228,11 +237,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
             disabled={saving}
             activeOpacity={0.88}
           >
-            <LinearGradient
-              colors={[colors.primary, lighten(colors.primary, 0.15), lighten(colors.primary, 0.32)]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={m.btnGrad}
-            >
+            <View style={[m.btnGrad, { backgroundColor: colors.primary }]}>
               {saving ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
@@ -245,7 +250,7 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
                   <Text style={m.btnT}>{isEdit ? "Save Changes" : "Create Center"}</Text>
                 </>
               )}
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
 
         </Animated.View>
@@ -260,19 +265,21 @@ function CenterFormModal({ visible, center, onDone, onClose }: CenterFormModal) 
 interface AssignStaffModalProps {
   visible:    boolean;
   centerId:   string;
+  centerName: string;
   assigned:   CenterStaffItem[];
   onDone:     () => void;
   onClose:    () => void;
 }
 
-function AssignStaffModal({ visible, centerId, assigned, onDone, onClose }: AssignStaffModalProps) {
+function AssignStaffModal({ visible, centerId, centerName, assigned, onDone, onClose }: AssignStaffModalProps) {
   const { showAlert } = useAlert();
   const colors = useThemeColors();
   const m = useThemedStyles(makeMStyles);
   const [allStaff, setAllStaff] = useState<AllStaffItem[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [saving,   setSaving]   = useState<string | null>(null); // staffId being saved
-  const [role,     setRole]     = useState<"admin" | "teacher" | "frontdesk">("teacher");
+  // A staff member can hold more than one role at once at the same center.
+  const [roles,    setRoles]    = useState<("admin" | "teacher" | "frontdesk")[]>(["teacher"]);
 
   useEffect(() => {
     if (!visible) return;
@@ -285,9 +292,10 @@ function AssignStaffModal({ visible, centerId, assigned, onDone, onClose }: Assi
   const assignedIds = new Set(assigned.map((a) => a.staffId));
 
   async function assign(staffId: string) {
+    if (roles.length === 0) return;
     setSaving(staffId);
     try {
-      await assignStaffToCenter(centerId, staffId, role);
+      await assignStaffToCenter(centerId, staffId, roles);
       onDone();
     } catch {
       showAlert("Error", "Could not assign staff member.", "error");
@@ -302,30 +310,70 @@ function AssignStaffModal({ visible, centerId, assigned, onDone, onClose }: Assi
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={m.overlay}>
         <TouchableOpacity style={m.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[m.sheet, { maxHeight: "80%" }]}>
+        <View style={[m.sheet, { maxHeight: SHEET_HEIGHT.standard, paddingBottom: ms(20) }]}>
           <View style={m.drag} />
-          <Text style={m.title}>Assign Staff</Text>
 
-          {/* Role selector */}
+          {/* Header row — same shell as the center form, so the two popups
+              on this screen read as one consistent surface. */}
+          <View style={m.fHeader}>
+            <View style={m.fHeaderLeft}>
+              <View style={m.fHeaderIcon}>
+                <Ionicons name="person-add-outline" size={ms(20)} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={m.fTitle}>Assign Staff</Text>
+                <Text style={m.fSubtitle} numberOfLines={1}>Add staff to {centerName}</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={m.closeBtn}
+              onPress={onClose}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={ms(18)} color={C.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={m.fDivider} />
+
+          {/* Role selector — each chip carries its own role color, tinted when
+              idle and filled solid when selected, instead of one flat gray.
+              Multiple chips can be active at once — a staff member can hold
+              more than one role at the same center. */}
           <Text style={m.label}>Assign as</Text>
           <View style={m.rolePicker}>
-            {(["admin", "teacher", "frontdesk"] as const).map((r) => (
-              <TouchableOpacity
-                key={r}
-                style={[m.roleChip, role === r && { backgroundColor: roleColors(colors)[r] }]}
-                onPress={() => setRole(r)}
-              >
-                <Text style={[m.roleChipT, role === r && { color: "#fff" }]}>
-                  {ROLE_LABELS[r]}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {(["admin", "teacher", "frontdesk"] as const).map((r) => {
+              const roleColor = roleColors(colors)[r];
+              const active = roles.includes(r);
+              return (
+                <TouchableOpacity
+                  key={r}
+                  style={[m.roleChip, { backgroundColor: active ? roleColor : roleColor + "15" }]}
+                  onPress={() => setRoles(active ? roles.filter((x) => x !== r) : [...roles, r])}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={ROLE_ICONS[r]} size={ms(13)} color={active ? "#fff" : roleColor} />
+                  <Text style={[m.roleChipT, { color: active ? "#fff" : roleColor }]}>
+                    {ROLE_LABELS[r]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {loading ? (
-            <ActivityIndicator color={colors.primary} style={{ marginVertical: ms(24) }} />
+            <View style={m.assignStatusWrap}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={m.assignStatusSub}>Loading staff…</Text>
+            </View>
           ) : unassigned.length === 0 ? (
-            <Text style={m.emptyT}>All active staff are already assigned to this center.</Text>
+            <View style={m.assignStatusWrap}>
+              <View style={m.assignEmptyIcon}>
+                <Ionicons name="checkmark-done-outline" size={ms(22)} color={colors.primary} />
+              </View>
+              <Text style={m.assignEmptyT}>All caught up</Text>
+              <Text style={m.assignStatusSub}>Every active staff member is already assigned here.</Text>
+            </View>
           ) : (
             <ScrollView style={{ maxHeight: ms(320) }} showsVerticalScrollIndicator={false}>
               {unassigned.map((s) => (
@@ -340,7 +388,8 @@ function AssignStaffModal({ visible, centerId, assigned, onDone, onClose }: Assi
                   <TouchableOpacity
                     style={[m.assignBtn, saving === s.id && m.btnDim]}
                     onPress={() => assign(s.id)}
-                    disabled={saving !== null}
+                    disabled={saving !== null || roles.length === 0}
+                    activeOpacity={0.85}
                   >
                     {saving === s.id
                       ? <ActivityIndicator size="small" color="#fff" />
@@ -351,10 +400,6 @@ function AssignStaffModal({ visible, centerId, assigned, onDone, onClose }: Assi
               ))}
             </ScrollView>
           )}
-
-          <TouchableOpacity style={m.cancelBtn} onPress={onClose}>
-            <Text style={m.cancelT}>Done</Text>
-          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -482,10 +527,14 @@ function CenterDetail({ center, onEdit, onToggleActive }: CenterDetailProps) {
               <Text style={d.staffName} numberOfLines={1}>{s.fullName}</Text>
               <Text style={d.staffEmail} numberOfLines={1}>{s.email}</Text>
             </View>
-            <View style={[d.roleChip, { backgroundColor: roleColors(colors)[s.role] + "22" }]}>
-              <Text style={[d.roleChipT, { color: roleColors(colors)[s.role] }]}>
-                {ROLE_LABELS[s.role]}
-              </Text>
+            <View style={{ flexDirection: "row", gap: ms(4) }}>
+              {s.roles.map((r) => (
+                <View key={r} style={[d.roleChip, { backgroundColor: roleColors(colors)[r] + "22" }]}>
+                  <Text style={[d.roleChipT, { color: roleColors(colors)[r] }]}>
+                    {ROLE_LABELS[r]}
+                  </Text>
+                </View>
+              ))}
             </View>
             <TouchableOpacity
               onPress={() => removeStaff(s.staffId, s.fullName)}
@@ -504,6 +553,7 @@ function CenterDetail({ center, onEdit, onToggleActive }: CenterDetailProps) {
       <AssignStaffModal
         visible={showAssign}
         centerId={center.id}
+        centerName={center.name}
         assigned={staff}
         onDone={() => { setShowAssign(false); load(); }}
         onClose={() => setShowAssign(false)}
@@ -525,6 +575,13 @@ export function CenterManagementScreen() {
   const [expanded,   setExpanded]   = useState<string | null>(null);
   const [showForm,   setShowForm]   = useState(false);
   const [editTarget, setEditTarget] = useState<CenterItem | null>(null);
+
+  // Nothing links here for a non-admin today, but nothing stopped a direct
+  // navigation.navigate("CenterManagement") either — RootNavigator registers
+  // every route unconditionally (no URL bar on mobile to gate). This closes
+  // that deep-link gap at the destination itself.
+  const { canRead } = usePermission("centers");
+  useEffect(() => { if (!canRead) navigation.goBack(); }, [canRead]);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -577,6 +634,8 @@ export function CenterManagementScreen() {
     );
   }
 
+  if (!canRead) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
       <ScreenHeader
@@ -616,6 +675,7 @@ export function CenterManagementScreen() {
           ) : (
             centers.map((center) => {
               const isOpen = expanded === center.id;
+              const centerIconFill = getAvatarFill(C.purple);
               return (
                 <View key={center.id} style={[s.card, !center.isActive && s.cardInactive]}>
                   {/* Card header — tap to expand */}
@@ -624,8 +684,8 @@ export function CenterManagementScreen() {
                     onPress={() => setExpanded(isOpen ? null : center.id)}
                     activeOpacity={0.7}
                   >
-                    <View style={[s.cardIcon, !center.isActive && { backgroundColor: C.border }]}>
-                      <Ionicons name="business-outline" size={ms(18)} color="#fff" />
+                    <View style={[s.cardIcon, { backgroundColor: centerIconFill.backgroundColor }, !center.isActive && { backgroundColor: C.border }]}>
+                      <Ionicons name="business-outline" size={ms(18)} color={centerIconFill.color} />
                     </View>
                     <View style={{ flex: 1, minWidth: 0, marginLeft: ms(12) }}>
                       <View style={s.nameRow}>
@@ -687,52 +747,52 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   scroll: { flex: 1, backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
   loader: { flex: 1, backgroundColor: colors.screenBg, alignItems: "center", justifyContent: "center", gap: ms(12) },
-  loaderT:{ fontSize: fs(13), color: C.muted },
+  loaderT:{ ...T.body, color: C.muted },
 
   empty:     { alignItems: "center", paddingVertical: ms(64), gap: ms(8) },
-  emptyT:    { fontSize: fs(16), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.placeholder, marginTop: ms(8) },
-  emptySub:  { fontSize: fs(12), color: C.placeholder, textAlign: "center", paddingHorizontal: ms(32) },
+  emptyT:    { ...T.cardTitle, color: C.placeholder, marginTop: ms(8) },
+  emptySub:  { ...T.bodySmall, color: C.placeholder, textAlign: "center", paddingHorizontal: ms(32) },
   emptyBtn:  { marginTop: ms(16), backgroundColor: colors.primary, borderRadius: ms(12), paddingHorizontal: ms(24), paddingVertical: ms(10) },
-  emptyBtnT: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
+  emptyBtnT: { ...T.buttonText, color: "#fff" },
 
   fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
 
   card:         { backgroundColor: C.card, borderRadius: ms(18), marginBottom: ms(14), shadowColor: C.text, shadowOffset: { width: 0, height: ms(3) }, shadowOpacity: 0.1, shadowRadius: ms(8), elevation: 3, overflow: "hidden" },
   cardInactive: { opacity: 0.65 },
   cardHead:     { flexDirection: "row", alignItems: "center", padding: ms(14) },
-  cardIcon:     { width: ms(40), height: ms(40), borderRadius: ms(12), backgroundColor: C.purple, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  cardIcon:     { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_RADIUS, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   nameRow:      { flexDirection: "row", alignItems: "center", gap: ms(6), flexWrap: "wrap" },
-  cardName:     { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, flexShrink: 1 },
-  cardMeta:     { fontSize: fs(11.5), color: C.muted, marginTop: 2 },
+  cardName:     { ...T.cardTitle, color: C.text, flexShrink: 1 },
+  cardMeta:     { ...T.caption, color: C.muted, marginTop: 2 },
   inactiveBadge:  { backgroundColor: C.border, borderRadius: ms(6), paddingHorizontal: ms(6), paddingVertical: 2 },
-  inactiveBadgeT: { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  inactiveBadgeT: { ...T.badgeText, color: C.muted },
 });
 
 const makeDStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap:      { borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: ms(14), paddingBottom: ms(14) },
   statsRow:  { flexDirection: "row", paddingVertical: ms(12) },
   stat:      { flex: 1, alignItems: "center" },
-  statN:     { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  statL:     { fontSize: fs(10), color: C.muted, marginTop: 2 },
+  statN:     { ...T.cardTitle, color: C.text },
+  statL:     { ...T.caption, color: C.muted, marginTop: 2 },
   statDiv:   { width: 1, backgroundColor: C.border, marginVertical: ms(4) },
   infoRow:   { flexDirection: "row", alignItems: "flex-start", gap: ms(6), marginBottom: ms(6) },
-  infoT:     { fontSize: fs(12), color: C.muted, flex: 1 },
+  infoT:     { ...T.bodySmall, color: C.muted, flex: 1 },
   actions:   { flexDirection: "row", gap: ms(10), marginTop: ms(8), marginBottom: ms(14) },
   actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: colors.bg, borderWidth: 1, borderColor: C.border },
-  actionT:   { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  actionT:   { ...T.chipText },
   staffHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: ms(8) },
-  staffTitle:  { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  staffTitle:  { ...T.listItemTitle, color: C.text },
   addStaffBtn: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(10), paddingVertical: ms(5) },
-  addStaffT:   { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.purple },
-  noStaff:     { fontSize: fs(12), color: C.muted, textAlign: "center", paddingVertical: ms(12) },
+  addStaffT:   { ...T.chipText, color: C.purple },
+  noStaff:     { ...T.bodySmall, color: C.muted, textAlign: "center", paddingVertical: ms(12) },
   staffRow:    { flexDirection: "row", alignItems: "center", paddingVertical: ms(9), gap: ms(10) },
   staffDiv:    { borderBottomWidth: 1, borderBottomColor: C.border },
   staffAv:     { width: ms(32), height: ms(32), borderRadius: ms(16), backgroundColor: "#EDE5F8", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  staffAvL:    { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.purple },
-  staffName:   { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
-  staffEmail:  { fontSize: fs(11), color: C.muted, marginTop: 1 },
+  staffAvL:    { ...T.listItemTitle, color: C.purple },
+  staffName:   { ...T.listItemTitle, color: C.text },
+  staffEmail:  { ...T.caption, color: C.muted, marginTop: 1 },
   roleChip:    { borderRadius: ms(6), paddingHorizontal: ms(7), paddingVertical: ms(3), marginRight: ms(6) },
-  roleChipT:   { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  roleChipT:   { ...T.badgeText },
 });
 
 const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
@@ -746,9 +806,11 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   // ── CenterFormModal header ───────────────────────────────────────────────────
   fHeader:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(20), paddingBottom: ms(14) },
   fHeaderLeft: { flexDirection: "row", alignItems: "center", gap: ms(12), flex: 1, minWidth: 0 },
-  fHeaderIcon: { width: ms(44), height: ms(44), borderRadius: ms(14), backgroundColor: "rgba(139,30,63,0.09)", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  fTitle:      { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  fSubtitle:   { fontSize: fs(11.5), color: C.muted, marginTop: 1 },
+  // Was a hardcoded maroon tint that ignored the tenant's actual brand color —
+  // now derived from colors.primary like every other soft-tint icon chip in the app.
+  fHeaderIcon: { width: ms(44), height: ms(44), borderRadius: ms(14), backgroundColor: colors.primary + "17", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  fTitle:      { ...T.cardTitle, color: C.text },
+  fSubtitle:   { ...T.caption, color: C.muted, marginTop: 1 },
   closeBtn:    { width: ms(34), height: ms(34), borderRadius: ms(10), backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   fDivider:    { height: 1, backgroundColor: C.border, marginBottom: ms(8) },
 
@@ -757,32 +819,34 @@ const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   fields:         { paddingHorizontal: ms(20), gap: ms(14) },
   fieldWrap:      { gap: ms(7) },
   fieldLabelRow:  { flexDirection: "row", alignItems: "center", gap: ms(6) },
-  fieldLabelT:    { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  fieldLabelT:    { ...T.chipText, color: C.text },
   req:            { color: colors.primary },
-  inputBox:       { backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border },
-  inputBoxFocused:{ borderColor: colors.primary, backgroundColor: "#FFF8FB" },
-  input:          { paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(14), color: C.text },
+  inputBox:       { backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border },
+  inputBoxFocused:{ borderColor: colors.primary, backgroundColor: colors.primary + "08" },
+  input:          { paddingHorizontal: ms(14), paddingVertical: ms(12), ...T.body, color: C.text },
   multiInput:     { minHeight: ms(72), textAlignVertical: "top" },
 
   // ── CenterFormModal button ───────────────────────────────────────────────────
   btn:     { marginHorizontal: ms(20), marginTop: ms(22), borderRadius: ms(16), overflow: "hidden" },
   btnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), paddingVertical: ms(15) },
-  btnT:    { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  btnT:    { ...T.buttonText, color: "#fff" },
 
   // ── AssignStaffModal ─────────────────────────────────────────────────────────
-  title:      { fontSize: fs(17), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(8), paddingHorizontal: ms(20) },
-  label:      { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: ms(6), marginTop: ms(10), paddingHorizontal: ms(20) },
-  rolePicker: { flexDirection: "row", gap: ms(8), marginBottom: ms(4), paddingHorizontal: ms(20) },
-  roleChip:   { flex: 1, alignItems: "center", paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: colors.bg, borderWidth: 1, borderColor: C.border },
-  roleChipT:  { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
-  emptyT:     { fontSize: fs(13), color: C.muted, textAlign: "center", paddingVertical: ms(16) },
+  label:      { ...T.sectionHeading, color: C.muted, marginBottom: ms(8), paddingHorizontal: ms(20) },
+  rolePicker: { flexDirection: "row", gap: ms(8), marginBottom: ms(6), paddingHorizontal: ms(20) },
+  // Background is set per-role at render (tinted when idle, solid when selected) —
+  // this only carries layout, not color, since role color is dynamic per chip.
+  roleChip:   { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingVertical: ms(9), borderRadius: ms(12) },
+  roleChipT:  { ...T.chipText },
+  assignStatusWrap: { alignItems: "center", paddingVertical: ms(28), paddingHorizontal: ms(20), gap: ms(6) },
+  assignStatusSub:  { ...T.bodySmall, color: C.muted, textAlign: "center" },
+  assignEmptyIcon:  { width: ms(48), height: ms(48), borderRadius: ms(16), backgroundColor: colors.primary + "12", justifyContent: "center", alignItems: "center", marginBottom: ms(2) },
+  assignEmptyT:     { ...T.listItemTitle, color: C.text },
   staffRow:   { flexDirection: "row", alignItems: "center", paddingVertical: ms(10), paddingHorizontal: ms(20), gap: ms(10), borderBottomWidth: 1, borderBottomColor: C.border },
-  staffAv:    { width: ms(36), height: ms(36), borderRadius: ms(18), backgroundColor: "#EDE5F8", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  staffAvL:   { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.purple },
-  staffName:  { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
-  staffEmail: { fontSize: fs(11), color: C.muted, marginTop: 1 },
-  assignBtn:  { backgroundColor: C.purple, borderRadius: ms(8), paddingHorizontal: ms(12), paddingVertical: ms(6), minWidth: ms(44), alignItems: "center" },
-  assignBtnT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
-  cancelBtn:  { alignItems: "center", marginTop: ms(12), paddingBottom: ms(4) },
-  cancelT:    { fontSize: fs(14), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  staffAv:    { width: ms(36), height: ms(36), borderRadius: ms(18), backgroundColor: colors.primary + "17", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  staffAvL:   { ...T.listItemTitle, color: colors.primary },
+  staffName:  { ...T.listItemTitle, color: C.text },
+  staffEmail: { ...T.caption, color: C.muted, marginTop: 1 },
+  assignBtn:  { backgroundColor: colors.primary, borderRadius: ms(8), paddingHorizontal: ms(12), paddingVertical: ms(6), minWidth: ms(44), alignItems: "center" },
+  assignBtnT: { ...T.chipText, color: "#fff" },
 });

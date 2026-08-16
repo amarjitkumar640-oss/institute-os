@@ -3,12 +3,14 @@ import multer from "multer";
 import { createStudentSchema, admitStudentSchema, updateStudentSchema } from "@institute-os/shared";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+import { requirePermission } from "../../middleware/permission";
 import { validateBody } from "../../middleware/validate";
-import { deletePhoto, uploadPhoto } from "../../lib/s3";
+import { deletePhoto, uploadPhoto, s3PathPrefix } from "../../lib/s3";
 import { generateStudentCode, withPhotoUrl, withPhotoUrls, serializeStudentDocument, serializeStudentDocuments } from "./students.service";
-import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
+import { centerIdForCreate, tenantIdForCreate, assignedCenterIds } from "../../lib/centerFilter";
+import { maskPhoneFields, shouldMaskPhoneForRole } from "../../lib/phone";
 import { BatchFullError, createEnrollment } from "../enrollments/enrollments.service";
+import { ApplicationAlreadyProcessedError, ApplicationNotFoundError } from "../admissions/admissions.errors";
 import { generateReceiptNo, generateSchedule } from "../fees/fees.service";
 import { notifyEnrollmentEvents } from "../notifications/notification.service";
 
@@ -16,9 +18,9 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 export const studentsRouter = Router();
 
-studentsRouter.get("/", requireAuth, async (req, res) => {
-  const { batchId } = req.query as { batchId?: string };
-  const isTeacher  = req.auth!.role === "teacher";
+studentsRouter.get("/", requireAuth, requirePermission("students", "read"), async (req, res) => {
+  const { batchId, centerId: requestedCenterId } = req.query as { batchId?: string; centerId?: string };
+  const isTeacher  = req.auth!.activeRole === "teacher";
   const facultyId  = req.auth!.facultyId;
 
   // Resolve the batches a teacher is allowed to see.
@@ -42,10 +44,11 @@ studentsRouter.get("/", requireAuth, async (req, res) => {
       where: { batchId, status: "active", batch: { tenantId: req.auth!.tenantId } },
       include: { student: { include: { course: { select: { name: true } } } }, batch: { select: { id: true, name: true } } },
     });
-    return res.json(await withPhotoUrls(enrollments.map((e) => ({
+    const maskPhone = shouldMaskPhoneForRole(req.auth!.activeRole);
+    return res.json(await withPhotoUrls(enrollments.map((e) => maskPhoneFields({
       ...e.student,
-      activeEnrollment: { batchId: e.batch.id, batchName: e.batch.name },
-    }))));
+      activeEnrollment: { id: e.id, batchId: e.batch.id, batchName: e.batch.name },
+    }, ["phone", "guardianPhone"], maskPhone))));
   }
 
   // For teachers without any assigned batches, return empty.
@@ -53,9 +56,20 @@ studentsRouter.get("/", requireAuth, async (req, res) => {
     return res.json([]);
   }
 
+  // In all-centers mode a caller (e.g. the Add Student to Batch picker) can
+  // narrow to one specific center — e.g. the batch's own center, so a batch
+  // belonging to one branch doesn't offer students from every branch the
+  // admin happens to be assigned to. Still intersected with this staff's own
+  // assigned centers, never trusted blindly from the query string.
+  const allowedCenterIds = await assignedCenterIds(req);
+  const centerIds = requestedCenterId
+    ? allowedCenterIds.filter((id) => id === requestedCenterId)
+    : allowedCenterIds;
+
   const students = await prisma.student.findMany({
     where: {
-      ...(await centerFilter(req)),
+      tenantId: req.auth!.tenantId,
+      centerId: { in: centerIds },
       // Teachers see only students enrolled in their assigned batches.
       ...(teacherBatchIds !== null
         ? { enrollments: { some: { batchId: { in: teacherBatchIds }, status: "active" } } }
@@ -72,28 +86,30 @@ studentsRouter.get("/", requireAuth, async (req, res) => {
     },
     orderBy: { createdAt: "desc" },
   });
-  const withActiveEnrollment = students.map(({ enrollments, ...student }) => ({
+  const maskPhone = shouldMaskPhoneForRole(req.auth!.activeRole);
+  const withActiveEnrollment = students.map(({ enrollments, ...student }) => maskPhoneFields({
     ...student,
     activeEnrollment: enrollments[0]
-      ? { batchId: enrollments[0].batch.id, batchName: enrollments[0].batch.name }
+      ? { id: enrollments[0].id, batchId: enrollments[0].batch.id, batchName: enrollments[0].batch.name }
       : null,
-  }));
+  }, ["phone", "guardianPhone"], maskPhone));
   res.json(await withPhotoUrls(withActiveEnrollment));
 });
 
-studentsRouter.get("/:id", requireAuth, async (req, res) => {
+studentsRouter.get("/:id", requireAuth, requirePermission("students", "read"), async (req, res) => {
   const student = await prisma.student.findFirst({
     where: { id: req.params.id, tenantId: req.auth!.tenantId },
     include: { enrollments: { include: { batch: true } } },
   });
   if (!student) return res.status(404).json({ error: "Student not found" });
-  res.json(await withPhotoUrl(student));
+  const masked = maskPhoneFields(student, ["phone", "guardianPhone"], shouldMaskPhoneForRole(req.auth!.activeRole));
+  res.json(await withPhotoUrl(masked));
 });
 
 studentsRouter.post(
   "/",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("students", "write"),
   validateBody(createStudentSchema),
   async (req, res) => {
     const centerId = centerIdForCreate(req, req.body.centerId);
@@ -112,10 +128,10 @@ studentsRouter.post(
 studentsRouter.post(
   "/admit",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("students", "write"),
   validateBody(admitStudentSchema),
   async (req, res) => {
-    const { batchId, amountPaid, tcAcknowledged: _tc, ...studentData } = req.body;
+    const { batchId, amountPaid, tcAcknowledged: _tc, applicationId, ...studentData } = req.body;
 
     try {
       const centerId = centerIdForCreate(req, req.body.centerId);
@@ -123,6 +139,12 @@ studentsRouter.post(
       const tenantId = tenantIdForCreate(req);
 
       const result = await prisma.$transaction(async (tx) => {
+        if (applicationId) {
+          const application = await (tx as any).admissionApplication.findFirst({ where: { id: applicationId, tenantId } });
+          if (!application) throw new ApplicationNotFoundError();
+          if (application.status !== "pending") throw new ApplicationAlreadyProcessedError(application.status);
+        }
+
         const studentCode = await generateStudentCode(tx as any, tenantId);
         const student = await tx.student.create({
           data: {
@@ -154,6 +176,13 @@ studentsRouter.post(
             tcAcknowledgedAt:   req.body.tcAcknowledged ? new Date() : null,
           },
         });
+
+        if (applicationId) {
+          await (tx as any).admissionApplication.update({
+            where: { id: applicationId },
+            data:  { status: "admitted", studentId: student.id, reviewedById: req.auth!.staffId, reviewedAt: new Date() },
+          });
+        }
 
         let enrollment = null;
         if (batchId) {
@@ -258,6 +287,12 @@ studentsRouter.post(
       if (err instanceof BatchFullError) {
         return res.status(409).json({ batchFull: true, message: err.message });
       }
+      if (err instanceof ApplicationNotFoundError) {
+        return res.status(404).json({ error: err.message });
+      }
+      if (err instanceof ApplicationAlreadyProcessedError) {
+        return res.status(409).json({ error: err.message });
+      }
       throw err;
     }
   }
@@ -266,7 +301,7 @@ studentsRouter.post(
 studentsRouter.patch(
   "/:id",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("students", "edit"),
   validateBody(updateStudentSchema),
   async (req, res) => {
     const student = await prisma.student.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
@@ -282,13 +317,13 @@ studentsRouter.patch(
 studentsRouter.post(
   "/:id/photo",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("students", "edit"),
   upload.single("photo"),
   async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Missing photo file" });
     const existing = await prisma.student.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!existing) return res.status(404).json({ error: "Student not found" });
-    const key = `students/${req.params.id}/${Date.now()}-${req.file.originalname}`;
+    const key = `${s3PathPrefix(existing.tenantId, existing.centerId)}/students/${req.params.id}/${Date.now()}-${req.file.originalname}`;
     await uploadPhoto(key, req.file.buffer, req.file.mimetype);
     const student = await prisma.student.update({
       where: { id: req.params.id },
@@ -301,7 +336,7 @@ studentsRouter.post(
 studentsRouter.delete(
   "/:id/photo",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("students", "delete"),
   async (req, res) => {
     const existing = await prisma.student.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!existing) return res.status(404).json({ error: "Student not found" });
@@ -321,10 +356,14 @@ studentsRouter.delete(
 
 // ── Documents (Aadhar scan, marksheet, etc.) — dynamic, master-data-driven ────
 
+// Mapped to "edit" rather than "read" — unlike the base student profile
+// (open to teachers too), document access has always been admin/frontdesk
+// only; using the same "read" flag as GET / would incorrectly open this to
+// teacher, who has students.read=true but students.edit=false.
 studentsRouter.get(
   "/:id/documents",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("students", "edit"),
   async (req, res) => {
     const student = await prisma.student.findFirst({ where: { id: req.params.id, tenantId: req.auth!.tenantId } });
     if (!student) return res.status(404).json({ error: "Student not found" });
@@ -340,7 +379,7 @@ studentsRouter.get(
 studentsRouter.post(
   "/:id/documents/:documentTypeId",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("students", "edit"),
   upload.single("document"),
   async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Missing document file" });
@@ -357,7 +396,7 @@ studentsRouter.post(
       await deletePhoto(existing.fileUrl).catch(() => {});
     }
 
-    const key = `student-docs/${documentTypeId}/${studentId}/${Date.now()}-${req.file.originalname}`;
+    const key = `${s3PathPrefix(student.tenantId, student.centerId)}/student-docs/${documentTypeId}/${studentId}/${Date.now()}-${req.file.originalname}`;
     await uploadPhoto(key, req.file.buffer, req.file.mimetype);
 
     const doc = await prisma.studentDocument.upsert({
@@ -373,7 +412,7 @@ studentsRouter.post(
 studentsRouter.delete(
   "/:id/documents/:documentTypeId",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("students", "delete"),
   async (req, res) => {
     const { id: studentId, documentTypeId } = req.params;
     const student = await prisma.student.findFirst({ where: { id: studentId, tenantId: req.auth!.tenantId } });
