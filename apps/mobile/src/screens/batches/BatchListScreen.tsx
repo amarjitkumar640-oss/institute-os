@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, ScrollView, ActivityIndicator, RefreshControl, Modal,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
+  TextInput, ScrollView, ActivityIndicator, RefreshControl, Modal, StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
+import { T } from "../../components/ui/typography";
 import type { RootStackParamList } from "../../navigation/types";
 import { listBatches, deleteBatch, type BatchItem, type BatchStatus } from "../../api/batches";
 import { listStudents, type StudentItem } from "../../api/students";
@@ -18,9 +18,11 @@ import { listExamCategories, type ExamCategoryItem } from "../../api/examCategor
 import { enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { useAuth } from "../../context/AuthContext";
+import { usePermission } from "../../hooks/usePermission";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
-import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { useThemeColors, useThemedStyles, contrastColor, type ThemeColors } from "../../context/ThemeContext";
 import { C } from "../../theme";
+import { AVATAR_SIZE, AVATAR_RADIUS, getAvatarFill } from "../../components/ui/avatarStyle";
 
 type Props = NativeStackScreenProps<RootStackParamList, "BatchList">;
 
@@ -86,17 +88,21 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [localCount, setLocalCount] = useState(batch.enrolledCount);
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      listStudents(),
+      // Scoped to the batch's own center — in all-centers mode, without
+      // this, every center's students would show up as candidates for a
+      // batch that only belongs to one specific branch.
+      listStudents(batch.centerId ? { centerId: batch.centerId } : undefined),
       listStudents({ batchId: batch.id }),
     ]).then(([all, enrolled]) => {
       setAllStudents(all);
       setEnrolledIds(new Set(enrolled.map((s) => s.id)));
     }).catch(() => { }).finally(() => setLoading(false));
-  }, [batch.id]);
+  }, [batch.id, batch.centerId]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return allStudents;
@@ -131,24 +137,41 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={sm.overlay}>
-        <View style={sm.sheet}>
-          <View style={sm.handle} />
-
-          {/* Header */}
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <StatusBar
+        translucent
+        barStyle={contrastColor(colors.primary) === "#FFFFFF" ? "light-content" : "dark-content"}
+        backgroundColor={colors.primary}
+      />
+      {/* Paints the area behind the transparent status bar directly, the same
+          way ScreenHeader's own header View does — StatusBar.setBackgroundColor
+          doesn't reliably repaint the bar on its own here, so this strip is what
+          actually makes the status bar read as primary-colored. */}
+      <View style={{ height: insets.top, backgroundColor: colors.primary }} />
+      <SafeAreaView style={sm.sheet} edges={["bottom"]}>
+          {/* Header — icon badge + boxed close button, matching Manage Center
+              Access's header shape. */}
           <View style={sm.header}>
-            <View style={{ flex: 1 }}>
+            <View style={[sm.headerIcon, { backgroundColor: colors.primary + "17" }]}>
+              <Ionicons name="person-add-outline" size={ms(21)} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={sm.title}>Add Student to Batch</Text>
-              <Text style={sm.sub} numberOfLines={1}>{batch.name}</Text>
+              <View style={sm.subRow}>
+                <View style={[sm.headChip, { backgroundColor: colors.primary + "14" }]}>
+                  <Ionicons name="layers-outline" size={ms(10)} color={colors.primary} style={sm.headChipIcon} />
+                  <Text style={[sm.headChipT, { color: colors.primary }]} numberOfLines={1}>{batch.name}</Text>
+                </View>
+                <View style={[sm.headChip, { backgroundColor: isFull ? C.redBg : C.greenBg }]}>
+                  <Ionicons name="people-outline" size={ms(10)} color={isFull ? C.red : C.green} style={sm.headChipIcon} />
+                  <Text style={[sm.headChipT, { color: isFull ? C.red : C.green }]} numberOfLines={1}>
+                    {localCount}/{batch.capacity} seats
+                  </Text>
+                </View>
+              </View>
             </View>
-            <View style={sm.capacityPill}>
-              <Text style={[sm.capacityT, { color: isFull ? C.red : C.green }]}>
-                {localCount}/{batch.capacity} seats
-              </Text>
-            </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: ms(8) }}>
-              <Ionicons name="close-circle" size={ms(24)} color={C.placeholder} />
+            <TouchableOpacity style={sm.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={ms(18)} color={C.muted} />
             </TouchableOpacity>
           </View>
 
@@ -193,6 +216,7 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
             </View>
           ) : (
             <FlatList
+              style={{ flex: 1 }}
               data={filtered}
               keyExtractor={(s) => s.id}
               contentContainerStyle={{ paddingBottom: ms(24) }}
@@ -208,8 +232,12 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
                 const busy = submitting === student.id;
                 const disabled = enrolled || isFull || !!submitting;
                 const courseColor = student.coursePreference ? (COURSE_COLOR[student.coursePreference] ?? C.muted) : C.muted;
-                const courseLabel = student.coursePreference ? (COURSE_LABEL[student.coursePreference] ?? student.coursePreference) : null;
+                // Prefer the student's actual assigned course over their intake-time
+                // preference — otherwise this always shows the generic preference
+                // (e.g. "SSC") even for students who've since been assigned a real course.
+                const courseLabel = student.course?.name ?? (student.coursePreference ? (COURSE_LABEL[student.coursePreference] ?? student.coursePreference) : null);
                 const ini = initials(student.fullName);
+                const fill = getAvatarFill(courseColor);
 
                 return (
                   <TouchableOpacity
@@ -218,20 +246,25 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
                     activeOpacity={enrolled ? 1 : 0.75}
                     disabled={disabled && !enrolled}
                   >
-                    <View style={[sm.avatar, { backgroundColor: courseColor }]}>
-                      <Text style={sm.avatarT}>{ini}</Text>
+                    <View style={[
+                      sm.avatar,
+                      student.photoUrl
+                        ? { backgroundColor: C.border }
+                        : { backgroundColor: fill.backgroundColor, borderWidth: fill.borderWidth, borderColor: fill.borderColor },
+                    ]}>
+                      {student.photoUrl
+                        ? <Image source={{ uri: student.photoUrl }} style={sm.avatarImg} />
+                        : <Text style={[sm.avatarT, { color: fill.color }]}>{ini}</Text>
+                      }
                     </View>
 
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={sm.studentName} numberOfLines={1}>{student.fullName}</Text>
-                      <Text style={sm.studentSub}>{student.studentCode}{student.phone ? ` · ${student.phone}` : ""}</Text>
-                    </View>
-
-                    {courseLabel && (
-                      <View style={[sm.courseTag, { backgroundColor: courseColor + "20" }]}>
-                        <Text style={[sm.courseTagT, { color: courseColor }]}>{courseLabel}</Text>
+                      <View style={[sm.courseChip, { backgroundColor: courseColor + "14" }]}>
+                        <Ionicons name="book-outline" size={ms(10)} color={courseColor} style={sm.courseChipIcon} />
+                        <Text style={[sm.courseChipT, { color: courseColor }]} numberOfLines={1}>{courseLabel ?? "No course assigned"}</Text>
                       </View>
-                    )}
+                    </View>
 
                     {busy ? (
                       <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: ms(4) }} />
@@ -252,53 +285,63 @@ function StudentPickerModal({ batch, onClose, onEnrolled }: {
           )}
 
           <TouchableOpacity style={sm.doneBtn} onPress={onClose} activeOpacity={0.85}>
-            <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={sm.doneGrad}>
+            <View style={[sm.doneGrad, { backgroundColor: colors.primary }]}>
               <Text style={sm.doneT}>Done</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
-        </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
 
 const sm = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingTop: ms(12), paddingHorizontal: ms(16), maxHeight: "85%" },
-  handle: { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(16) },
+  // Full screen, not a bottom sheet — a batch's roster can run into the
+  // hundreds, and a capped-height sheet made that list feel cramped. Same
+  // header/search/row chrome as before, just given the whole screen to work with.
+  sheet: { flex: 1, backgroundColor: C.card, paddingTop: ms(12), paddingHorizontal: ms(16) },
   header: { flexDirection: "row", alignItems: "center", marginBottom: ms(8), gap: ms(10) },
-  title: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  sub: { fontSize: fs(11.5), color: C.muted, marginTop: ms(2) },
-  capacityPill: { backgroundColor: C.inputBg, borderRadius: ms(20), paddingHorizontal: ms(10), paddingVertical: ms(5) },
-  capacityT: { fontSize: fs(11.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  headerIcon: { width: ms(44), height: ms(44), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  title: { ...T.cardTitle, color: C.text },
+  closeBtn: { width: ms(34), height: ms(34), borderRadius: ms(10), backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  subRow: { flexDirection: "row", alignItems: "center", gap: ms(6), marginTop: ms(4) },
+  headChip: { flexDirection: "row", alignItems: "center", borderRadius: ms(8), paddingHorizontal: ms(7), paddingVertical: ms(3), flexShrink: 1 },
+  headChipIcon: { marginRight: ms(4) },
+  headChipT: { ...T.chipText },
   fullBanner: { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.red + "18", borderRadius: ms(10), padding: ms(10), marginBottom: ms(10) },
-  fullBannerT: { fontSize: fs(12), color: C.red, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  fullBannerT: { ...T.bodySmall, color: C.red },
   resultBanner: { flexDirection: "row", alignItems: "center", gap: ms(8), borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(10), marginBottom: ms(10) },
-  resultT: { fontSize: fs(12.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", flex: 1 },
+  resultT: { ...T.chipText, flex: 1 },
   searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), marginBottom: ms(10), gap: ms(8) },
-  searchInput: { flex: 1, fontSize: fs(13), color: C.text, padding: 0, includeFontPadding: false },
+  searchInput: { flex: 1, ...T.body, color: C.text, padding: 0, includeFontPadding: false },
   loaderWrap: { alignItems: "center", paddingVertical: ms(40), gap: ms(12) },
-  loaderT: { fontSize: fs(13), color: C.muted },
+  loaderT: { ...T.body, color: C.muted },
   emptyWrap: { alignItems: "center", paddingVertical: ms(32), gap: ms(10) },
-  emptyT: { fontSize: fs(13), color: C.placeholder, textAlign: "center" },
+  emptyT: { ...T.body, color: C.placeholder, textAlign: "center" },
   studentRow: { flexDirection: "row", alignItems: "center", paddingVertical: ms(12), borderBottomWidth: 1, borderBottomColor: C.border, gap: ms(12) },
-  avatar: { width: ms(38), height: ms(38), borderRadius: ms(19), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  avatarT: { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff", includeFontPadding: false },
-  studentName: { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  studentSub: { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
-  courseTag: { borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(4), flexShrink: 0 },
-  courseTagT: { fontSize: fs(10.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  avatar: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_RADIUS, justifyContent: "center", alignItems: "center", flexShrink: 0, overflow: "hidden" },
+  avatarImg: { width: AVATAR_SIZE, height: AVATAR_SIZE },
+  avatarT: { ...T.listItemTitle, includeFontPadding: false },
+  studentName: { ...T.listItemTitle, color: C.text },
+  courseChip: {
+    flexDirection: "row", alignItems: "center", alignSelf: "flex-start",
+    borderRadius: ms(8), paddingHorizontal: ms(7), paddingVertical: ms(3), marginTop: ms(4),
+  },
+  courseChipIcon: { marginRight: ms(4) },
+  courseChipT: { ...T.chipText },
   enrolledBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), backgroundColor: C.greenBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(5), marginLeft: ms(4) },
-  enrolledT: { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.green },
+  enrolledT: { ...T.chipText, color: C.green },
   addBtn: { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: C.inputBg, justifyContent: "center", alignItems: "center", marginLeft: ms(4) },
   doneBtn: { marginTop: ms(12), marginBottom: ms(24), borderRadius: ms(14), overflow: "hidden" },
   doneGrad: { alignItems: "center", paddingVertical: ms(14) },
-  doneT: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  doneT: { ...T.buttonText, color: "#fff" },
 });
 
 // ── Batch Card ────────────────────────────────────────────────────────────────
 
-function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStudent, isAllCenters }: {
+function BatchCard({
+  batch, onPress, onEdit, onDelete, onViewStudents, onAddStudent, isAllCenters,
+  canEdit, canDelete, canAddStudent,
+}: {
   batch: BatchItem;
   onPress: () => void;
   onEdit: () => void;
@@ -306,6 +349,9 @@ function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStud
   onViewStudents: () => void;
   onAddStudent: () => void;
   isAllCenters?: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canAddStudent: boolean;
 }) {
   const exam = examMeta(batch.course.examCategories);
   const status = STATUS_META[batch.status];
@@ -315,18 +361,6 @@ function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStud
 
   return (
     <TouchableOpacity style={cs.card} onPress={onPress} activeOpacity={0.92}>
-      {/* Top row */}
-      <View style={cs.cardTop}>
-        <View style={cs.cardMid}>
-          <Text style={cs.batchName} numberOfLines={1}>{batch.name}</Text>
-          <Text style={cs.courseName} numberOfLines={1}>{batch.course.name}</Text>
-        </View>
-        <View style={[cs.statusBadge, { backgroundColor: status.bg }]}>
-          <View style={[cs.statusDot, { backgroundColor: status.dot }]} />
-          <Text style={[cs.statusT, { color: status.color }]}>{status.label}</Text>
-        </View>
-      </View>
-
       {/* Center chip — only visible in all-centers mode */}
       {isAllCenters && batch.center && (
         <View style={cs.centerChip}>
@@ -334,6 +368,34 @@ function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStud
           <Text style={cs.centerChipT}>{batch.center.name}</Text>
         </View>
       )}
+
+      {/* Top row */}
+      <View style={cs.cardTop}>
+        <View style={cs.cardMid}>
+          <Text style={cs.batchName} numberOfLines={1}>{batch.name}</Text>
+          <View style={cs.batchSubRow}>
+            <View style={[cs.statusBadge, { backgroundColor: status.bg }]}>
+              <View style={[cs.statusDot, { backgroundColor: status.dot }]} />
+              <Text style={[cs.statusT, { color: status.color }]}>{status.label}</Text>
+            </View>
+            <Text style={cs.courseName} numberOfLines={1}>{batch.course.name}</Text>
+          </View>
+        </View>
+        {(canEdit || canDelete) && (
+          <View style={cs.cardIconActions}>
+            {canEdit && (
+              <TouchableOpacity style={cs.iconBtn} onPress={(e) => { e.stopPropagation?.(); onEdit(); }} activeOpacity={0.8}>
+                <Ionicons name="pencil-outline" size={ms(15)} color={C.blue} />
+              </TouchableOpacity>
+            )}
+            {canDelete && (
+              <TouchableOpacity style={[cs.iconBtn, cs.iconBtnDanger]} onPress={(e) => { e.stopPropagation?.(); onDelete(); }} activeOpacity={0.8}>
+                <Ionicons name="trash-outline" size={ms(15)} color={C.red} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
 
       <View style={cs.divider} />
 
@@ -368,24 +430,14 @@ function BatchCard({ batch, onPress, onEdit, onDelete, onViewStudents, onAddStud
       </TouchableOpacity>
 
       {/* Action buttons */}
-      <View style={cs.cardActions}>
-        {!isFull && (
+      {!isFull && canAddStudent && (
+        <View style={cs.cardActions}>
           <TouchableOpacity style={cs.addStudentBtn} onPress={(e) => { e.stopPropagation?.(); onAddStudent(); }} activeOpacity={0.8}>
             <Ionicons name="person-add-outline" size={ms(14)} color={C.green} />
             <Text style={cs.addStudentT}>Add Student</Text>
           </TouchableOpacity>
-        )}
-        <View style={cs.editDeleteRow}>
-          <TouchableOpacity style={cs.editBtn} onPress={(e) => { e.stopPropagation?.(); onEdit(); }} activeOpacity={0.8}>
-            <Ionicons name="pencil-outline" size={ms(14)} color={C.blue} />
-            <Text style={cs.editBtnT}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={cs.deleteBtn} onPress={(e) => { e.stopPropagation?.(); onDelete(); }} activeOpacity={0.8}>
-            <Ionicons name="trash-outline" size={ms(14)} color={C.red} />
-            <Text style={cs.deleteBtnT}>Delete</Text>
-          </TouchableOpacity>
         </View>
-      </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -442,6 +494,11 @@ function BatchEmpty({ search }: { search: string }) {
 export function BatchListScreen({ route, navigation }: Props) {
   const initialStatus = route.params?.initialFilter === "active" ? "running" : "All";
   const { isAllCenters } = useAuth();
+  const { canWrite, canEdit, canDelete } = usePermission("batches");
+  // Enrolling a student is gated by the "students" screen's edit permission
+  // server-side (POST /api/enrollments requires students.edit), not batches
+  // — matching the API's own requirePermission call, not a batches action.
+  const { canEdit: canEditStudents } = usePermission("students");
   const colors = useThemeColors();
   const cs = useThemedStyles(makeCsStyles);
 
@@ -589,6 +646,9 @@ export function BatchListScreen({ route, navigation }: Props) {
                   onViewStudents={() => navigation.navigate("StudentList", { batchId: item.id, batchName: item.name })}
                   onAddStudent={() => setAddStudentTarget(item)}
                   isAllCenters={isAllCenters}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  canAddStudent={canEditStudents}
                 />
               )}
               contentContainerStyle={cs.listContent}
@@ -600,9 +660,11 @@ export function BatchListScreen({ route, navigation }: Props) {
             />
           </>
         )}
-        <TouchableOpacity style={cs.fab} onPress={() => navigation.navigate("CreateBatch")} activeOpacity={0.85}>
-          <Ionicons name="add" size={ms(26)} color="#fff" />
-        </TouchableOpacity>
+        {canWrite && (
+          <TouchableOpacity style={cs.fab} onPress={() => navigation.navigate("CreateBatch")} activeOpacity={0.85}>
+            <Ionicons name="add" size={ms(26)} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Delete confirm modal */}
@@ -656,25 +718,25 @@ const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
   content: { flex: 1, backgroundColor: colors.screenBg },
 
   loader: { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(14) },
-  loaderT: { fontSize: fs(14), color: C.muted },
+  loaderT: { ...T.body, color: C.muted },
 
 
   banner: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
-  bannerNum: { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
-  bannerLbl: { fontSize: fs(9.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600", marginTop: ms(2) },
+  bannerNum: { ...T.cardTitle },
+  bannerLbl: { ...T.caption, color: C.muted, marginTop: ms(2) },
   bannerDiv: { width: 1, height: ms(28), backgroundColor: C.border },
 
   searchWrap: { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
   searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
-  searchInput: { flex: 1, fontSize: fs(13.5), color: C.text, padding: 0, includeFontPadding: false },
+  searchInput: { flex: 1, ...T.body, color: C.text, padding: 0, includeFontPadding: false },
 
   filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0 },
   filterRow: { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
   filterDivider: { width: 1, height: ms(20), backgroundColor: C.border, marginRight: ms(8) },
   chip: { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipT: { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, includeFontPadding: false, lineHeight: fs(16) },
+  chipT: { ...T.chipText, color: C.muted, includeFontPadding: false },
   chipTOn: { color: "#fff" },
   listContent: { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(40) },
 
@@ -682,39 +744,40 @@ const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: ms(10), marginBottom: ms(10) },
   examTag: { borderRadius: ms(6), paddingHorizontal: ms(7), paddingVertical: ms(3), flexShrink: 0 },
-  examTagT: { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.4 },
+  examTagT: { ...T.badgeText },
   cardMid: { flex: 1, minWidth: 0 },
-  batchName: { fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(5) },
+  batchName: { ...T.listItemTitle, color: C.text, marginBottom: ms(5) },
   batchSubRow: { flexDirection: "row", alignItems: "center", gap: ms(6), flexWrap: "wrap" },
-  courseName: { fontSize: fs(11.5), color: C.muted, flex: 1 },
+  courseName: { ...T.caption, color: C.muted, flex: 1 },
   statusBadge: { flexDirection: "row", alignItems: "center", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(4), gap: ms(4), flexShrink: 0 },
   statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  statusT: { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  statusT: { ...T.badgeText },
   divider: { height: 1, backgroundColor: C.border, marginBottom: ms(10) },
   centerChip: { flexDirection: "row", alignItems: "center", gap: ms(4), alignSelf: "flex-start", backgroundColor: C.purpleBg, borderRadius: ms(8), paddingHorizontal: ms(8), paddingVertical: ms(3), marginBottom: ms(8) },
-  centerChipT: { fontSize: fs(11), color: C.purple, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  centerChipT: { ...T.chipText, color: C.purple },
   metaRow: { flexDirection: "row", alignItems: "center", gap: ms(6), marginBottom: ms(10) },
   metaItem: { flexDirection: "row", alignItems: "center", gap: ms(4) },
-  metaT: { fontSize: fs(11), color: C.muted },
+  metaT: { ...T.caption, color: C.muted },
 
   // Capacity bar
   capacityRow: { flexDirection: "row", alignItems: "center", gap: ms(8) },
   capacityBar: { flex: 1, height: ms(5), backgroundColor: C.border, borderRadius: ms(3), overflow: "hidden" },
   capacityFill: { height: "100%", borderRadius: ms(3) },
   capacityRight: { flexDirection: "row", alignItems: "center", gap: ms(6) },
-  capacityT: { fontSize: fs(10.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  capacityT: { ...T.chipText },
   viewStudentsBadge: { flexDirection: "row", alignItems: "center", gap: ms(3), paddingHorizontal: ms(7), paddingVertical: ms(3), borderRadius: ms(8), backgroundColor: C.inputBg },
-  viewStudentsT: { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  viewStudentsT: { ...T.badgeText },
 
   // Card actions
   cardActions: { marginTop: ms(10), paddingTop: ms(10), borderTopWidth: 1, borderTopColor: C.border, gap: ms(8) },
   addStudentBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6), backgroundColor: C.greenBg, borderRadius: ms(10), paddingVertical: ms(9) },
-  addStudentT: { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.green },
-  editDeleteRow: { flexDirection: "row", gap: ms(8) },
-  editBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), backgroundColor: C.blue + "18", borderRadius: ms(10), paddingVertical: ms(8) },
-  editBtnT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.blue },
-  deleteBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), backgroundColor: C.red + "18", borderRadius: ms(10), paddingVertical: ms(8) },
-  deleteBtnT: { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.red },
+  addStudentT: { ...T.chipText, color: C.green },
+
+  // Per-row edit/delete — small icon-only tinted squares (DESIGN_SYSTEM.md's
+  // convention for a repeated per-row action), not full-width buttons.
+  cardIconActions: { flexDirection: "row", gap: ms(6), flexShrink: 0 },
+  iconBtn: { width: ms(30), height: ms(30), borderRadius: ms(10), backgroundColor: C.blue + "18", justifyContent: "center", alignItems: "center" },
+  iconBtnDanger: { backgroundColor: C.red + "18" },
 
   // FAB
   fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
@@ -723,18 +786,18 @@ const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(28) },
   modalCard: { width: "100%", backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(24), paddingTop: ms(32), paddingBottom: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(12) }, shadowOpacity: 0.22, shadowRadius: ms(28), elevation: 18 },
   modalIconCircle: { width: ms(64), height: ms(64), borderRadius: ms(32), backgroundColor: C.red + "18", borderWidth: 2, borderColor: C.red + "30", justifyContent: "center", alignItems: "center", marginBottom: ms(18) },
-  modalTitle: { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(10) },
-  modalBody: { fontSize: fs(13), color: C.muted, textAlign: "center", lineHeight: fs(20), marginBottom: ms(16) },
+  modalTitle: { ...T.displayMedium, color: C.text, marginBottom: ms(10) },
+  modalBody: { ...T.body, color: C.muted, textAlign: "center", marginBottom: ms(16) },
   modalErr: { flexDirection: "row", alignItems: "flex-start", gap: ms(8), backgroundColor: C.red + "18", borderRadius: ms(10), padding: ms(12), marginBottom: ms(12), width: "100%" },
-  modalErrT: { fontSize: fs(12), color: C.red, flex: 1, lineHeight: fs(18) },
+  modalErrT: { ...T.bodySmall, color: C.red, flex: 1 },
   modalBtnRow: { flexDirection: "row", gap: ms(10), width: "100%" },
   modalCancelBtn: { flex: 1, alignItems: "center", paddingVertical: ms(13), borderRadius: ms(14), backgroundColor: C.inputBg },
-  modalCancelT: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  modalCancelT: { ...T.buttonText, color: C.muted },
   modalDeleteBtn: { flex: 1, alignItems: "center", paddingVertical: ms(13), borderRadius: ms(14), backgroundColor: C.red },
-  modalDeleteT: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  modalDeleteT: { ...T.buttonText, color: "#fff" },
 
   // Empty
   empty: { alignItems: "center", paddingTop: ms(60), gap: ms(8), paddingHorizontal: ms(32) },
-  emptyTitle: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.placeholder, textAlign: "center" },
-  emptySub: { fontSize: fs(12), color: C.placeholder, textAlign: "center" },
+  emptyTitle: { ...T.cardTitle, color: C.placeholder, textAlign: "center" },
+  emptySub: { ...T.bodySmall, color: C.placeholder, textAlign: "center" },
 });

@@ -19,6 +19,7 @@ export async function runClassReminderSweep(db: PrismaClient) {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
   const nowHHMM = now.toTimeString().slice(0, 5);
+  let notifiedCount = 0;
 
   for (const tenant of tenants) {
     const windowEnd = addMinutesToTime(nowHHMM, tenant.classReminderMinutes);
@@ -48,10 +49,13 @@ export async function runClassReminderSweep(db: PrismaClient) {
           `${session.subject?.name ?? "Class"} — ${session.batch.name} starts at ${session.startTime}`,
           { screen: "BatchSchedule", batchId: session.batch.id, batchName: session.batch.name },
         );
+        notifiedCount++;
       }
       await db.classSession.update({ where: { id: session.id }, data: { reminderSentAt: now } });
     }
   }
+
+  return { notifiedCount };
 }
 
 // Notifies the configured routing roles about installments that are overdue
@@ -62,6 +66,7 @@ export async function runClassReminderSweep(db: PrismaClient) {
 export async function runOverdueInstallmentSweep(db: PrismaClient) {
   const tenants = await db.tenant.findMany({ where: { isActive: true }, select: { id: true, overdueGraceDays: true } });
   const now = new Date();
+  let notifiedCount = 0;
 
   for (const tenant of tenants) {
     const cutoff = new Date(now);
@@ -100,12 +105,10 @@ export async function runOverdueInstallmentSweep(db: PrismaClient) {
         { screen: "FeeScheduleDetail", enrollmentId: inst.schedule.enrollmentId, studentName },
         inst.schedule.enrollment.batch.centerId,
       );
+      notifiedCount++;
       await db.scheduleInstallment.update({ where: { id: inst.id }, data: { overdueNotifiedAt: now } });
     }
   }
-}
 
-export async function runNotificationSweeps(db: PrismaClient) {
-  await runClassReminderSweep(db);
-  await runOverdueInstallmentSweep(db);
+  return { notifiedCount };
 }

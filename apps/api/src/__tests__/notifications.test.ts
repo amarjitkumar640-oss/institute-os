@@ -4,7 +4,7 @@ import request from "supertest";
 import { app } from "../app";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
-import { resetDb } from "./setup";
+import { resetDb, legacyPermissionsForRole } from "./setup";
 import type { AuthPayload } from "../middleware/auth";
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
@@ -22,7 +22,7 @@ async function makeAdmin() {
   await ensureTestTenant();
   const passwordHash = await bcrypt.hash("secret123", 10);
   return prisma.staff.create({
-    data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9100000000", email: "admin@x.test", role: "admin", passwordHash },
+    data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9100000000", email: "admin@x.test", roles: ["admin"], passwordHash },
   });
 }
 
@@ -44,7 +44,7 @@ async function makeTeacherWithFaculty(label: string, batchId: string) {
   const staff = await prisma.staff.create({
     data: {
       tenantId: TENANT_ID, fullName: `${label} Teacher`, phone: `9${label.charCodeAt(0)}0000000`,
-      email: `${label.toLowerCase()}@teacher.test`, role: "teacher", passwordHash,
+      email: `${label.toLowerCase()}@teacher.test`, roles: ["teacher"], passwordHash,
     },
   });
   const faculty = await prisma.faculty.create({
@@ -64,7 +64,8 @@ async function makeTeacherWithFaculty(label: string, batchId: string) {
 }
 
 function tokenFor(payload: AuthPayload) {
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
+  const permissions = payload.permissions ?? legacyPermissionsForRole([payload.activeRole]);
+  return jwt.sign({ ...payload, permissions }, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
 }
 
 async function makeStudent(code: string) {
@@ -82,7 +83,7 @@ describe("notification triggers", () => {
       const batch = await makeCourseAndBatch(10);
       const { staff, session } = await makeTeacherWithFaculty("A", batch.id);
       const admin = await makeAdmin();
-      const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
       const res = await request(app)
         .patch(`/api/schedule/class-sessions/${session.id}`)
@@ -99,7 +100,7 @@ describe("notification triggers", () => {
       const batch = await makeCourseAndBatch(10);
       const { staff, session } = await makeTeacherWithFaculty("A", batch.id);
       const admin = await makeAdmin();
-      const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
       const res = await request(app)
         .patch(`/api/schedule/class-sessions/${session.id}`)
@@ -124,7 +125,7 @@ describe("notification triggers", () => {
       const session = await prisma.classSession.create({
         data: { batchId: batch.id, facultyId: faculty.id, scheduledDate: new Date(`${TODAY}T00:00:00.000Z`), startTime: "09:00", endTime: "10:00", status: "scheduled" },
       });
-      const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
       const res = await request(app)
         .patch(`/api/schedule/class-sessions/${session.id}`)
@@ -137,12 +138,82 @@ describe("notification triggers", () => {
     });
   });
 
+  describe("session subject/faculty reassignment", () => {
+    it("reassigning subject+faculty together notifies the outgoing teacher with the OLD subject and the incoming teacher with the NEW subject", async () => {
+      const batch = await makeCourseAndBatch(10);
+      const computer = await prisma.subject.create({ data: { tenantId: TENANT_ID, name: "Computer" } });
+      const maths = await prisma.subject.create({ data: { tenantId: TENANT_ID, name: "Maths" } });
+      const { staff: staffA, session } = await makeTeacherWithFaculty("A", batch.id);
+      await prisma.classSession.update({ where: { id: session.id }, data: { subjectId: computer.id } });
+      const { staff: staffB, faculty: facultyB } = await makeTeacherWithFaculty("B", batch.id);
+      const admin = await makeAdmin();
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
+
+      const res = await request(app)
+        .patch(`/api/schedule/class-sessions/${session.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ subjectId: maths.id, facultyId: facultyB.id });
+      expect(res.status).toBe(200);
+
+      const outgoing = await prisma.notification.findMany({ where: { recipientId: staffA.id } });
+      expect(outgoing).toHaveLength(1);
+      expect(outgoing[0].type).toBe("session_cancelled");
+      expect(outgoing[0].body).toContain("Computer");
+      expect(outgoing[0].body).not.toContain("Maths");
+
+      const incoming = await prisma.notification.findMany({ where: { recipientId: staffB.id } });
+      expect(incoming).toHaveLength(1);
+      expect(incoming[0].type).toBe("session_assigned");
+      expect(incoming[0].body).toContain("Maths");
+    });
+
+    it("changing only the subject (same teacher) fires session_subject_changed naming both subjects, not a reassignment", async () => {
+      const batch = await makeCourseAndBatch(10);
+      const computer = await prisma.subject.create({ data: { tenantId: TENANT_ID, name: "Computer" } });
+      const maths = await prisma.subject.create({ data: { tenantId: TENANT_ID, name: "Maths" } });
+      const { staff, session } = await makeTeacherWithFaculty("A", batch.id);
+      await prisma.classSession.update({ where: { id: session.id }, data: { subjectId: computer.id } });
+      const admin = await makeAdmin();
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
+
+      const res = await request(app)
+        .patch(`/api/schedule/class-sessions/${session.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ subjectId: maths.id });
+      expect(res.status).toBe(200);
+
+      const notifications = await prisma.notification.findMany({ where: { recipientId: staff.id } });
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].type).toBe("session_subject_changed");
+      expect(notifications[0].body).toContain("Computer");
+      expect(notifications[0].body).toContain("Maths");
+    });
+
+    it("does not notify at all when subjectId is set to the same value it already had", async () => {
+      const batch = await makeCourseAndBatch(10);
+      const computer = await prisma.subject.create({ data: { tenantId: TENANT_ID, name: "Computer" } });
+      const { staff, session } = await makeTeacherWithFaculty("A", batch.id);
+      await prisma.classSession.update({ where: { id: session.id }, data: { subjectId: computer.id } });
+      const admin = await makeAdmin();
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
+
+      const res = await request(app)
+        .patch(`/api/schedule/class-sessions/${session.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ subjectId: computer.id });
+      expect(res.status).toBe(200);
+
+      const notifications = await prisma.notification.findMany({ where: { recipientId: staff.id } });
+      expect(notifications).toHaveLength(0);
+    });
+  });
+
   describe("new enrollment", () => {
     it("notifies admin (default routing) when a student enrolls", async () => {
       const batch = await makeCourseAndBatch(10);
       const admin = await makeAdmin();
       const student = await makeStudent("0001");
-      const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
       const res = await request(app)
         .post("/api/enrollments")
@@ -159,13 +230,13 @@ describe("notification triggers", () => {
       const admin = await makeAdmin();
       const passwordHash = await bcrypt.hash("secret123", 10);
       const frontdesk = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "FD", phone: "9222222222", email: "fd@x.test", role: "frontdesk", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "FD", phone: "9222222222", email: "fd@x.test", roles: ["frontdesk"], passwordHash },
       });
       await prisma.notificationRoutingRule.create({
         data: { tenantId: TENANT_ID, type: "new_enrollment", roles: ["frontdesk"] },
       });
       const student = await makeStudent("0002");
-      const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
       await request(app).post("/api/enrollments").set("Authorization", `Bearer ${token}`).send({ studentId: student.id, batchId: batch.id });
 
@@ -181,9 +252,9 @@ describe("notification triggers", () => {
       const admin = await makeAdmin();
       const passwordHash = await bcrypt.hash("secret123", 10);
       const frontdesk = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "FD", phone: "9333333333", email: "fd2@x.test", role: "frontdesk", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "FD", phone: "9333333333", email: "fd2@x.test", roles: ["frontdesk"], passwordHash },
       });
-      const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
       for (let i = 1; i <= 10; i++) {
         const student = await makeStudent(String(1000 + i));
@@ -208,9 +279,9 @@ describe("notification triggers", () => {
       const admin = await makeAdmin();
       const passwordHash = await bcrypt.hash("secret123", 10);
       await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "FD", phone: "9444444444", email: "fd3@x.test", role: "frontdesk", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "FD", phone: "9444444444", email: "fd3@x.test", roles: ["frontdesk"], passwordHash },
       });
-      const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
       const s1 = await makeStudent("2001");
       const s2 = await makeStudent("2002");

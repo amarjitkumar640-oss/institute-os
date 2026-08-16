@@ -13,6 +13,7 @@ import {
 import { setupNotifications } from "./src/lib/pushNotifications";
 import { ThemeProvider } from "./src/context/ThemeContext";
 import { AppSplashScreen } from "./src/components/ui/AppSplashScreen";
+import { AndroidNavBarBackground } from "./src/components/ui/AndroidNavBarBackground";
 
 // Keep the native (OS-level) splash up until our own branded JS splash has
 // painted its first frame, so there's no blank/white gap between the two —
@@ -23,6 +24,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 setupNotifications();
 import { OrgProvider } from "./src/context/OrgContext";
 import { AuthProvider } from "./src/context/AuthContext";
+import { NotificationBadgeProvider } from "./src/context/NotificationBadgeContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 
 // Apply Inter Regular as the default font for every Text in the app.
@@ -40,28 +42,29 @@ export default function App() {
     Inter_800ExtraBold,
   });
 
-  // Runs after the first commit below, regardless of which branch rendered —
-  // that's the earliest point our own splash is guaranteed to be on screen.
+  // Runs after the first commit, regardless of fontsLoaded — that's the
+  // earliest point our own JS splash (rendered by RootNavigator below,
+  // gated on fontsLoaded/isLoading/orgLoading) is guaranteed to be on screen.
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
-  if (!fontsLoaded) {
-    return (
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <AppSplashScreen />
-        </ThemeProvider>
-      </SafeAreaProvider>
-    );
-  }
-
+  // Always mount the full provider tree — including while fonts are still
+  // loading — so AppSplashScreen renders from exactly one place (inside
+  // RootNavigator) instead of a second, separate instance here. Two mounts
+  // of the same splash meant two independent unmount/remount transitions
+  // (a visible white flash each time) and two chances for the brand color
+  // to visibly "correct itself" as ThemeProvider's async branding fetch
+  // resolves — collapsing to one mount removes both.
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <OrgProvider>
           <AuthProvider>
-            <RootNavigator />
+            <NotificationBadgeProvider>
+              <RootNavigator fontsLoaded={fontsLoaded} />
+              <AndroidNavBarBackground />
+            </NotificationBadgeProvider>
           </AuthProvider>
         </OrgProvider>
       </ThemeProvider>

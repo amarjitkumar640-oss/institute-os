@@ -41,7 +41,7 @@ function LoginAccessSection({ faculty, onUpdated }: { faculty: Faculty; onUpdate
 
   const { data: staffList } = useQuery({ queryKey: ["staff"], queryFn: listStaff });
   const eligibleTeachers = (staffList ?? []).filter(
-    (s) => s.role === "teacher" && !s.linkedFaculty
+    (s) => s.roles.includes("teacher") && !s.linkedFaculty
   );
 
   const linked = faculty.linkedStaff;
@@ -91,7 +91,7 @@ function LoginAccessSection({ faculty, onUpdated }: { faculty: Faculty; onUpdate
     setLoading(true);
     setError(null);
     try {
-      const newStaff = await createStaff({ fullName: faculty.fullName, email, phone, password, role: "teacher" });
+      const newStaff = await createStaff({ fullName: faculty.fullName, email, phone, password, roles: ["teacher"] });
       await updateFaculty(faculty.id, { staffId: newStaff.id });
       toast({ title: "Login created and linked" });
       onUpdated();

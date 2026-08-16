@@ -17,7 +17,9 @@ import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { T } from "../../components/ui/typography";
 import { ManageSlotModal } from "./ManageSlotModal";
+import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../context/AuthContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "BatchSchedule">;
@@ -85,40 +87,43 @@ function SlotCard({ slot, onEdit }: { slot: ClassSlot; onEdit?: (slot: ClassSlot
   const sc = useThemedStyles(makeScStyles);
   const color = dayColorMap(colors)[slot.dayOfWeek] ?? colors.primary;
   const inner = (
-    <>
-      <View style={sc.cardBody}>
-        <View style={sc.cardTopRow}>
-          <View style={[sc.timeIconWrap, { backgroundColor: color + "18" }]}>
-            <Ionicons name="time-outline" size={ms(13)} color={color} />
-          </View>
-          <Text style={sc.timeText}>{fmtTimeRange(slot.startTime, slot.endTime)}</Text>
-          {onEdit && <Ionicons name="chevron-forward" size={ms(14)} color={C.placeholder} />}
+    <View style={sc.cardMainRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        {/* Subject — the card's headline now, shown in full (wraps up to
+            2 lines instead of truncating) rather than a small pill. */}
+        <Text
+          style={[sc.subjectTitle, !slot.subject && { color: C.placeholder }]}
+          numberOfLines={2}
+        >
+          {slot.subject?.name ?? "No subject assigned"}
+        </Text>
+
+        {/* Duration */}
+        <View style={sc.durationRow}>
+          <Ionicons name="time-outline" size={ms(12)} color={color} />
+          <Text style={sc.durationText}>{fmtTimeRange(slot.startTime, slot.endTime)}</Text>
         </View>
 
-        {(slot.subject || slot.faculty || slot.room) && (
-          <View style={sc.pillRow}>
-            {slot.subject && (
-              <View style={[sc.pill, { backgroundColor: C.blue + "14", borderColor: C.blue + "30" }]}>
-                <Ionicons name="book-outline" size={ms(10)} color={C.blue} />
-                <Text style={[sc.pillT, { color: C.blue }]} numberOfLines={1}>{slot.subject.name}</Text>
-              </View>
-            )}
+        {/* Faculty + Room */}
+        {(slot.faculty || slot.room) && (
+          <View style={sc.metaRow}>
             {slot.faculty && (
-              <View style={[sc.pill, { backgroundColor: C.green + "14", borderColor: C.green + "30" }]}>
-                <Ionicons name="person-outline" size={ms(10)} color={C.green} />
-                <Text style={[sc.pillT, { color: C.green }]} numberOfLines={1}>{slot.faculty.fullName}</Text>
+              <View style={sc.metaItem}>
+                <Ionicons name="person-outline" size={ms(11)} color={C.green} />
+                <Text style={sc.metaText} numberOfLines={1}>{slot.faculty.fullName}</Text>
               </View>
             )}
             {slot.room && (
-              <View style={[sc.pill, { backgroundColor: C.orange + "14", borderColor: C.orange + "30" }]}>
-                <Ionicons name="location-outline" size={ms(10)} color={C.orange} />
-                <Text style={[sc.pillT, { color: C.orange }]} numberOfLines={1}>{slot.room}</Text>
+              <View style={sc.metaItem}>
+                <Ionicons name="location-outline" size={ms(11)} color={C.orange} />
+                <Text style={sc.metaText} numberOfLines={1}>{slot.room}</Text>
               </View>
             )}
           </View>
         )}
       </View>
-    </>
+      {onEdit && <Ionicons name="chevron-forward" size={ms(14)} color={C.placeholder} />}
+    </View>
   );
 
   if (!onEdit) return <View style={sc.card}>{inner}</View>;
@@ -146,47 +151,50 @@ function SessionCard({ session, onPress }: { session: ClassSession; onPress: () 
       activeOpacity={0.78}
     >
       <View style={sc.cardBody}>
+        {/* Date + duration — back at the top, as in the original card */}
         <View style={sc.cardTopRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={sc.sessionDate}>{fmtSessionDate(session.scheduledDate)}</Text>
-            <Text style={sc.sessionTime}>{fmtTimeRange(session.startTime, session.endTime)}</Text>
-          </View>
-          <View style={sc.badgeGroup}>
-            <View style={[sc.statusBadge, { backgroundColor: sm.bg }]}>
-              <Ionicons name={sm.icon as any} size={ms(10)} color={sm.color} />
-              <Text style={[sc.statusBadgeT, { color: sm.color }]}>{sm.label}</Text>
-            </View>
-            {session.type !== "regular" && (
-              <View style={[sc.typeBadge, { backgroundColor: tm.bg }]}>
-                <Text style={[sc.typeBadgeT, { color: tm.color }]}>{tm.label}</Text>
-              </View>
-            )}
+          <View style={[sc.durationRow, { flex: 1, marginBottom: 0 }]}>
+            <Ionicons name="calendar-outline" size={ms(12)} color={colors.primary} />
+            <Text style={sc.durationText}>{fmtSessionDate(session.scheduledDate)}</Text>
+            <Text style={sc.durationSep}>·</Text>
+            <Ionicons name="time-outline" size={ms(12)} color={colors.primary} />
+            <Text style={sc.durationText}>{fmtTimeRange(session.startTime, session.endTime)}</Text>
           </View>
           <Ionicons name="chevron-forward" size={ms(14)} color={C.placeholder} />
         </View>
 
-        {(subject || faculty || session.room) && (
-          <View style={sc.pillRow}>
-            {subject && (
-              <View style={[sc.pill, { backgroundColor: C.blue + "14", borderColor: C.blue + "30" }]}>
-                <Ionicons name="book-outline" size={ms(10)} color={C.blue} />
-                <Text style={[sc.pillT, { color: C.blue }]} numberOfLines={1}>{subject.name}</Text>
-              </View>
-            )}
-            {faculty && (
-              <View style={[sc.pill, { backgroundColor: C.green + "14", borderColor: C.green + "30" }]}>
-                <Ionicons name="person-outline" size={ms(10)} color={C.green} />
-                <Text style={[sc.pillT, { color: C.green }]} numberOfLines={1}>{faculty.fullName}</Text>
-              </View>
-            )}
-            {session.room && (
-              <View style={[sc.pill, { backgroundColor: C.orange + "14", borderColor: C.orange + "30" }]}>
-                <Ionicons name="location-outline" size={ms(10)} color={C.orange} />
-                <Text style={[sc.pillT, { color: C.orange }]} numberOfLines={1}>{session.room}</Text>
-              </View>
-            )}
+        {/* Subject — full headline, matching the Weekly Template card's redesign */}
+        <Text
+          style={[sc.subjectTitle, !subject && { color: C.placeholder }]}
+          numberOfLines={2}
+        >
+          {subject?.name ?? "No subject assigned"}
+        </Text>
+
+        {/* Status + Type + Faculty + Room — all on one line */}
+        <View style={sc.metaRow}>
+          <View style={[sc.statusBadge, { backgroundColor: sm.bg }]}>
+            <Ionicons name={sm.icon as any} size={ms(10)} color={sm.color} />
+            <Text style={[sc.statusBadgeT, { color: sm.color }]}>{sm.label}</Text>
           </View>
-        )}
+          {session.type !== "regular" && (
+            <View style={[sc.typeBadge, { backgroundColor: tm.bg }]}>
+              <Text style={[sc.typeBadgeT, { color: tm.color }]}>{tm.label}</Text>
+            </View>
+          )}
+          {faculty && (
+            <View style={sc.metaItem}>
+              <Ionicons name="person-outline" size={ms(11)} color={C.green} />
+              <Text style={sc.metaText} numberOfLines={1}>{faculty.fullName}</Text>
+            </View>
+          )}
+          {session.room && (
+            <View style={sc.metaItem}>
+              <Ionicons name="location-outline" size={ms(11)} color={C.orange} />
+              <Text style={sc.metaText} numberOfLines={1}>{session.room}</Text>
+            </View>
+          )}
+        </View>
 
         {session.cancelReason && (
           <Text style={sc.cancelReason} numberOfLines={1}>
@@ -204,8 +212,12 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
   const colors = useThemeColors();
   const sc = useThemedStyles(makeScStyles);
   const { batchId, batchName } = route.params;
+  const { canEdit: canEditSlotsPermission, canWrite: canCreateSlots } = usePermission("schedule");
   const { staff } = useAuth();
-  const canEditSlots = staff?.role !== "teacher";
+  // Editing the weekly template is admin/frontdesk-only — matches the API's
+  // own block on PATCH /class-slots/:slotId, which a teacher's "edit" grant
+  // would otherwise technically satisfy.
+  const canEditSlots = canEditSlotsPermission && (staff?.activeRole === "admin" || staff?.activeRole === "frontdesk");
 
   const [activeTab, setActiveTab]       = useState<"template" | "week">("template");
   const [slots, setSlots]               = useState<ClassSlot[]>([]);
@@ -230,14 +242,30 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
   const loadWeek = useCallback(async (quiet = false) => {
     if (!quiet) setLoadingWeek(true);
     try {
-      await generateSessions(batchId, { from: toDateStr(from), to: toDateStr(to) });
+      // Generating is a best-effort pre-step, not something every viewer
+      // can or needs to do — POST .../sessions/generate requires
+      // schedule.write, which a teacher (read+edit only) doesn't have, and
+      // would always 403. Previously that 403 threw before listSessions
+      // ever ran, so a teacher's Week tab could never show even already-
+      // generated sessions. Gated by permission, and non-fatal regardless
+      // (a transient failure here still shouldn't hide existing sessions).
+      if (canCreateSlots) {
+        await generateSessions(batchId, { from: toDateStr(from), to: toDateStr(to) }).catch(() => {});
+      }
       const data = await listSessions(batchId, { from: toDateStr(from), to: toDateStr(to) });
       setSessions(data);
     } catch { /* silent */ }
     finally { setLoadingWeek(false); }
-  }, [batchId, from, to]);
+  }, [batchId, from, to, canCreateSlots]);
 
-  useFocusEffect(useCallback(() => { loadSlots(); }, [loadSlots]));
+  // Refreshes whichever tab is currently active on every focus (screen
+  // re-opened, app foregrounded, etc.) — previously only ever refreshed the
+  // Template tab's slots, so the Week tab could silently show stale session
+  // data (e.g. a newly-generated or reassigned today's class) until the
+  // active tab was manually switched away and back.
+  useFocusEffect(useCallback(() => {
+    if (activeTab === "template") loadSlots(); else loadWeek();
+  }, [activeTab, loadSlots, loadWeek]));
 
   useEffect(() => {
     if (activeTab === "week") loadWeek();
@@ -321,7 +349,11 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
                     <Ionicons name="calendar-outline" size={ms(52)} color={colors.primary} />
                   </View>
                   <Text style={sc.emptyTitle}>No weekly slots yet</Text>
-                  <Text style={sc.emptySub}>Tap the + button to define the first recurring class slot for this batch.</Text>
+                  <Text style={sc.emptySub}>
+                    {canCreateSlots
+                      ? "Tap the + button to define the first recurring class slot for this batch."
+                      : "No recurring class slots have been set up for this batch yet."}
+                  </Text>
                 </View>
               ) : (
                 activeDays.map((day) => {
@@ -407,8 +439,12 @@ export function BatchScheduleScreen({ route, navigation }: Props) {
           </View>
         )}
 
-        {/* FAB — add slot (template tab, admin/frontdesk only) */}
-        {activeTab === "template" && canEditSlots && (
+        {/* FAB — add slot. POST .../slots requires schedule.write, a
+            different flag than the schedule.edit each existing slot's Edit
+            action needs — teacher has edit but not write, so this can't
+            reuse canEditSlots (that was the bug: the FAB was showing for
+            teacher, who'd get a 403 tapping it). */}
+        {activeTab === "template" && canCreateSlots && (
           <TouchableOpacity
             style={sc.fab}
             onPress={() => setSlotModal({ visible: true })}
@@ -454,13 +490,13 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabActive:  { borderBottomColor: colors.primary },
-  tabT:       { fontSize: fs(12), color: C.muted,   fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  tabTActive: { fontSize: fs(12), color: colors.primary, fontFamily: "Inter_700Bold", fontWeight: "700" },
+  tabT:       { ...T.chipText, color: C.muted },
+  tabTActive: { ...T.chipText, color: colors.primary },
 
   // Content
   listContent: { padding: ms(16), paddingBottom: ms(96) },
   center:      { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(10) },
-  loadingT:    { fontSize: fs(12), color: C.muted, marginTop: ms(4) },
+  loadingT:    { ...T.bodySmall, color: C.muted, marginTop: ms(4) },
 
   // Empty state
   emptyBox: {
@@ -477,17 +513,17 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent:  "center",
     marginBottom:    ms(16),
   },
-  emptyTitle: { fontSize: fs(15), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(6), textAlign: "center" },
-  emptySub:   { fontSize: fs(12), color: C.muted, textAlign: "center", lineHeight: fs(19) },
+  emptyTitle: { ...T.cardTitle, color: C.text, marginBottom: ms(6), textAlign: "center" },
+  emptySub:   { ...T.bodySmall, color: C.muted, textAlign: "center" },
 
   // Day section header
   daySection:    { marginBottom: ms(20) },
   dayHeaderRow:  { flexDirection: "row", alignItems: "center", marginBottom: ms(10), gap: ms(6) },
   dayDot:        { width: ms(7), height: ms(7), borderRadius: ms(3.5), flexShrink: 0 },
-  dayLabel:      { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" },
+  dayLabel:      { ...T.sectionHeading, letterSpacing: 0.6 },
   dayLine:       { flex: 1, height: 1, backgroundColor: C.border },
   dayCountPill:  { borderRadius: ms(10), paddingHorizontal: ms(7), paddingVertical: ms(2) },
-  dayCountT:     { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  dayCountT:     { ...T.badgeText },
 
   // Shared card
   card: {
@@ -506,32 +542,23 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
   cardBody:{ flex: 1, padding: ms(14), gap: ms(8) },
 
   cardTopRow: { flexDirection: "row", alignItems: "center", gap: ms(8) },
-  timeIconWrap: {
-    width: ms(30), height: ms(30),
-    borderRadius: ms(8),
-    alignItems: "center", justifyContent: "center",
-    flexShrink: 0,
-  },
-  timeText: { flex: 1, fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+
+  // Slot card — subject headline, then duration, then faculty/room meta.
+  cardMainRow:  { flex: 1, flexDirection: "row", alignItems: "center", gap: ms(8), padding: ms(14) },
+  subjectTitle: { ...T.cardTitle, color: C.text, marginBottom: ms(5) },
+  durationRow:  { flexDirection: "row", alignItems: "center", gap: ms(5), marginBottom: ms(6) },
+  durationText: { ...T.caption, color: C.muted },
+  durationSep:  { ...T.caption, color: C.placeholder },
+  metaRow:      { flexDirection: "row", alignItems: "center", gap: ms(14), flexWrap: "wrap" },
+  metaItem:     { flexDirection: "row", alignItems: "center", gap: ms(4), flexShrink: 1 },
+  metaText:     { ...T.caption, color: C.muted },
 
   // Session-specific
-  sessionDate: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  sessionTime: { fontSize: fs(11), color: C.muted, marginTop: ms(1) },
-  badgeGroup:  { flexDirection: "row", gap: ms(4), flexShrink: 0 },
   statusBadge: { flexDirection: "row", alignItems: "center", gap: ms(3), borderRadius: ms(5), paddingHorizontal: ms(6), paddingVertical: ms(2) },
-  statusBadgeT:{ fontSize: fs(9.5), fontFamily: "Inter_700Bold", fontWeight: "700" },
+  statusBadgeT:{ ...T.badgeText },
   typeBadge:   { borderRadius: ms(5), paddingHorizontal: ms(6), paddingVertical: ms(2) },
-  typeBadgeT:  { fontSize: fs(9.5), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  cancelReason:{ fontSize: fs(10), color: C.red, fontStyle: "italic" },
-
-  // Pills
-  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: ms(6) },
-  pill: {
-    flexDirection: "row", alignItems: "center", gap: ms(4),
-    borderRadius: ms(6), borderWidth: 1,
-    paddingHorizontal: ms(7), paddingVertical: ms(3),
-  },
-  pillT: { fontSize: fs(10.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", maxWidth: ms(110) },
+  typeBadgeT:  { ...T.badgeText },
+  cancelReason:{ ...T.caption, color: C.red, fontStyle: "italic" },
 
   // Week navigation
   weekNav: {
@@ -549,7 +576,7 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.primary + "10",
     alignItems: "center", justifyContent: "center",
   },
-  weekLabel: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  weekLabel: { ...T.listItemTitle, color: C.text },
 
   // FAB
   fab: {

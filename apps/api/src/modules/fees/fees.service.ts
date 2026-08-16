@@ -464,7 +464,7 @@ export async function listSchedules(
       enrollment: {
         include: {
           student: { select: { id: true, fullName: true, studentCode: true, phone: true } },
-          batch:   { select: { id: true, name: true } },
+          batch:   { select: { id: true, name: true, center: { select: { id: true, name: true } } } },
         },
       },
     },

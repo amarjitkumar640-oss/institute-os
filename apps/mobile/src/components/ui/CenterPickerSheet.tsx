@@ -5,6 +5,7 @@ import { BottomSheet } from "./BottomSheet";
 import { apiClient } from "../../api/client";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { T } from "./typography";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 
 interface CenterOption {
@@ -124,16 +125,16 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.primary + "16", justifyContent: "center", alignItems: "center",
     marginBottom: ms(10),
   },
-  title:  { fontSize: fs(17), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  sub:    { fontSize: fs(12.5), color: C.muted, marginTop: ms(4), lineHeight: fs(17), textAlign: "center" },
+  title:  { ...T.displayMedium, color: C.text },
+  sub:    { ...T.bodySmall, color: C.muted, marginTop: ms(4), textAlign: "center" },
   state:  { paddingHorizontal: ms(28), paddingBottom: ms(26), alignItems: "center", gap: ms(10) },
-  errT:   { fontSize: fs(13), color: C.text, textAlign: "center", lineHeight: fs(18) },
+  errT:   { ...T.body, color: C.text, textAlign: "center" },
   retryBtn: {
     flexDirection: "row", alignItems: "center", gap: ms(6),
     backgroundColor: colors.primary, borderRadius: ms(12),
     paddingHorizontal: ms(18), paddingVertical: ms(10), marginTop: ms(4),
   },
-  retryBtnT: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff" },
+  retryBtnT: { ...T.chipText, color: "#fff" },
   row: {
     flexDirection: "row", alignItems: "center", gap: ms(12),
     paddingHorizontal: ms(20), paddingVertical: ms(13),
@@ -144,6 +145,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     width: ms(34), height: ms(34), borderRadius: ms(10),
     backgroundColor: colors.primary + "14", justifyContent: "center", alignItems: "center", flexShrink: 0,
   },
-  rowT: { flex: 1, fontSize: fs(14), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
+  rowT: { flex: 1, ...T.listItemTitle, color: C.text },
   bottomSpacer: { height: ms(20) },
 });

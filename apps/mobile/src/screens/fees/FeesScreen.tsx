@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, Modal,
@@ -11,6 +11,9 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { SHEET_HEIGHT } from "../../components/ui/BottomSheet";
+import { AVATAR_SIZE, AVATAR_RADIUS, getAvatarFill } from "../../components/ui/avatarStyle";
+import { T } from "../../components/ui/typography";
 import type { RootStackParamList } from "../../navigation/types";
 import { useAuth } from "../../context/AuthContext";
 import { ms, fs } from "../../utils/responsive";
@@ -95,6 +98,7 @@ function ScheduleCard({
 }) {
   const colors = useThemeColors();
   const avatarColor   = getAvatarPalette(colors)[index % getAvatarPalette(colors).length];
+  const fill          = getAvatarFill(avatarColor);
   const displayStatus = deriveDisplayStatus(schedule);
   const sm            = STATUS_META[displayStatus];
   const outstanding   = scheduleTotalOutstanding(schedule);
@@ -124,8 +128,8 @@ function ScheduleCard({
       activeOpacity={0.78}
     >
       <View style={fc.topRow}>
-        <View style={[fc.avatar, { backgroundColor: avatarColor }]}>
-          <Text style={fc.avatarT}>{initials(student?.fullName ?? "?")}</Text>
+        <View style={[fc.avatar, { backgroundColor: fill.backgroundColor, borderWidth: fill.borderWidth, borderColor: fill.borderColor }]}>
+          <Text style={[fc.avatarT, { color: fill.color }]}>{initials(student?.fullName ?? "?")}</Text>
         </View>
         <View style={fc.nameBlock}>
           <Text style={fc.name} numberOfLines={1}>{student?.fullName ?? "Unknown"}</Text>
@@ -231,7 +235,7 @@ const bs = StyleSheet.create({
     backgroundColor:    C.card,
     borderTopLeftRadius:  ms(24),
     borderTopRightRadius: ms(24),
-    maxHeight:          "72%",
+    maxHeight:          SHEET_HEIGHT.short,
     paddingTop:         ms(10),
     paddingHorizontal:  ms(0),
   },
@@ -244,9 +248,7 @@ const bs = StyleSheet.create({
     marginBottom:    ms(14),
   },
   title: {
-    fontSize:          fs(15),
-    fontFamily:        "Inter_700Bold",
-    fontWeight:        "700",
+    ...T.cardTitle,
     color:             C.text,
     paddingHorizontal: ms(20),
     marginBottom:      ms(8),
@@ -269,17 +271,15 @@ const bs = StyleSheet.create({
     flexShrink:     0,
   },
   rowLabel: {
-    flex:       1,
-    fontSize:   fs(14),
-    fontFamily: "Inter_500Medium",
-    fontWeight: "500",
-    color:      C.text,
+    flex: 1,
+    ...T.listItemTitle,
+    color: C.text,
   },
 });
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-export function FeesScreen({ navigation }: Props) {
+export function FeesScreen({ navigation, route }: Props) {
   const colors  = useThemeColors();
   const ls      = useThemedStyles(makeLsStyles);
   const { currentCenter } = useAuth();
@@ -291,9 +291,14 @@ export function FeesScreen({ navigation }: Props) {
   const [refreshing,     setRefreshing]     = useState(false);
   const [error,          setError]          = useState<string | null>(null);
   const [search,         setSearch]         = useState("");
-  const [filter,         setFilter]         = useState<ScheduleFilter>("all");
+  const [filter,         setFilter]         = useState<ScheduleFilter>(route.params?.initialFilter ?? "all");
   const [batchFilter,    setBatchFilter]    = useState<string | null>(null);
   const [batchSheetOpen, setBatchSheetOpen] = useState(false);
+
+  // Only the very first load should show the full-screen loading overlay —
+  // every reload after that is triggered by changing a filter, which should
+  // update quietly instead of flashing the whole screen grey again.
+  const didLoadOnce = useRef(false);
 
   useEffect(() => {
     listBatches().then(setBatches).catch(() => {});
@@ -322,7 +327,10 @@ export function FeesScreen({ navigation }: Props) {
   }, [filter, search, batchFilter]);
 
   useEffect(() => {
-    const t = setTimeout(() => load(), search ? 300 : 0);
+    const t = setTimeout(() => {
+      load(didLoadOnce.current);
+      didLoadOnce.current = true;
+    }, search ? 300 : 0);
     return () => clearTimeout(t);
   }, [load]);
 
@@ -376,28 +384,6 @@ export function FeesScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {/* ── Status filter chips ───────────────────────────────────────────── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={ls.chipRow}
-      >
-        {FILTERS.map((f) => {
-          const active = filter === f.key;
-          return (
-            <TouchableOpacity
-              key={f.key}
-              style={[ls.chip, active && { backgroundColor: f.color, borderColor: f.color }]}
-              onPress={() => setFilter(f.key)}
-              activeOpacity={0.75}
-            >
-              <Ionicons name={f.icon as any} size={ms(12)} color={active ? "#fff" : C.muted} />
-              <Text style={[ls.chipT, active && ls.chipTOn]}>{f.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
       {/* ── Search + Batch filter ─────────────────────────────────────────── */}
       <View style={ls.filterRow}>
         <View style={ls.searchBox}>
@@ -417,15 +403,16 @@ export function FeesScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* Batch filter button */}
+        {/* Batch filter button — background/icons stay static; the corner
+            badge below is the only "a filter is active" signal. */}
         <TouchableOpacity
-          style={[ls.batchBtn, batchFilter && { borderColor: colors.primary, backgroundColor: colors.primary + "0E" }]}
+          style={ls.batchBtn}
           onPress={() => setBatchSheetOpen(true)}
           activeOpacity={0.75}
         >
-          <Ionicons name="layers-outline" size={ms(15)} color={batchFilter ? colors.primary : C.muted} />
-          {batchFilter && <View style={[ls.batchDot, { backgroundColor: colors.primary }]} />}
-          <Ionicons name="chevron-down" size={ms(12)} color={batchFilter ? colors.primary : C.muted} />
+          <Ionicons name="layers-outline" size={ms(15)} color={C.muted} />
+          {!!batchFilter && <View style={[ls.batchDot, { backgroundColor: colors.primary }]} />}
+          <Ionicons name="chevron-down" size={ms(12)} color={C.muted} />
         </TouchableOpacity>
       </View>
 
@@ -444,6 +431,29 @@ export function FeesScreen({ navigation }: Props) {
           </View>
         </View>
       )}
+
+      {/* ── Status filter chips ───────────────────────────────────────────── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={ls.chipScroll}
+        contentContainerStyle={ls.chipRow}
+      >
+        {FILTERS.map((f) => {
+          const active = filter === f.key;
+          return (
+            <TouchableOpacity
+              key={f.key}
+              style={[ls.chip, active && { backgroundColor: f.color, borderColor: f.color }]}
+              onPress={() => setFilter(f.key)}
+              activeOpacity={0.75}
+            >
+              <Ionicons name={f.icon as any} size={ms(12)} color={active ? "#fff" : C.muted} />
+              <Text style={[ls.chipT, active && ls.chipTOn]}>{f.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
     </View>
   );
@@ -530,7 +540,7 @@ const fc = StyleSheet.create({
     paddingVertical:   ms(14),
     paddingHorizontal: ms(16),
     marginHorizontal:  ms(16),
-    marginBottom:      ms(10),
+    marginBottom:      ms(12),
     overflow:          "hidden",
     shadowColor:       C.text,
     shadowOffset:      { width: 0, height: ms(5) },
@@ -541,15 +551,15 @@ const fc = StyleSheet.create({
   cardOverdue: { backgroundColor: "#FFF5F4" },
   topRow:     { flexDirection: "row", alignItems: "center", gap: ms(10) },
   avatar: {
-    width: ms(40), height: ms(40), borderRadius: ms(12),
+    width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_RADIUS,
     justifyContent: "center", alignItems: "center", flexShrink: 0,
   },
-  avatarT:     { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: "#fff", includeFontPadding: false },
+  avatarT:     { ...T.listItemTitle, includeFontPadding: false },
   nameBlock:   { flex: 1, minWidth: 0, gap: ms(2) },
-  name:        { fontSize: fs(13.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.text },
-  code:        { fontSize: fs(11), color: C.muted },
+  name:        { ...T.listItemTitle, color: C.text },
+  code:        { ...T.caption, color: C.muted },
   amountBlock: { flexDirection: "row", alignItems: "center", gap: ms(4), flexShrink: 0 },
-  amount:      { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  amount:      { ...T.listItemTitle, color: C.text },
   midRow: {
     flexDirection: "row", alignItems: "center",
     justifyContent: "space-between", marginTop: ms(10),
@@ -560,14 +570,14 @@ const fc = StyleSheet.create({
     paddingHorizontal: ms(6), paddingVertical: ms(2),
     flexShrink: 1, maxWidth: "70%",
   },
-  batchPillT: { fontSize: fs(11), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.blue, flexShrink: 1 },
+  batchPillT: { ...T.chipText, color: C.blue, flexShrink: 1 },
   badge: {
     flexDirection: "row", alignItems: "center", gap: ms(3),
     borderRadius: ms(7), paddingHorizontal: ms(8), paddingVertical: ms(2),
   },
-  badgeT:  { fontSize: fs(9.5), fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.2 },
+  badgeT:  { ...T.badgeText, letterSpacing: 0.2 },
   dueRow:  { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(8) },
-  due:     { fontSize: fs(10.5), flex: 1 },
+  due:     { ...T.caption, flex: 1 },
 });
 
 // ── Screen styles ─────────────────────────────────────────────────────────────
@@ -583,8 +593,8 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor:   C.card,
     borderRadius:      ms(18),
     marginHorizontal:  ms(16),
-    marginTop:         ms(14),
-    marginBottom:      ms(16),
+    marginTop:         ms(8),
+    marginBottom:      ms(8),
     padding:           ms(16),
     shadowColor:       C.text,
     shadowOffset:      { width: 0, height: ms(4) },
@@ -601,8 +611,8 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems:     "center",
     justifyContent: "center",
   },
-  summaryLbl:     { fontSize: fs(11.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  summaryVal:     { fontSize: fs(22), fontFamily: "Inter_800ExtraBold", fontWeight: "800", paddingLeft: ms(36) },
+  summaryLbl:     { ...T.caption, color: C.muted },
+  summaryVal:     { ...T.displayMedium, paddingLeft: ms(36) },
   summaryDivider: { width: ms(1), backgroundColor: C.border, marginHorizontal: ms(16), alignSelf: "stretch" },
   overduePill: {
     flexDirection:     "row",
@@ -616,12 +626,28 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf:         "flex-start",
     marginLeft:        ms(36),
   },
-  overduePillT: { fontSize: fs(10), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.red },
+  overduePillT: { ...T.badgeText, color: C.red },
 
-  // Status chips
+  // Status chips.
+  // Student List's chip row is a fixed-height container (38) around a
+  // shorter chip (paddingVertical 5) — the ~6px of vertical centering
+  // "buffer" inside that fixed box is what actually sets the visible gap
+  // above/below the pill, not just the margin between rows. This chip is
+  // taller (paddingVertical 8, plus an icon), so its own fixed height needs
+  // to be taller too, to keep that same ~6px buffer on each side.
+  // FlatList's contentContainerStyle padding (listContent) wraps
+  // ListHeaderComponent too, not just the data rows — so the "gap before the
+  // first card" has to live here, on the header's last element, as a margin
+  // on the fixed-height outer scroll container (padding on the inner
+  // content would get clipped — this ScrollView doesn't scroll vertically).
+  // No fixed height here — a fixed height taller than the chip would center
+  // it inside an invisible buffer, inflating the visible gap above beyond
+  // whatever margin is set. Letting it size to content keeps marginBottom
+  // the exact, only source of that gap.
+  chipScroll: { flexGrow: 0, flexShrink: 0, marginBottom: ms(12) },
   chipRow: {
+    alignItems:        "center",
     paddingHorizontal: ms(16),
-    paddingBottom:     ms(12),
     flexDirection:     "row",
     gap:               ms(8),
   },
@@ -636,7 +662,7 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth:       1,
     borderColor:       C.border,
   },
-  chipT:   { fontSize: fs(12.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
+  chipT:   { ...T.chipText, color: C.muted },
   chipTOn: { color: "#fff" },
 
   // Search + batch filter row
@@ -645,13 +671,15 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems:        "center",
     gap:               ms(10),
     paddingHorizontal: ms(16),
-    marginBottom:      ms(12),
+    // Same gap as summaryCard.marginBottom, so search→chips matches
+    // stats-card→search exactly.
+    marginBottom:      ms(8),
   },
   searchBox: {
     flex:              1,
     flexDirection:     "row",
     alignItems:        "center",
-    backgroundColor:   C.card,
+    backgroundColor:   C.inputBg,
     borderRadius:      ms(12),
     paddingHorizontal: ms(12),
     paddingVertical:   ms(10),
@@ -661,12 +689,12 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
     shadowOpacity:     0.06,
     shadowRadius:      ms(6),
     elevation:         2,
-    borderWidth:       1,
+    borderWidth:       StyleSheet.hairlineWidth,
     borderColor:       C.border,
   },
   searchInput: {
     flex:               1,
-    fontSize:           fs(13.5),
+    ...T.body,
     color:              C.text,
     padding:            0,
     includeFontPadding: false,
@@ -689,18 +717,26 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
     position:          "relative",
   },
   batchDot: {
+    // Sits right on the button's border line at the corner — a slight
+    // overlap, not floating past it and not tucked away inside it.
     position:     "absolute",
-    top:          ms(8),
-    right:        ms(8),
-    width:        ms(6),
-    height:       ms(6),
-    borderRadius: ms(3),
+    top:          -ms(2),
+    right:        -ms(2),
+    width:        ms(8),
+    height:       ms(8),
+    borderRadius: ms(4),
   },
 
-  // Active batch chip (visible below filter row when a batch is selected)
+  // Active batch chip (visible below filter row when a batch is selected).
+  // marginTop(6) + filterRow's own marginBottom(2) = 8, matching Student
+  // List's gap from search row to its active-filter chip; marginBottom(2)
+  // matches Student List's trailing gap into the next filter row.
   activeBatchRow: {
     paddingHorizontal: ms(16),
-    marginBottom:      ms(6),
+    // filterRow's own marginBottom(8) already provides the gap above this,
+    // so no extra marginTop here — and marginBottom matches that same 8 for
+    // the gap below, keeping every gap in this section equal.
+    marginBottom:      ms(8),
   },
   activeBatchChip: {
     flexDirection:     "row",
@@ -713,10 +749,8 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth:       1,
   },
   activeBatchT: {
-    fontSize:   fs(12.5),
-    fontFamily: "Inter_600SemiBold",
-    fontWeight: "600",
-    maxWidth:   ms(180),
+    ...T.chipText,
+    maxWidth: ms(180),
   },
 
   listContent: { paddingBottom: ms(40) },

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Search, DollarSign } from "lucide-react";
 import { listFeeSchedules, getFeeSummary, type ScheduleListItem } from "@/api/fees";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ const STATUS_COLORS: Record<string, "default" | "success" | "danger" | "warning"
 
 export function FeesPage() {
   const navigate = useNavigate();
+  const { isAllCenters } = useAuth();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 
@@ -31,6 +33,14 @@ export function FeesPage() {
   });
 
   const { data: summary } = useQuery({ queryKey: ["fee-summary"], queryFn: getFeeSummary });
+
+  // Only meaningful when viewing more than one center's data at once —
+  // redundant (every row would show the same name) when scoped to one.
+  const centerColumn: ColumnDef<ScheduleListItem> = {
+    id: "center",
+    header: "Center",
+    cell: ({ row }) => row.original.batch?.center?.name ?? "—",
+  };
 
   const columns: ColumnDef<ScheduleListItem>[] = [
     {
@@ -48,6 +58,7 @@ export function FeesPage() {
       header: "Batch",
       cell: ({ row }) => <span className="text-sm">{row.original.batch?.name ?? "—"}</span>,
     },
+    ...(isAllCenters ? [centerColumn] : []),
     {
       accessorKey: "totalFee",
       header: "Total Fee",

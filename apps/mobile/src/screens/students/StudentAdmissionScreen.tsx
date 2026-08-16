@@ -13,12 +13,14 @@ import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
-import { BottomSheet } from "../../components/ui/BottomSheet";
+import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
 import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
+import { T } from "../../components/ui/typography";
 import {
   admitStudent, uploadStudentPhoto, deleteStudentPhoto,
   type AdmitStudentPayload, type AdmitStudentResult,
 } from "../../api/students";
+import { getAdmissionApplication } from "../../api/admissionApplications";
 import {
   listDocumentTypes, uploadStudentDocument, deleteStudentDocument,
   type DocumentType,
@@ -29,6 +31,7 @@ import { apiClient } from "../../api/client";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { usePermission } from "../../hooks/usePermission";
 import type {
   Gender, Qualification, CoursePreference, DurationPref, BatchTiming, PaymentMode,
 } from "../../api/students";
@@ -132,6 +135,11 @@ function parseDisplayDate(s: string): string | null {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function isoToDisplayDate(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
 // ── Step progress bar ─────────────────────────────────────────────────────────
 
 const STEPS = [
@@ -159,7 +167,7 @@ function StepBar({ current }: { current: number }) {
                   : <Text style={[sb.num, { color }]}>{i + 1}</Text>
                 }
               </View>
-              <Text style={[sb.lbl, { color: active ? colors.primary : done ? colors.primary : C.placeholder, fontWeight: active ? "800" : "600" }]} numberOfLines={1}>
+              <Text style={[sb.lbl, { color: active ? colors.primary : done ? colors.primary : C.placeholder, fontWeight: active ? "700" : "600" }]} numberOfLines={1}>
                 {step.label}
               </Text>
             </View>
@@ -177,7 +185,7 @@ const sb = StyleSheet.create({
   wrap:    { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: ms(16), paddingVertical: ms(14), backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border },
   stepCol: { alignItems: "center", gap: ms(4), width: ms(52) },
   circle:  { width: ms(28), height: ms(28), borderRadius: ms(14), borderWidth: 2, justifyContent: "center", alignItems: "center" },
-  num:     { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  num:     { ...T.badgeText },
   lbl:     { fontSize: fs(9), textAlign: "center" },
   line:    { flex: 1, height: 2, alignSelf: "center", marginBottom: ms(16), marginHorizontal: ms(-2) },
 });
@@ -219,7 +227,7 @@ const or = StyleSheet.create({
   pill:        { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(12), paddingVertical: ms(8), borderRadius: ms(10), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
   radio:       { width: ms(14), height: ms(14), borderRadius: ms(7), borderWidth: 2, justifyContent: "center", alignItems: "center" },
   radioDot:    { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: C.card },
-  label:       { fontSize: fs(12.5), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted },
+  label:       { ...T.chipText, color: C.muted },
   labelActive: { color: "#fff", fontFamily: "Inter_700Bold", fontWeight: "700" },
 });
 
@@ -243,8 +251,8 @@ const sh = StyleSheet.create({
   wrap:    { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(16) },
   iconBox: { width: ms(34), height: ms(34), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
   col:     { flex: 1 },
-  label:   { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 1 },
-  sub:     { fontSize: fs(10.5), color: C.muted, marginTop: ms(1) },
+  label:   { ...T.sectionHeading },
+  sub:     { ...T.caption, color: C.muted, marginTop: ms(1) },
 });
 
 // ── QR Scanner modal ──────────────────────────────────────────────────────────
@@ -352,7 +360,7 @@ const makeQrStyles = (colors: ThemeColors) => StyleSheet.create({
 
   bottom:     { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", gap: ms(16), paddingHorizontal: ms(24) },
   hint:       { color: "rgba(255,255,255,0.85)", fontSize: fs(13), textAlign: "center", lineHeight: fs(20) },
-  uidPill:    { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: "rgba(27,156,99,0.18)", borderRadius: ms(20), paddingHorizontal: ms(14), paddingVertical: ms(8), borderWidth: 1, borderColor: "rgba(27,156,99,0.35)" },
+  uidPill:    { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.green + "2E", borderRadius: ms(20), paddingHorizontal: ms(14), paddingVertical: ms(8), borderWidth: 1, borderColor: C.green + "59" },
   uidT:       { color: "#80EFBC", fontSize: fs(11.5), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
 
 });
@@ -491,7 +499,7 @@ function BatchPickerModal({ visible, batches, selectedId, onSelect, onClose }: {
 const makeBpmStyles = (colors: ThemeColors) => StyleSheet.create({
   laterCard:    { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, padding: ms(14), marginBottom: ms(14) },
   laterCardSel: { borderColor: colors.primary, backgroundColor: colors.primary + "0C" },
-  laterCardT:   { flex: 1, fontSize: fs(13.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  laterCardT:   { flex: 1, ...T.listItemTitle, color: C.text },
 
   list: { gap: ms(10) },
   card: {
@@ -501,13 +509,13 @@ const makeBpmStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cardDot:  { width: ms(9), height: ms(9), borderRadius: ms(5), flexShrink: 0 },
   cardBody: { flex: 1, minWidth: 0 },
-  cardName: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  cardCourse: { fontSize: fs(11.5), color: C.muted, marginTop: ms(1) },
+  cardName: { ...T.listItemTitle, color: C.text },
+  cardCourse: { ...T.caption, color: C.muted, marginTop: ms(1) },
   cardMetaRow: { flexDirection: "row", alignItems: "center", gap: ms(8), marginTop: ms(6) },
   catPill:   { borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  catPillT:  { fontSize: fs(9.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  catPillT:  { ...T.badgeText },
   seatsRow:  { flexDirection: "row", alignItems: "center", gap: ms(4) },
-  seatsT:    { fontSize: fs(10.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  seatsT:    { ...T.caption, color: C.muted },
 });
 
 // ── Success detail row ────────────────────────────────────────────────────────
@@ -531,8 +539,8 @@ const dr = StyleSheet.create({
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(28), height: ms(28), borderRadius: ms(7), justifyContent: "center", alignItems: "center", flexShrink: 0 },
   col:       { flex: 1 },
-  label:     { fontSize: fs(9.5), color: C.muted, fontFamily: "Inter_700Bold", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
-  value:     { fontSize: fs(12.5), color: C.text, fontFamily: "Inter_700Bold", fontWeight: "700", marginTop: ms(1) },
+  label:     { ...T.sectionHeading, color: C.muted },
+  value:     { ...T.listItemTitle, color: C.text, marginTop: ms(1) },
 });
 
 // ── Option constants ──────────────────────────────────────────────────────────
@@ -669,29 +677,29 @@ function StepErrorBanner({ errors }: { errors: Record<string, string> }) {
 
 const eb = StyleSheet.create({
   wrap:  { flexDirection: "row", alignItems: "flex-start", gap: ms(8), backgroundColor: C.red + "10", borderRadius: ms(12), padding: ms(12), marginBottom: ms(16), borderWidth: 1, borderColor: C.red + "30" },
-  title: { fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.red, marginBottom: ms(4) },
-  msg:   { fontSize: fs(12), color: C.red, lineHeight: fs(18) },
+  title: { ...T.chipText, color: C.red, marginBottom: ms(4) },
+  msg:   { ...T.body, color: C.red },
 });
 
 // ── Shared picker-sheet styles ────────────────────────────────────────────────
 
 const ps = StyleSheet.create({
   backdrop:    { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
-  panel:       { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), maxHeight: "92%", paddingTop: ms(10) },
+  panel:       { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), maxHeight: SHEET_HEIGHT.tall, paddingTop: ms(10) },
   handle:      { width: ms(36), height: ms(4), borderRadius: ms(2), backgroundColor: C.border, alignSelf: "center", marginBottom: ms(12) },
   headerRow:   { flexDirection: "row", alignItems: "center", gap: ms(12), paddingHorizontal: ms(16), paddingBottom: ms(14), borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   headerIco:   { width: ms(40), height: ms(40), borderRadius: ms(13), alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  headerTitle: { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  headerSub:   { fontSize: fs(12), color: C.muted, marginTop: ms(2) },
+  headerTitle: { ...T.cardTitle, color: C.text },
+  headerSub:   { ...T.caption, color: C.muted, marginTop: ms(2) },
   closeBtn:    { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
   searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(4) },
-  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.inputBg, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), borderWidth: 1, borderColor: C.border },
-  searchInput: { flex: 1, fontSize: fs(14), color: C.text, includeFontPadding: false, padding: 0 },
+  searchRow:   { flexDirection: "row", alignItems: "center", gap: ms(8), backgroundColor: C.inputBg, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border },
+  searchInput: { flex: 1, ...T.body, color: C.text, includeFontPadding: false, padding: 0 },
   list:        { flexGrow: 0 },
   listContent: { paddingHorizontal: ms(16), paddingTop: ms(14), paddingBottom: ms(24) },
   empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(32) },
-  emptyT:      { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
-  emptySub:    { fontSize: fs(12), color: C.placeholder },
+  emptyT:      { ...T.listItemTitle, color: C.muted },
+  emptySub:    { ...T.bodySmall, color: C.placeholder },
 });
 
 // ── Course picker modal (Step 3) ──────────────────────────────────────────────
@@ -810,11 +818,11 @@ const cp = StyleSheet.create({
   gridCatRow:  { paddingHorizontal: ms(10), paddingBottom: ms(8) },
   gridCatPill: { flexDirection: "row", alignItems: "center", gap: ms(5), borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3) },
   gridDot:     { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  gridCat:     { fontSize: fs(9.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
-  gridName:    { flex: 1, fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, lineHeight: fs(18) },
+  gridCat:     { ...T.chipText },
+  gridName:    { flex: 1, ...T.cardTitle, color: C.text },
   gridMeta:    { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(10), paddingBottom: ms(10) },
-  gridDur:     { fontSize: fs(10.5), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
-  gridFee:     { fontSize: fs(10.5), color: C.green, fontFamily: "Inter_700Bold", fontWeight: "700" },
+  gridDur:     { ...T.caption, color: C.muted },
+  gridFee:     { ...T.caption, color: C.green },
 });
 
 // ── Duration picker (Step 3) ──────────────────────────────────────────────────
@@ -861,10 +869,10 @@ function DurationPicker({ value, onSelect, error }: {
 const dp = StyleSheet.create({
   row:   { flexDirection: "row", gap: ms(8) },
   card:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border, gap: ms(3) },
-  label: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  hint:  { fontSize: fs(10.5), color: C.muted },
+  label: { ...T.listItemTitle, color: C.text },
+  hint:  { ...T.caption, color: C.muted },
   err:   { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(8) },
-  errT:  { fontSize: fs(11.5), color: C.red, flex: 1 },
+  errT:  { ...T.helperText, color: C.red, flex: 1 },
 });
 
 // ── Qualification grid (Step 3) ───────────────────────────────────────────────
@@ -916,9 +924,9 @@ function QualGrid({ value, onSelect, error }: {
 const qg = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: ms(10) },
   card: { width: "47%", alignItems: "center", justifyContent: "center", paddingVertical: ms(14), paddingHorizontal: ms(8), borderRadius: ms(14), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border, gap: ms(6) },
-  name: { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, textAlign: "center" },
+  name: { ...T.listItemTitle, color: C.text, textAlign: "center" },
   err:  { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(8) },
-  errT: { fontSize: fs(11.5), color: C.red, flex: 1 },
+  errT: { ...T.helperText, color: C.red, flex: 1 },
 });
 
 // ── Qualification picker modal (Step 3) ──────────────────────────────────────
@@ -996,8 +1004,8 @@ const qpm = StyleSheet.create({
   grid:       { flexDirection: "row", flexWrap: "wrap", gap: ms(14) },
   card:       { width: "47%", alignItems: "center", paddingTop: ms(22), paddingBottom: ms(16), paddingHorizontal: ms(8), borderRadius: ms(18), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, gap: ms(8), position: "relative" },
   iconWrap:   { width: ms(56), height: ms(56), borderRadius: ms(18), justifyContent: "center", alignItems: "center" },
-  cardLabel:  { fontSize: fs(13.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, textAlign: "center" },
-  cardSub:    { fontSize: fs(10.5), color: C.muted, textAlign: "center" },
+  cardLabel:  { ...T.cardTitle, color: C.text, textAlign: "center" },
+  cardSub:    { ...T.caption, color: C.muted, textAlign: "center" },
   checkBadge: { position: "absolute", top: ms(8), right: ms(8) },
 });
 
@@ -1037,8 +1045,8 @@ function TimingPicker({ value, onSelect }: {
 const tp = StyleSheet.create({
   row:   { flexDirection: "row", gap: ms(8) },
   card:  { flex: 1, alignItems: "center", paddingVertical: ms(14), borderRadius: ms(14), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border, gap: ms(4) },
-  label: { fontSize: fs(12), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.blue },
-  sub:   { fontSize: fs(10), color: C.muted },
+  label: { ...T.listItemTitle, color: C.blue },
+  sub:   { ...T.caption, color: C.muted },
 });
 
 // ── Payment mode picker (Step 5) ──────────────────────────────────────────────
@@ -1091,18 +1099,30 @@ const pmp = StyleSheet.create({
   row:     { flexDirection: "row", gap: ms(10) },
   card:    { flex: 1, flexDirection: "row", alignItems: "center", paddingVertical: ms(10), paddingHorizontal: ms(10), borderRadius: ms(12), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, gap: ms(8) },
   iconWrap: { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  label:   { fontSize: fs(12.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  sub:     { fontSize: fs(9.5), color: C.muted, marginTop: ms(1) },
+  label:   { ...T.listItemTitle, color: C.text },
+  sub:     { ...T.caption, color: C.muted, marginTop: ms(1) },
   err:     { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(8) },
-  errT:    { fontSize: fs(11.5), color: C.red, flex: 1 },
+  errT:    { ...T.helperText, color: C.red, flex: 1 },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
-export function StudentAdmissionScreen({ navigation }: Props) {
+export function StudentAdmissionScreen({ navigation, route }: Props) {
+  const applicationId = route.params?.applicationId;
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
   const insets = useSafeAreaInsets();
+
+  // Nothing links here for a role without students.write today (the FABs
+  // that open this screen — from the dashboard and the student list — are
+  // themselves hidden), but nothing stops a direct navigation.navigate
+  // either — RootNavigator registers every route unconditionally. The
+  // underlying POST /students/admit call requires students.write regardless
+  // of whether this is a fresh admission or reviewing an existing
+  // application (applicationId), so one gate covers both entry points.
+  const { canWrite } = usePermission("students");
+  useEffect(() => { if (!canWrite) navigation.goBack(); }, [canWrite]);
+
   const [step, setStep]  = useState(0);
   const slideAnim        = useRef(new Animated.Value(0)).current;
   const scrollRef        = useRef<import("react-native").ScrollView>(null);
@@ -1127,6 +1147,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
   // ── Terms & Conditions ──
   const [termsOpen,      setTermsOpen]      = useState(false);
   const [tcAcknowledged, setTcAcknowledged] = useState(false);
+  const [applicantAcceptedTc, setApplicantAcceptedTc] = useState(false);
 
   // ── Info modal (replaces native Alert) ──
   const [infoModal, setInfoModal] = useState<{
@@ -1209,6 +1230,47 @@ export function StudentAdmissionScreen({ navigation }: Props) {
       .catch(() => {})
       .finally(() => setCoursesLoading(false));
   }, []);
+
+  // Opened via "Review" from the Admission Applications inbox — prefill only
+  // the student-fillable fields; office-use ones (batch/payment/etc.) are
+  // still left for frontdesk to fill in on the Office step below.
+  useEffect(() => {
+    if (!applicationId) return;
+    getAdmissionApplication(applicationId)
+      .then((app) => {
+        setFullName(app.fullName);
+        setPhone(app.phone);
+        if (app.dob) setDob(isoToDisplayDate(app.dob));
+        setGender((app.gender as Gender | null) ?? null);
+        setAddress(app.address ?? "");
+        setFatherName(app.fatherName ?? "");
+        setMotherName(app.motherName ?? "");
+        setGuardianOccupation(app.guardianOccupation ?? "");
+        setEmail(app.email ?? "");
+        setGuardianPhone(app.guardianPhone ?? "");
+        setQualification((app.qualification as Qualification | null) ?? null);
+        setPassYear(app.passYear ?? "");
+        setBoard(app.board ?? "");
+        setWhatsapp(app.whatsapp ?? "");
+        setCoursePreference((app.coursePreference as CoursePreference | null) ?? null);
+        setDurationPreference((app.durationPreference as DurationPref | null) ?? null);
+        if (app.courseId) {
+          setSelectedCourseId(app.courseId);
+          setSelectedCourseName(app.course?.name ?? null);
+        }
+        // The applicant already accepted terms themselves when they
+        // submitted the public form — no need to make frontdesk re-tick
+        // this (still editable, e.g. if they want to walk through the terms
+        // again in person anyway).
+        if (app.tcAcceptedAt) {
+          setTcAcknowledged(true);
+          setApplicantAcceptedTc(true);
+        }
+      })
+      .catch(() => {
+        showInfo("error", "Couldn't load application", "The application details couldn't be loaded — you can still fill the form in manually.");
+      });
+  }, [applicationId]);
 
   // ── Step navigation ────────────────────────────────────────────────────────
 
@@ -1329,6 +1391,7 @@ export function StudentAdmissionScreen({ navigation }: Props) {
         paymentMode,
         amountPaid:         amountPaid.trim() ? Number(amountPaid) : null,
         tcAcknowledged:     tcAcknowledged || undefined,
+        applicationId,
       };
 
       const response = await admitStudent(payload);
@@ -1568,6 +1631,13 @@ export function StudentAdmissionScreen({ navigation }: Props) {
               </Text>
             </TouchableOpacity>
 
+            {applicantAcceptedTc && (
+              <View style={s.tcErrorRow}>
+                <Ionicons name="checkmark-circle-outline" size={ms(13)} color={C.green} />
+                <Text style={[s.tcError, { color: C.green }]}>Applicant already accepted these terms when they applied online</Text>
+              </View>
+            )}
+
             {!!errors.tcAcknowledged && (
               <View style={s.tcErrorRow}>
                 <Ionicons name="alert-circle-outline" size={ms(13)} color={C.red} />
@@ -1672,6 +1742,8 @@ export function StudentAdmissionScreen({ navigation }: Props) {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (!canWrite) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
@@ -1982,71 +2054,74 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   scanBtn:        { marginBottom: ms(18), borderRadius: ms(14) },
   scanBtnDone:    {},
   scanBtnGrad:    { flexDirection: "row", alignItems: "center", gap: ms(12), paddingHorizontal: ms(16), paddingVertical: ms(14) },
-  scanBtnTitle:   { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
-  scanBtnSub:     { fontSize: fs(11), color: "rgba(255,255,255,0.8)", marginTop: ms(2) },
+  scanBtnTitle:   { ...T.buttonText, color: "#fff" },
+  scanBtnSub:     { ...T.caption, color: "rgba(255,255,255,0.8)", marginTop: ms(2) },
 
   // Field blocks
   fieldBlock:      { marginBottom: ms(16), gap: ms(10) },
-  fieldLabel:      { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, letterSpacing: 0.8, textTransform: "uppercase" },
+  // Matches FormField's own label style (T.chipText) — these OptionRow-based
+  // fields (Gender, Course Applied For, etc.) are individual field labels,
+  // not group headers, so sectionHeading was the wrong token.
+  fieldLabel:      { ...T.chipText, color: C.text },
   twoCol:          { flexDirection: "row", gap: ms(10) },
   reqLabelRow:     { flexDirection: "row", alignItems: "center" },
-  reqAsterisk:     { fontSize: fs(13), color: C.red, fontFamily: "Inter_800ExtraBold", fontWeight: "800", lineHeight: fs(14) },
+  reqAsterisk:     { fontSize: fs(13), color: C.red, fontFamily: "Inter_700Bold", fontWeight: "700", lineHeight: fs(14) },
   sectionDivider:  { height: 1, backgroundColor: C.border, marginTop: ms(4), marginBottom: ms(20) },
 
   // T&C section
   tcSection:    { gap: ms(12) },
   showTcBtn:    { flexDirection: "row", alignItems: "center", gap: ms(12), backgroundColor: C.inputBg, borderRadius: ms(14), padding: ms(14), borderWidth: 1, borderColor: C.border },
   showTcIcon:   { width: ms(38), height: ms(38), borderRadius: ms(10), backgroundColor: C.card, justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  showTcTitle:  { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
-  showTcSub:    { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
+  showTcTitle:  { ...T.buttonText, color: colors.primary },
+  showTcSub:    { ...T.caption, color: C.muted, marginTop: ms(2) },
   tcCheckRow:   { flexDirection: "row", alignItems: "flex-start", gap: ms(10), padding: ms(12), backgroundColor: C.inputBg, borderRadius: ms(12), borderWidth: 1.5, borderColor: C.border },
   tcCheckRowOn: { borderColor: colors.primary, backgroundColor: colors.primary + "10" },
   checkbox:     { width: ms(20), height: ms(20), borderRadius: ms(5), borderWidth: 2, borderColor: C.border, backgroundColor: C.card, justifyContent: "center", alignItems: "center", flexShrink: 0, marginTop: ms(1) },
   checkboxOn:   { backgroundColor: colors.primary, borderColor: colors.primary },
-  tcCheckText:  { flex: 1, fontSize: fs(12.5), color: C.text, lineHeight: fs(19), fontFamily: "Inter_500Medium", fontWeight: "500" },
+  tcCheckText:  { flex: 1, ...T.body, color: C.text },
   tcErrorRow:   { flexDirection: "row", alignItems: "center", gap: ms(5) },
-  tcError:      { fontSize: fs(11.5), color: C.red, flex: 1 },
+  tcError:      { ...T.helperText, color: C.red, flex: 1 },
 
   // Office badge
   officeBadgeWrap: { alignItems: "center", marginBottom: ms(18) },
   officeBadge:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: C.blue + "12", borderRadius: ms(20), paddingHorizontal: ms(14), paddingVertical: ms(7), borderWidth: 1, borderColor: C.blue + "30" },
-  officeBadgeT:    { fontSize: fs(10.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.blue, letterSpacing: 1.2 },
+  officeBadgeT:    { ...T.badgeText, color: C.blue, letterSpacing: 1.2 },
   divider:         { height: 1, backgroundColor: C.border, marginVertical: ms(16) },
 
   // Amount input
-  amountRow:    { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), gap: ms(8) },
+  amountRow:    { flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: ms(12), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), gap: ms(8) },
   amountRowErr: { borderColor: C.red, backgroundColor: C.red + "08" },
-  amountPrefix: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.green },
-  amountInput:  { flex: 1, fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, includeFontPadding: false, padding: 0 },
+  amountPrefix: { ...T.cardTitle, color: C.green },
+  amountInput:  { flex: 1, ...T.cardTitle, color: C.text, includeFontPadding: false, padding: 0 },
 
   // Course selector
-  courseSel:            { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(14) },
+  courseSel:            { flexDirection: "row", alignItems: "center", gap: ms(10), backgroundColor: C.inputBg, borderRadius: ms(14), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(14) },
   courseSelErr:         { borderColor: C.red, backgroundColor: C.red + "08" },
   courseSelDot:         { width: ms(10), height: ms(10), borderRadius: ms(5), flexShrink: 0 },
-  courseSelValue:       { flex: 1, fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  courseSelPlaceholder: { flex: 1, fontSize: fs(14), color: C.placeholder },
+  courseSelValue:       { flex: 1, ...T.listItemTitle, color: C.text },
+  courseSelPlaceholder: { flex: 1, ...T.body, color: C.placeholder },
 
   // Errors
   submitError:   { backgroundColor: C.red + "08", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(14), marginTop: ms(8) },
-  submitErrorT:  { fontSize: fs(13), color: C.red, lineHeight: fs(18), fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  submitErrorT:  { ...T.body, color: C.red },
   inlineError:   { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(6) },
-  inlineErrorT:  { fontSize: fs(11.5), color: C.red, flex: 1 },
+  inlineErrorT:  { ...T.helperText, color: C.red, flex: 1 },
 
   // Nav buttons
   navRow:       { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
   navSpacer:    { flex: 1 },
   prevBtn:      { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(16), paddingVertical: ms(12), borderRadius: ms(14), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border },
-  prevBtnT:     { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
+  prevBtnT:     { ...T.buttonText, color: colors.primary },
   nextBtn:      { borderRadius: ms(14) },
   nextBtnGrad:  { flexDirection: "row", alignItems: "center", gap: ms(6), paddingHorizontal: ms(22), paddingVertical: ms(13), borderRadius: ms(14) },
-  nextBtnT:     { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
-  stepPill:     { textAlign: "center", fontSize: fs(11), color: C.placeholder, marginTop: ms(2) },
+  nextBtnT:     { ...T.buttonText, color: "#fff" },
+  stepPill:     { textAlign: "center", ...T.caption, color: C.placeholder, marginTop: ms(2) },
 
   // Loader
   loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
   loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  loaderSub:     { fontSize: fs(12), color: C.muted },
+  loaderTitle:   { ...T.cardTitle, color: C.text },
+  loaderSub:     { ...T.bodySmall, color: C.muted },
 
   // Success
   successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
@@ -2061,40 +2136,40 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   sparkleBR:    { position: "absolute", bottom: ms(6), right: ms(4) },
 
   successContent: { width: "100%", alignItems: "center" },
-  successTitle:   { fontSize: fs(21), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, letterSpacing: 0.1, marginBottom: ms(6) },
+  successTitle:   { ...T.displayMedium, color: C.text, marginBottom: ms(6) },
   regCodeRow:     { flexDirection: "row", alignItems: "center", gap: ms(6), backgroundColor: colors.primary + "12", borderRadius: ms(10), paddingHorizontal: ms(12), paddingVertical: ms(5), marginBottom: ms(6) },
-  regCode:        { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary, letterSpacing: 1 },
-  successSub:     { fontSize: fs(12.5), color: C.muted, marginBottom: ms(12), textAlign: "center" },
+  regCode:        { ...T.listItemTitle, color: colors.primary, letterSpacing: 1 },
+  successSub:     { ...T.bodySmall, color: C.muted, marginBottom: ms(12), textAlign: "center" },
   detailBox:      { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(12), borderWidth: 1, borderColor: C.border },
   termsBox:       { width: "100%", backgroundColor: C.bg, borderRadius: ms(12), padding: ms(10), marginBottom: ms(10), borderWidth: 1, borderColor: C.border },
   termsTitleRow:  { flexDirection: "row", alignItems: "center", gap: ms(5), marginBottom: ms(4) },
-  termsT:         { fontSize: fs(12), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
-  termsSub:       { fontSize: fs(11), color: C.muted, lineHeight: fs(15) },
+  termsT:         { ...T.chipText, color: colors.primary },
+  termsSub:       { ...T.caption, color: C.muted },
   doneBtnWrap:    { width: "100%", marginBottom: ms(8) },
   whatsappBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(12) },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(13) },
-  doneBtnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:       { ...T.buttonText, color: "#FFFFFF" },
 
   // ── Discard modal ──
   discardOverlay:       { flex: 1, backgroundColor: "rgba(16,4,8,0.55)", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(28) },
   discardCard:          { width: "100%", backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(24), paddingTop: ms(32), paddingBottom: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(12) }, shadowOpacity: 0.22, shadowRadius: ms(28), elevation: 18 },
   discardIconCircle:    { width: ms(64), height: ms(64), borderRadius: ms(32), backgroundColor: colors.primary + "17", borderWidth: 2, borderColor: colors.primary + "33", justifyContent: "center", alignItems: "center", marginBottom: ms(18) },
-  discardTitle:         { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(10), letterSpacing: 0.2 },
-  discardBody:          { fontSize: fs(13), color: C.muted, textAlign: "center", lineHeight: fs(20), marginBottom: ms(20) },
-  discardDivider:       { width: "100%", height: 1, backgroundColor: "#F2EAE8", marginBottom: ms(16) },
+  discardTitle:         { ...T.displayMedium, color: C.text, marginBottom: ms(10) },
+  discardBody:          { ...T.body, color: C.muted, textAlign: "center", marginBottom: ms(20) },
+  discardDivider:       { width: "100%", height: 1, backgroundColor: C.border, marginBottom: ms(16) },
   discardDestructiveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14), marginBottom: ms(10) },
-  discardDestructiveTxt: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  discardDestructiveTxt: { ...T.buttonText, color: "#FFFFFF" },
   discardCancelBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), width: "100%", backgroundColor: colors.primary + "12", borderRadius: ms(14), paddingVertical: ms(13), borderWidth: 1.5, borderColor: colors.primary + "33" },
-  discardCancelTxt:     { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
+  discardCancelTxt:     { ...T.buttonText, color: colors.primary },
 
   // ── Info modal ──
   infoOverlay:   { flex: 1, backgroundColor: "rgba(16,4,8,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(28) },
   infoCard:      { width: "100%", borderRadius: ms(24), borderWidth: 1.5, paddingHorizontal: ms(24), paddingTop: ms(32), paddingBottom: ms(24), alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.18, shadowRadius: ms(24), elevation: 16 },
   infoIconCircle: { width: ms(68), height: ms(68), borderRadius: ms(34), justifyContent: "center", alignItems: "center", marginBottom: ms(16) },
-  infoTitle:     { fontSize: fs(17), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(10), textAlign: "center", letterSpacing: 0.2 },
-  infoBody:      { fontSize: fs(13), color: "#5A4F53", textAlign: "center", lineHeight: fs(20), marginBottom: ms(24) },
+  infoTitle:     { ...T.displayMedium, color: C.text, marginBottom: ms(10), textAlign: "center" },
+  infoBody:      { ...T.body, color: C.muted, textAlign: "center", marginBottom: ms(24) },
   infoBtn:       { width: "100%", borderRadius: ms(14), paddingVertical: ms(14), alignItems: "center" },
-  infoBtnTxt:    { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.4 },
+  infoBtnTxt:    { ...T.buttonText, color: "#FFFFFF" },
 });
 
 // ── TermsModal styles ─────────────────────────────────────────────────────────
@@ -2103,7 +2178,7 @@ const makeTmStyles = (colors: ThemeColors) => StyleSheet.create({
   safe:       { flex: 1, backgroundColor: C.bg },
   header:     { flexDirection: "row", alignItems: "center", paddingHorizontal: ms(16), paddingBottom: ms(12), gap: ms(10), backgroundColor: C.card },
   headerIcon: { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: colors.primary + "14", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  headerTitle: { flex: 1, fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
+  headerTitle: { flex: 1, ...T.cardTitle, color: C.text },
   closeBtn:   { width: ms(36), height: ms(36), borderRadius: ms(10), backgroundColor: C.inputBg, justifyContent: "center", alignItems: "center", flexShrink: 0, borderWidth: 1, borderColor: C.border },
   divider:    { height: 1, backgroundColor: C.border },
 
@@ -2119,20 +2194,20 @@ const makeTmStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth:     1,
     borderColor:     C.red + "30",
   },
-  alertTitle: { fontSize: fs(13), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.red, marginBottom: ms(3) },
-  alertBody:  { fontSize: fs(13), color: C.red, lineHeight: fs(19), fontFamily: "Inter_600SemiBold", fontWeight: "600", flex: 1 },
+  alertTitle: { ...T.chipText, color: C.red, marginBottom: ms(3) },
+  alertBody:  { ...T.body, color: C.red, flex: 1 },
 
   termRow:    { flexDirection: "row", gap: ms(10), alignItems: "flex-start" },
   termNum:    { width: ms(22), height: ms(22), borderRadius: ms(11), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", flexShrink: 0, marginTop: ms(2) },
-  termNumT:   { fontSize: fs(10), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
-  termText:   { flex: 1, fontSize: fs(13.5), color: C.text, lineHeight: fs(21) },
+  termNumT:   { ...T.badgeText, color: "#fff" },
+  termText:   { flex: 1, ...T.body, color: C.text },
 
   footerBox:  { flexDirection: "row", alignItems: "flex-start", gap: ms(8), backgroundColor: C.inputBg, borderRadius: ms(12), padding: ms(14), marginTop: ms(4), borderWidth: 1, borderColor: C.border },
-  footerT:    { flex: 1, fontSize: fs(11.5), color: C.muted, lineHeight: fs(17) },
+  footerT:    { flex: 1, ...T.helperText, color: C.muted },
 
   btnWrap:    { padding: ms(16), backgroundColor: C.card, borderTopWidth: 1, borderTopColor: C.border },
   btn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(15) },
-  btnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  btnT:       { ...T.buttonText, color: "#fff" },
 });
 
 // ── Documents stage — shown once, right after admission succeeds, before the
@@ -2319,7 +2394,7 @@ function DocumentsStep({ studentId, onDone }: { studentId: string; onDone: () =>
           </TouchableOpacity>
           {activeHasUpload && (
             <TouchableOpacity style={ds.sheetOption} onPress={() => activeSheet && removeUpload(activeSheet)} activeOpacity={0.8}>
-              <View style={[ds.sheetOptionIcon, { backgroundColor: "#C0392B18" }]}>
+              <View style={[ds.sheetOptionIcon, { backgroundColor: C.red + "18" }]}>
                 <Ionicons name="trash-outline" size={ms(22)} color={C.red} />
               </View>
               <Text style={[ds.sheetOptionLabel, { color: C.red }]}>Remove</Text>
@@ -2355,11 +2430,11 @@ const makeDsStyles = (colors: ThemeColors) => StyleSheet.create({
   header:        { backgroundColor: colors.headerBg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   headerContent: { flexDirection: "row", alignItems: "center", gap: ms(12), paddingHorizontal: ms(16), paddingVertical: ms(12) },
   headerIconWrap: { width: ms(40), height: ms(40), borderRadius: ms(13), backgroundColor: colors.primary + "18", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  headerTitle:   { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text },
-  headerSub:     { fontSize: fs(11.5), color: C.muted, marginTop: ms(1) },
+  headerTitle:   { ...T.cardTitle, color: C.text },
+  headerSub:     { ...T.helperText, color: C.muted, marginTop: ms(1) },
   closeBtn:      { width: ms(36), height: ms(36), borderRadius: ms(11), backgroundColor: C.inputBg, justifyContent: "center", alignItems: "center", flexShrink: 0, borderWidth: 1, borderColor: C.border },
 
-  note: { fontSize: fs(12.5), color: C.muted, lineHeight: fs(18), marginBottom: ms(16) },
+  note: { ...T.bodySmall, color: C.muted, marginBottom: ms(16) },
 
   row: {
     flexDirection: "row", alignItems: "center", gap: ms(12),
@@ -2370,21 +2445,21 @@ const makeDsStyles = (colors: ThemeColors) => StyleSheet.create({
   rowIconDone: { backgroundColor: C.greenBg },
   rowThumb:    { width: ms(40), height: ms(40) },
   rowBody:     { flex: 1 },
-  rowLabel:    { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
-  rowSub:      { fontSize: fs(11.5), color: C.muted, marginTop: ms(2) },
-  rowErr:      { fontSize: fs(11), color: C.red, marginTop: ms(3) },
+  rowLabel:    { ...T.listItemTitle, color: C.text },
+  rowSub:      { ...T.helperText, color: C.muted, marginTop: ms(2) },
+  rowErr:      { ...T.caption, color: C.red, marginTop: ms(3) },
 
   footer: { padding: ms(16), backgroundColor: C.card, borderTopWidth: 1, borderTopColor: C.border, gap: ms(10) },
   continueBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(15) },
-  continueBtnT: { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#fff" },
+  continueBtnT: { ...T.buttonText, color: "#fff" },
   skipBtn:  { alignItems: "center", paddingVertical: ms(4) },
-  skipT:    { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  skipT:    { ...T.buttonText, color: C.muted },
 
   sheetInner:  { padding: ms(20) },
-  sheetTitle:  { fontSize: fs(16), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(14) },
+  sheetTitle:  { ...T.cardTitle, color: C.text, marginBottom: ms(14) },
   sheetOption: { flexDirection: "row", alignItems: "center", gap: ms(14), paddingVertical: ms(12) },
   sheetOptionIcon: { width: ms(42), height: ms(42), borderRadius: ms(12), justifyContent: "center", alignItems: "center" },
-  sheetOptionLabel: { fontSize: fs(14.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  sheetOptionLabel: { ...T.listItemTitle, color: C.text },
 
   previewOverlay:  { flex: 1, backgroundColor: "rgba(10,4,7,0.95)", justifyContent: "center", alignItems: "center" },
   previewCloseBtn: { position: "absolute", right: ms(16), width: ms(38), height: ms(38), borderRadius: ms(19), backgroundColor: "rgba(255,255,255,0.16)", justifyContent: "center", alignItems: "center", zIndex: 1 },

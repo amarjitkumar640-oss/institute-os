@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import {
   Plus, Search, Users, CheckCircle2, BookOpen, Users2,
@@ -8,6 +8,7 @@ import {
   Banknote, CreditCard, ArrowLeft, ArrowRight,
 } from "lucide-react";
 import { listStudents, admitStudent, type Student } from "@/api/students";
+import { getAdmissionApplication, type AdmissionApplication } from "@/api/admissionApplications";
 import { listAssignableCenters } from "@/api/centers";
 import { listBatches } from "@/api/batches";
 import { listCourses, type Course } from "@/api/courses";
@@ -213,7 +214,13 @@ function SectionHead({ icon, label }: { icon: React.ReactNode; label: string }) 
 
 // ── Admit Student Dialog (multi-step) ─────────────────────────────────────────
 
-function AdmitStudentDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AdmitStudentDialog({
+  open, onClose, initialApplication,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialApplication?: AdmissionApplication | null;
+}) {
   const { currentCenter } = useAuth();
   const qc = useQueryClient();
 
@@ -254,6 +261,7 @@ function AdmitStudentDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [whatsapp, setWhatsapp]           = useState("");
   const [guardianPhone, setGuardianPhone] = useState("");
   const [tcAcknowledged, setTcAcknowledged] = useState(false);
+  const [applicantAcceptedTc, setApplicantAcceptedTc] = useState(false);
 
   // ── Step 5: Office ──
   const [batchId, setBatchId]           = useState<string | null>(null);
@@ -261,6 +269,40 @@ function AdmitStudentDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [paymentMode, setPaymentMode]   = useState<PaymentMode | null>(null);
   const [amountPaid, setAmountPaid]     = useState("");
   const [centerId, setCenterId]         = useState<string | null>(null);
+
+  // Prefill from a self-service AdmissionApplication opened via "Review" —
+  // only the student-fillable fields; office-use ones (batch/payment/etc.)
+  // are still left for frontdesk to fill in here.
+  useEffect(() => {
+    if (!initialApplication) return;
+    setFullName(initialApplication.fullName);
+    setPhone(initialApplication.phone);
+    setEmail(initialApplication.email ?? "");
+    setDob(initialApplication.dob ? initialApplication.dob.slice(0, 10) : "");
+    setAddress(initialApplication.address ?? "");
+    setGender((initialApplication.gender as Gender | null) ?? null);
+    setFatherName(initialApplication.fatherName ?? "");
+    setMotherName(initialApplication.motherName ?? "");
+    setGuardianOccupation(initialApplication.guardianOccupation ?? "");
+    setGuardianPhone(initialApplication.guardianPhone ?? "");
+    setQualification((initialApplication.qualification as Qualification | null) ?? null);
+    setPassYear(initialApplication.passYear ?? "");
+    setBoard(initialApplication.board ?? "");
+    setWhatsapp(initialApplication.whatsapp ?? "");
+    setSelectedCourseId(initialApplication.courseId ?? null);
+    setCoursePreference((initialApplication.coursePreference as CoursePreference | null) ?? null);
+    setDurationPreference((initialApplication.durationPreference as DurationPref | null) ?? null);
+    // Applicant's preferred center — still just a starting point for the
+    // Office step below; frontdesk can change it before admitting.
+    if (initialApplication.centerId) setCenterId(initialApplication.centerId);
+    // The applicant already accepted terms themselves when they submitted
+    // the public form — no need to make frontdesk re-tick this (still
+    // editable, e.g. if they want to walk through the terms again in person).
+    if (initialApplication.tcAcceptedAt) {
+      setTcAcknowledged(true);
+      setApplicantAcceptedTc(true);
+    }
+  }, [initialApplication]);
 
   function clearError(key: string) {
     setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
@@ -340,9 +382,11 @@ function AdmitStudentDialog({ open, onClose }: { open: boolean; onClose: () => v
         amountPaid:         amountPaid.trim() ? Number(amountPaid) : undefined,
         tcAcknowledged,
         centerId:           centerId ?? undefined,
+        applicationId:      initialApplication?.id ?? undefined,
       });
 
       qc.invalidateQueries({ queryKey: ["students"] });
+      if (initialApplication) qc.invalidateQueries({ queryKey: ["admission-applications"] });
       const selectedBatch = (batches ?? []).find((b) => b.id === batchId);
       setAdmitted({
         studentCode: result.student.studentCode,
@@ -619,6 +663,11 @@ function AdmitStudentDialog({ open, onClose }: { open: boolean; onClose: () => v
                       I confirm that the student / parent has been informed of and has agreed to all the above terms and conditions.
                     </span>
                   </label>
+                  {applicantAcceptedTc && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Applicant already accepted these terms when they applied online
+                    </p>
+                  )}
                   {errors.tcAcknowledged && <p className="text-xs text-red-600">{errors.tcAcknowledged}</p>}
                 </div>
               )}
@@ -719,16 +768,43 @@ function AdmitStudentDialog({ open, onClose }: { open: boolean; onClose: () => v
 
 export function StudentsPage() {
   const navigate  = useNavigate();
+  const { isAllCenters } = useAuth();
   const [search, setSearch]     = useState("");
   const [showAdmit, setShowAdmit] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const applicationId = searchParams.get("applicationId");
 
   const { data: students, isLoading } = useQuery({ queryKey: ["students"], queryFn: () => listStudents() });
+
+  // Opened via "Review" from the Admission Applications inbox (/students?applicationId=…)
+  const { data: reviewingApplication } = useQuery({
+    queryKey: ["admission-application", applicationId],
+    queryFn:  () => getAdmissionApplication(applicationId!),
+    enabled:  !!applicationId,
+  });
+
+  useEffect(() => {
+    if (reviewingApplication) setShowAdmit(true);
+  }, [reviewingApplication]);
+
+  function closeAdmitDialog() {
+    setShowAdmit(false);
+    if (applicationId) setSearchParams({}, { replace: true });
+  }
 
   const filtered = (students ?? []).filter((s) =>
     s.fullName.toLowerCase().includes(search.toLowerCase()) ||
     s.phone.includes(search) ||
     s.studentCode?.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Only meaningful when viewing more than one center's data at once —
+  // redundant (every row would show the same name) when scoped to one.
+  const centerColumn: ColumnDef<Student> = {
+    id: "center",
+    header: "Center",
+    cell: ({ row }) => row.original.center?.name ?? "—",
+  };
 
   const columns: ColumnDef<Student>[] = [
     {
@@ -771,11 +847,7 @@ export function StudentsPage() {
         ? <span className="text-sm">{row.original.activeEnrollment.batchName}</span>
         : <span className="text-gray-400 text-sm">Not enrolled</span>,
     },
-    {
-      id: "center",
-      header: "Center",
-      cell: ({ row }) => row.original.center?.name ?? "—",
-    },
+    ...(isAllCenters ? [centerColumn] : []),
     {
       accessorKey: "createdAt",
       header: "Admitted",
@@ -817,7 +889,7 @@ export function StudentsPage() {
           <DataTable columns={columns} data={filtered} />
         )}
       </div>
-      <AdmitStudentDialog open={showAdmit} onClose={() => setShowAdmit(false)} />
+      <AdmitStudentDialog open={showAdmit} onClose={closeAdmitDialog} initialApplication={reviewingApplication} />
     </div>
   );
 }

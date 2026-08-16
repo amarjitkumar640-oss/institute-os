@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
 import { useThemeColors } from "../../context/ThemeContext";
 import { C } from "../../theme";
+import { T } from "./typography";
 
 export interface SelectOption {
   label: string;
@@ -113,9 +114,9 @@ const s = StyleSheet.create({
   chip:        {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: ms(9),
-    paddingHorizontal: ms(16),
-    borderRadius: ms(20),
+    paddingVertical: ms(6),
+    paddingHorizontal: ms(14),
+    borderRadius: ms(16),
     borderWidth: 1.5,
     borderColor: C.border,
     backgroundColor: C.card,
@@ -123,7 +124,7 @@ const s = StyleSheet.create({
   },
   chipError:   { borderColor: C.red },
   chipIcon:    { flexShrink: 0 },
-  chipT:       { fontSize: fs(13), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, includeFontPadding: false },
+  chipT:       { ...T.caption, color: C.muted, includeFontPadding: false },
   chipTOn:     { color: "#fff" },
   errorRow:    { flexDirection: "row", alignItems: "center", marginTop: ms(5), gap: ms(4) },
   errorT:      { fontSize: fs(11.5), color: C.red, flex: 1 },

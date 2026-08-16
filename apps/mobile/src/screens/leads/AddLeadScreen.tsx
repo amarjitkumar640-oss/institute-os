@@ -12,6 +12,7 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
+import { T } from "../../components/ui/typography";
 import { createLead, type LeadItem } from "../../api/leads";
 import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
@@ -128,10 +129,10 @@ export function AddLeadScreen({ navigation }: Props) {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => navigation.replace("Leads")} activeOpacity={0.85} style={s.doneBtnWrap}>
-              <LinearGradient colors={[colors.primary, "#A52341"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.doneBtn}>
+              <View style={[s.doneBtn, { backgroundColor: colors.primary }]}>
                 <Ionicons name="list-outline" size={ms(18)} color="#fff" />
                 <Text style={s.doneBtnT}>View All Leads</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -247,32 +248,32 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: C.card, borderRadius: ms(20), padding: ms(18), marginBottom: ms(16), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 
   fieldBlock: { marginBottom: ms(20) },
-  fieldLabel: { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(9), letterSpacing: 0.3 },
+  fieldLabel: { ...T.chipText, color: C.text, marginBottom: ms(9) },
 
   examGrid: { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   examCard: { flexBasis: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6), paddingVertical: ms(12), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
-  examCardT: { fontSize: fs(13), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text },
+  examCardT: { ...T.listItemTitle, color: C.text },
 
   chipRow: { flexDirection: "row", gap: ms(6) },
   chip:    { flex: 1, alignItems: "center", paddingHorizontal: ms(4), paddingVertical: ms(9), borderRadius: ms(12), backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border },
-  chipT:   { fontSize: fs(11), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.muted },
+  chipT:   { ...T.chipText, color: C.muted },
 
-  notesInput: { minHeight: ms(80), backgroundColor: C.card, borderRadius: ms(12), borderWidth: 1.5, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), fontSize: fs(14), color: C.text },
+  notesInput: { minHeight: ms(80), backgroundColor: C.inputBg, borderRadius: ms(12), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, paddingHorizontal: ms(14), paddingVertical: ms(12), ...T.body, color: C.text },
 
   inlineError:  { flexDirection: "row", alignItems: "center", gap: ms(4), marginTop: ms(6) },
-  inlineErrorT: { fontSize: fs(11.5), color: C.red, flex: 1 },
+  inlineErrorT: { ...T.helperText, color: C.red, flex: 1 },
 
   submitError:  { flexDirection: "row", alignItems: "flex-start", gap: ms(8), backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginTop: ms(4) },
-  submitErrorT: { fontSize: fs(13), color: C.red, lineHeight: fs(18), flex: 1 },
+  submitErrorT: { ...T.body, color: C.red, flex: 1 },
 
   successOverlay: { flex: 1, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
   successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(28), padding: ms(26), alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(10) }, shadowOpacity: 0.14, shadowRadius: ms(28), elevation: 12 },
   checkCircle:    { width: ms(76), height: ms(76), borderRadius: ms(38), justifyContent: "center", alignItems: "center", marginBottom: ms(16) },
-  successTitle:   { fontSize: fs(21), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: C.text, marginBottom: ms(6) },
-  successSub:     { fontSize: fs(13), color: C.muted, textAlign: "center", marginBottom: ms(22) },
+  successTitle:   { ...T.displayMedium, color: C.text, marginBottom: ms(6) },
+  successSub:     { ...T.body, color: C.muted, textAlign: "center", marginBottom: ms(22) },
   doneBtnWrap:    { width: "100%", marginBottom: ms(10) },
   outlineBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(14), borderWidth: 1.5, borderColor: colors.primary },
-  outlineBtnT:    { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: colors.primary },
+  outlineBtnT:    { ...T.buttonText, color: colors.primary },
   doneBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(15) },
-  doneBtnT:       { fontSize: fs(15), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:       { ...T.buttonText, color: "#FFFFFF" },
 });

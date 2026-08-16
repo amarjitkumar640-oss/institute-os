@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Calendar, RefreshCw } from "lucide-react";
+import { Calendar, RefreshCw, Repeat, MoreVertical, CheckCircle2, XCircle } from "lucide-react";
 import { listBatches } from "@/api/batches";
 import { listBatchSessions, patchSession, generateSessions, type ClassSession } from "@/api/schedule";
 import { Button } from "@/components/ui/button";
@@ -10,15 +10,43 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
+import { usePermission } from "@/hooks/usePermission";
 import { useAuth } from "@/context/AuthContext";
+import { SessionReassignDialog } from "./SessionReassignDialog";
+
+// Mirrors the API's own sessionHasEnded() check in schedule.service.ts — a
+// session can't be marked completed until it's actually ended (same-day
+// session before its end time, or any future day). Cancelling a not-yet-
+// ended session is still allowed; only "completed" is time-restricted. This
+// is a UX nicety to hide the option up front — the API is the real
+// enforcement, and compares against the server's clock, not the browser's.
+function sessionHasEnded(scheduledDate: string, endTime: string): boolean {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const scheduledDateStr = scheduledDate.slice(0, 10);
+  if (scheduledDateStr < todayStr) return true;
+  if (scheduledDateStr > todayStr) return false;
+  const nowHHMM = now.toTimeString().slice(0, 5);
+  return nowHHMM >= endTime;
+}
 
 export function SchedulePage() {
   const qc = useQueryClient();
+  const { canEdit, canWrite } = usePermission("schedule");
   const { staff } = useAuth();
+  // Cancelling and reassigning are a step above the ordinary edit a teacher
+  // can otherwise make (marking their own ended session complete) — only
+  // admin/frontdesk may cancel a class or reassign its subject/faculty.
+  // Matches the API's own checks.
+  const canCancel   = canEdit && (staff?.activeRole === "admin" || staff?.activeRole === "frontdesk");
+  const canReassign = canCancel;
   const today = new Date().toISOString().slice(0, 10);
   const oneMonthLater = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
@@ -27,6 +55,7 @@ export function SchedulePage() {
   const [to, setTo] = useState(oneMonthLater);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [generatingRange, setGeneratingRange] = useState({ from: today, to: oneMonthLater });
+  const [reassignTarget, setReassignTarget] = useState<ClassSession | null>(null);
 
   const { data: batches } = useQuery({ queryKey: ["batches"], queryFn: listBatches });
 
@@ -98,16 +127,46 @@ export function SchedulePage() {
     {
       id: "actions",
       header: "",
-      cell: ({ row }) => row.original.status === "scheduled" && (staff?.role === "admin" || staff?.role === "teacher") ? (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => patchMutation.mutate({ id: row.original.id, payload: { status: "completed" } })}>
-            Complete
-          </Button>
-          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => patchMutation.mutate({ id: row.original.id, payload: { status: "cancelled" } })}>
-            Cancel
-          </Button>
-        </div>
-      ) : null,
+      cell: ({ row }) => {
+        if (row.original.status !== "scheduled" || !canEdit) return null;
+        const canComplete = sessionHasEnded(row.original.scheduledDate, row.original.endTime);
+        // A teacher whose session hasn't ended yet can't reassign, complete,
+        // or cancel — nothing here they can do, so no menu at all rather
+        // than a "..." button that opens empty.
+        if (!canReassign && !canComplete && !canCancel) return null;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {canReassign && (
+                <DropdownMenuItem onClick={() => setReassignTarget(row.original)}>
+                  <Repeat className="mr-2 h-3.5 w-3.5" /> Reassign
+                </DropdownMenuItem>
+              )}
+              {canComplete && (
+                <DropdownMenuItem onClick={() => patchMutation.mutate({ id: row.original.id, payload: { status: "completed" } })}>
+                  <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Mark Complete
+                </DropdownMenuItem>
+              )}
+              {canCancel && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                    onClick={() => patchMutation.mutate({ id: row.original.id, payload: { status: "cancelled" } })}
+                  >
+                    <XCircle className="mr-2 h-3.5 w-3.5" /> Cancel Session
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
     },
   ];
 
@@ -151,7 +210,12 @@ export function SchedulePage() {
           )}
         </div>
 
-        {batchId && staff?.role === "admin" && (
+        {/* Was admin-only in this UI even though the underlying API route had
+            no role gate of its own — now driven by the same schedule.write
+            flag the API enforces (seeded admin+frontdesk, matching the
+            sibling slot-creation gate). Frontdesk gains real visibility into
+            this card as a result — flagged in the migration's PR notes. */}
+        {batchId && canWrite && (
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Generate Sessions from Slots</CardTitle>
@@ -178,6 +242,10 @@ export function SchedulePage() {
           <DataTable columns={columns} data={sessions ?? []} />
         )}
       </div>
+
+      {reassignTarget && (
+        <SessionReassignDialog session={reassignTarget} onClose={() => setReassignTarget(null)} />
+      )}
     </div>
   );
 }

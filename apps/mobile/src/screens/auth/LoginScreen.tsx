@@ -17,13 +17,12 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import { useOrg } from "../../context/OrgContext";
 import { C } from "../../theme";
-import { useThemeColors, useThemedStyles, useBrandLogoUrl, darken, lighten, type ThemeColors } from "../../context/ThemeContext";
+import { useThemeColors, useThemedStyles, useBrandLogoUrl, type ThemeColors } from "../../context/ThemeContext";
 import { LOGIN_ILLUSTRATION_SVG } from "../../components/illustrations/LoginIllustration";
 
 const { height: SCREEN_H } = Dimensions.get("window");
@@ -441,11 +440,7 @@ export function LoginScreen() {
                 activeOpacity={1}
               >
                 <Animated.View style={{ transform: [{ scale: pressScale }] }}>
-                  <LinearGradient
-                    colors={[darken(colors.primary, 0.06), lighten(colors.primary, 0.12)]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                    style={s.btn}
-                  >
+                  <View style={[s.btn, { backgroundColor: colors.primary }]}>
                     {submitting ? (
                       <>
                         <ActivityIndicator size="small" color="#fff" style={s.btnIcon} />
@@ -457,7 +452,7 @@ export function LoginScreen() {
                         <Ionicons name="arrow-forward" size={18} color="#fff" style={s.btnIconRight} />
                       </>
                     )}
-                  </LinearGradient>
+                  </View>
                 </Animated.View>
               </TouchableOpacity>
             </Animated.View>
@@ -504,8 +499,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   heroTitleBlock: { flex: 1 },
   heroTitle: {
     fontSize: 30,
-    fontFamily: "Inter_800ExtraBold",
-    fontWeight: "800",
+    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
     color: "#fff",
     letterSpacing: -0.5,
     lineHeight: 34,
@@ -556,9 +551,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     height: 44,
     borderRadius: 10,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#E0E0E0",
-    backgroundColor: "#FFFFFF",
+    // Light tinted fill, not white — root's background is white too, and a
+    // hairline border alone was hard to spot against it.
+    backgroundColor: "#F2F2F7",
     paddingLeft: 14,
     paddingRight: 12,
   },

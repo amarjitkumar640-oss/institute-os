@@ -21,6 +21,18 @@ function serializeCourse<T extends { defaultFee: Prisma.Decimal } & WithCategory
   return { ...rest, defaultFee: Number(defaultFee), examCategories: examCategories.map((ec) => ec.examCategory) };
 }
 
+// Deliberately open to any authenticated staff, unlike listCourses() (which
+// requires courses.read) — this only exists to power course-filter chips on
+// screens like the student list, so a role without access to the full
+// Courses management screen (e.g. teacher) can still filter by course.
+export async function listCourseNames(tenantId: string) {
+  return prisma.course.findMany({
+    where: { tenantId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+}
+
 export async function listCourses(query: CourseQuery, tenantId: string) {
   const { examCategoryId, search, page, limit } = query;
 

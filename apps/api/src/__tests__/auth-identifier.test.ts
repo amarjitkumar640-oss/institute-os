@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import request from "supertest";
 import { app } from "../app";
 import { prisma } from "../lib/prisma";
-import { resetDb } from "./setup";
+import { resetDb, legacyPermissionsForRole } from "./setup";
 import { normalizePhone } from "@institute-os/shared";
 import { login } from "../modules/auth/auth.service";
 
@@ -32,7 +32,7 @@ async function seedActiveStaff(overrides: Partial<{ isActive: boolean; tenantAct
       email:        "Admin@Success.Test",           // mixed case, on purpose — login must be case-insensitive
       phone:        normalizePhone("98765 43210"),  // stored normalized, as the create route would store it
       username:     overrides.username ?? "admin_success",
-      role:         "admin",
+      roles:        ["admin"],
       passwordHash,
       isActive:     overrides.isActive ?? true,
     },
@@ -143,7 +143,7 @@ describe("identifier-based auth (HTTP)", () => {
   it("POST /api/staff 409s on a duplicate phone number instead of a raw 500", async () => {
     const staff = await seedActiveStaff();
     const token = require("jsonwebtoken").sign(
-      { staffId: staff.id, role: "admin", centerId: null, tenantId: TENANT_ID },
+      { staffId: staff.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID, permissions: legacyPermissionsForRole(["admin"]) },
       require("../lib/env").env.JWT_ACCESS_SECRET,
       { expiresIn: "15m" }
     );
@@ -151,7 +151,7 @@ describe("identifier-based auth (HTTP)", () => {
     const res = await request(app)
       .post("/api/staff")
       .set("Authorization", `Bearer ${token}`)
-      .send({ fullName: "Dup", email: "dup@x.test", phone: "9876543210", role: "teacher", password: "secret123" });
+      .send({ fullName: "Dup", email: "dup@x.test", phone: "9876543210", roles: ["teacher"], password: "secret123" });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/phone/i);
@@ -160,7 +160,7 @@ describe("identifier-based auth (HTTP)", () => {
   it("POST /api/staff 409s on a duplicate username", async () => {
     const staff = await seedActiveStaff();
     const token = require("jsonwebtoken").sign(
-      { staffId: staff.id, role: "admin", centerId: null, tenantId: TENANT_ID },
+      { staffId: staff.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID, permissions: legacyPermissionsForRole(["admin"]) },
       require("../lib/env").env.JWT_ACCESS_SECRET,
       { expiresIn: "15m" }
     );
@@ -168,7 +168,7 @@ describe("identifier-based auth (HTTP)", () => {
     const res = await request(app)
       .post("/api/staff")
       .set("Authorization", `Bearer ${token}`)
-      .send({ fullName: "Dup", email: "dup2@x.test", phone: "9000000001", username: "admin_success", role: "teacher", password: "secret123" });
+      .send({ fullName: "Dup", email: "dup2@x.test", phone: "9000000001", username: "admin_success", roles: ["teacher"], password: "secret123" });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/username/i);
@@ -177,7 +177,7 @@ describe("identifier-based auth (HTTP)", () => {
   it("PATCH /api/tenants/me/settings lets an admin set the login method", async () => {
     const staff = await seedActiveStaff();
     const token = require("jsonwebtoken").sign(
-      { staffId: staff.id, role: "admin", centerId: null, tenantId: TENANT_ID },
+      { staffId: staff.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID },
       require("../lib/env").env.JWT_ACCESS_SECRET,
       { expiresIn: "15m" }
     );

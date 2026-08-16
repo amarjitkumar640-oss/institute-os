@@ -12,23 +12,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FormField } from "@/components/FormField";
 import { DataTable } from "@/components/DataTable";
 import { toast } from "@/components/ui/use-toast";
 import { type ColumnDef } from "@tanstack/react-table";
 
+const CENTER_ROLE_OPTIONS: Array<{ value: "admin" | "teacher" | "frontdesk"; label: string }> = [
+  { value: "admin", label: "Admin" },
+  { value: "teacher", label: "Teacher" },
+  { value: "frontdesk", label: "Front Desk" },
+];
+
 function AssignStaffDialog({ centerId, open, onClose }: { centerId: string; open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const { data: allStaff } = useQuery({ queryKey: ["staff"], queryFn: listStaff });
   const [staffId, setStaffId] = useState("");
-  const [role, setRole] = useState<"admin" | "teacher" | "frontdesk">("frontdesk");
+  // A staff member can hold more than one role at once at the same center.
+  const [roles, setRoles] = useState<("admin" | "teacher" | "frontdesk")[]>(["frontdesk"]);
   const [loading, setLoading] = useState(false);
 
   async function handleAssign() {
-    if (!staffId) return;
+    if (!staffId || roles.length === 0) return;
     setLoading(true);
     try {
-      await assignStaffToCenter(centerId, staffId, role);
+      await assignStaffToCenter(centerId, staffId, roles);
       qc.invalidateQueries({ queryKey: ["center-staff", centerId] });
       toast({ title: "Staff assigned" });
       onClose();
@@ -49,25 +57,30 @@ function AssignStaffDialog({ centerId, open, onClose }: { centerId: string; open
               <SelectTrigger><SelectValue placeholder="Select staff" /></SelectTrigger>
               <SelectContent>
                 {(allStaff ?? []).filter((s) => s.isActive).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.fullName} ({s.role})</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>{s.fullName} ({s.roles.join(", ")})</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label="Role in Center" required>
-            <Select onValueChange={(v) => setRole(v as "admin" | "teacher" | "frontdesk")} defaultValue="frontdesk">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="teacher">Teacher</SelectItem>
-                <SelectItem value="frontdesk">Front Desk</SelectItem>
-              </SelectContent>
-            </Select>
+          <FormField label="Roles in Center" required>
+            <div className="flex flex-col gap-2">
+              {CENTER_ROLE_OPTIONS.map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={roles.includes(opt.value)}
+                    onCheckedChange={(checked) =>
+                      setRoles(checked ? [...roles, opt.value] : roles.filter((r) => r !== opt.value))
+                    }
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
           </FormField>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleAssign} disabled={!staffId || loading}>Assign</Button>
+          <Button onClick={handleAssign} disabled={!staffId || roles.length === 0 || loading}>Assign</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -127,9 +140,15 @@ export function CenterDetailPage() {
     { accessorKey: "email", header: "Email" },
     { accessorKey: "phone", header: "Phone" },
     {
-      accessorKey: "role",
-      header: "Role",
-      cell: ({ row }) => <Badge variant="info" className="capitalize">{row.original.role}</Badge>,
+      id: "roles",
+      header: "Roles",
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {row.original.roles.map((r) => (
+            <Badge key={r} variant="info" className="capitalize">{r}</Badge>
+          ))}
+        </div>
+      ),
     },
     {
       accessorKey: "isActive",

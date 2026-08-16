@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { convertLeadSchema, createLeadSchema } from "@institute-os/shared";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+import { requirePermission } from "../../middleware/permission";
 import { validateBody } from "../../middleware/validate";
 import { BatchFullError } from "../enrollments/enrollments.service";
 import { convertLead } from "./leads.service";
@@ -12,11 +12,11 @@ import { notifyEnrollmentEvents } from "../notifications/notification.service";
 
 export const leadsRouter = Router();
 
-leadsRouter.get("/", requireAuth, requireRole("admin", "frontdesk"), async (req, res) => {
+leadsRouter.get("/", requireAuth, requirePermission("leads", "read"), async (req, res) => {
   const leads = await prisma.lead.findMany({
     where:   await centerFilter(req),
     orderBy: { createdAt: "desc" },
-    include: { targetExam: true },
+    include: { targetExam: true, center: { select: { id: true, name: true } } },
   });
   res.json(leads);
 });
@@ -24,7 +24,7 @@ leadsRouter.get("/", requireAuth, requireRole("admin", "frontdesk"), async (req,
 leadsRouter.post(
   "/",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("leads", "write"),
   validateBody(createLeadSchema),
   async (req, res) => {
     const centerId = centerIdForCreate(req, req.body.centerId);
@@ -40,7 +40,7 @@ leadsRouter.post(
 leadsRouter.post(
   "/:id/convert",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("leads", "edit"),
   validateBody(convertLeadSchema),
   async (req, res) => {
     try {

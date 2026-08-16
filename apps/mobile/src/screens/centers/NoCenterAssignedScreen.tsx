@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { ms, fs } from "../../utils/responsive";
+import { T } from "../../components/ui/typography";
 
 // Standalone gate screen, same family as LoginScreen/CenterSelectScreen —
 // renders outside NavigationContainer, so no ScreenHeader/nav dependency.
@@ -16,7 +17,7 @@ export function NoCenterAssignedScreen() {
   const { staff, logout, recheckCenterAssignment } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
-  const isAdmin = staff?.role === "admin";
+  const isAdmin = staff?.activeRole === "admin";
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -70,12 +71,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: ms(20),
   },
   title: {
-    fontSize: fs(19), fontFamily: "Inter_800ExtraBold", fontWeight: "800",
+    ...T.displayMedium,
     color: colors.text, textAlign: "center", marginBottom: ms(10),
   },
   message: {
-    fontSize: fs(13.5), color: colors.muted, textAlign: "center",
-    lineHeight: fs(20), marginBottom: ms(28),
+    ...T.body, color: colors.muted, textAlign: "center",
+    marginBottom: ms(28),
   },
   actions: { width: "100%" },
 });

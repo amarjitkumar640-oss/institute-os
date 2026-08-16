@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
 import { useThemeColors, useBrandLogoUrl, darken, lighten } from "../../context/ThemeContext";
 import { ms, fs } from "../../utils/responsive";
+import { T } from "./typography";
 
 function Dot({ delay }: { delay: number }) {
   const v = useRef(new Animated.Value(0)).current;
@@ -48,6 +49,19 @@ export function AppSplashScreen({ orgName }: { orgName?: string | null }) {
   const colors  = useThemeColors();
   const logoUrl = useBrandLogoUrl();
 
+  // Logo entrance: a quick scale+fade pop on mount rather than appearing
+  // instantly — runs once per mount, which (post the boot-sequence fix) is
+  // exactly once for the whole splash lifetime, not re-triggered per gate.
+  const badgeScale   = useRef(new Animated.Value(0.6)).current;
+  const badgeOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(badgeScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
+      Animated.timing(badgeOpacity, { toValue: 1, duration: 280, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    ]).start();
+  }, []);
+
   return (
     <LinearGradient
       // Same two stops as the login screen's primary button gradient (see
@@ -62,13 +76,15 @@ export function AppSplashScreen({ orgName }: { orgName?: string | null }) {
       <Waves />
 
       <View style={styles.center}>
-        <View style={styles.badge}>
+        <Animated.View
+          style={[styles.badge, { opacity: badgeOpacity, transform: [{ scale: badgeScale }] }]}
+        >
           <Image
             source={logoUrl ? { uri: logoUrl } : require("../../../assets/institute-logo.png")}
             style={styles.logo}
             resizeMode="contain"
           />
-        </View>
+        </Animated.View>
         <Text style={styles.name}>{orgName || "Institute OS"}</Text>
         <Text style={styles.tagline}>Getting things ready…</Text>
       </View>
@@ -97,12 +113,12 @@ const styles = StyleSheet.create({
   },
   logo: { width: ms(56), height: ms(56) },
   name: {
-    color: "#fff", fontSize: fs(20), fontWeight: "800", textAlign: "center",
-    fontFamily: "Inter_800ExtraBold",
+    ...T.displayMedium,
+    color: "#fff", textAlign: "center",
   },
   tagline: {
-    color: "rgba(255,255,255,.72)", fontSize: fs(12.5), marginTop: ms(6),
-    fontFamily: "Inter_500Medium",
+    ...T.caption,
+    color: "rgba(255,255,255,.72)", marginTop: ms(6),
   },
   dots: {
     position: "absolute", bottom: "14%", flexDirection: "row", gap: ms(7),

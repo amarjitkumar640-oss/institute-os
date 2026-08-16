@@ -171,11 +171,14 @@ export const admitStudentSchema = z.object({
   // T&C acknowledgment — front desk confirms student was informed
   tcAcknowledged:     z.boolean().optional(),
   centerId:           z.string().uuid().optional(),
+  // Set when this admission is carried through from a self-service
+  // AdmissionApplication — closes the loop by stamping studentId back onto it.
+  applicationId:      z.string().uuid().nullable().optional(),
 });
 export type AdmitStudentInput = z.infer<typeof admitStudentSchema>;
 
 export const updateStudentSchema = admitStudentSchema
-  .omit({ batchId: true })
+  .omit({ batchId: true, applicationId: true })
   .partial()
   .refine((d) => !d.fullName || d.fullName.length >= 1, { path: ["fullName"], message: "Name required" });
 export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
@@ -184,6 +187,50 @@ export const createEnrollmentSchema = z.object({
   studentId: z.string().uuid(),
   batchId: z.string().uuid(),
 });
+
+// ─── Admission Applications (public self-service form) ────────────────────────
+
+// Student-fillable subset of admitStudentSchema. Deliberately excludes
+// aadhaar (no ID numbers on an unauthenticated public page), plus everything
+// that's frontdesk/office-use: batchId, preferredTiming, paymentMode,
+// amountPaid, applicationId. `centerId` IS included here — unlike the admit
+// flow, it's the applicant's own preference for which branch to attend, not
+// an office assignment. `tcAccepted` replaces admitStudentSchema's optional
+// `tcAcknowledged` with a required checkbox — the applicant's own acceptance
+// of terms, not frontdesk confirming they informed someone.
+export const submitAdmissionApplicationSchema = admitStudentSchema
+  .pick({
+    fullName: true,
+    phone: true,
+    email: true,
+    dob: true,
+    address: true,
+    gender: true,
+    fatherName: true,
+    motherName: true,
+    guardianOccupation: true,
+    guardianEmail: true,
+    guardianPhone: true,
+    qualification: true,
+    passYear: true,
+    board: true,
+    courseId: true,
+    coursePreference: true,
+    durationPreference: true,
+    whatsapp: true,
+    centerId: true,
+  })
+  .extend({
+    tcAccepted: z.boolean().refine((v) => v === true, {
+      message: "You must accept the terms and conditions to apply",
+    }),
+  });
+export type SubmitAdmissionApplicationInput = z.infer<typeof submitAdmissionApplicationSchema>;
+
+export const rejectAdmissionApplicationSchema = z.object({
+  reason: z.string().min(1).max(300),
+});
+export type RejectAdmissionApplicationInput = z.infer<typeof rejectAdmissionApplicationSchema>;
 
 // ─── Fee Templates ────────────────────────────────────────────────────────────
 
@@ -324,3 +371,25 @@ export const sessionQuerySchema = z.object({
   status: sessionStatusSchema.optional(),
 });
 export type SessionQueryInput = z.infer<typeof sessionQuerySchema>;
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+
+export const attendanceStatusSchema = z.enum(["present", "absent"]);
+export type AttendanceStatusInput = z.infer<typeof attendanceStatusSchema>;
+
+export const setAttendanceSchema = z.object({
+  marks: z.array(z.object({
+    studentId: z.string().uuid(),
+    status:    attendanceStatusSchema,
+  })),
+});
+export type SetAttendanceInput = z.infer<typeof setAttendanceSchema>;
+
+export const setFacultyAttendanceSchema = z.object({
+  date:  dateStr,
+  marks: z.array(z.object({
+    facultyId: z.string().uuid(),
+    status:    attendanceStatusSchema,
+  })),
+});
+export type SetFacultyAttendanceInput = z.infer<typeof setFacultyAttendanceSchema>;

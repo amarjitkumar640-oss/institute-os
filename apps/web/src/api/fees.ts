@@ -39,7 +39,7 @@ export interface ScheduleListItem {
   creditBalance: number;
   status: string;
   student: { id: string; fullName: string; phone: string };
-  batch: { id: string; name: string };
+  batch: { id: string; name: string; center: { id: string; name: string } | null };
   paidAmount: number;
   pendingAmount: number;
 }

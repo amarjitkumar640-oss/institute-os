@@ -12,6 +12,8 @@ import { listLeads, type LeadItem, type LeadStatus } from "../../api/leads";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { AVATAR_SIZE, AVATAR_RADIUS, getAvatarFill } from "../../components/ui/avatarStyle";
+import { T } from "../../components/ui/typography";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Leads">;
 
@@ -30,15 +32,17 @@ function initials(name: string) {
 }
 
 function LeadCard({ lead }: { lead: LeadItem }) {
+  const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
   const exam = { label: lead.targetExam.label, color: lead.targetExam.color };
   const status = STATUS_META[lead.status] ?? { label: lead.status, color: C.muted };
+  const fill = getAvatarFill(colors.primary);
 
   return (
     <View style={s.card}>
       <View style={s.cardTop}>
-        <View style={s.avatar}>
-          <Text style={s.avatarT}>{initials(lead.name)}</Text>
+        <View style={[s.avatar, { backgroundColor: fill.backgroundColor, borderWidth: fill.borderWidth, borderColor: fill.borderColor }]}>
+          <Text style={[s.avatarT, { color: fill.color }]}>{initials(lead.name)}</Text>
         </View>
         <View style={s.cardInfo}>
           <Text style={s.name} numberOfLines={1}>{lead.name}</Text>
@@ -143,22 +147,22 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   content: { flex: 1, backgroundColor: colors.screenBg, position: "relative" },
   fab: { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
   loader: { flex: 1, justifyContent: "center", alignItems: "center", gap: ms(14) },
-  loaderT: { fontSize: fs(14), color: C.muted },
+  loaderT: { ...T.body, color: C.muted },
   list:        { flex: 1 },
   listContent: { flexGrow: 1, paddingHorizontal: ms(16), paddingTop: ms(14), paddingBottom: ms(40) },
 
   card: { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
   cardTop: { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(10) },
-  avatar: { width: ms(44), height: ms(44), borderRadius: ms(22), borderWidth: 1.5, borderColor: colors.primary + "40", backgroundColor: colors.primary + "1C", justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  avatarT: { fontSize: fs(14), fontFamily: "Inter_800ExtraBold", fontWeight: "800", color: colors.primary, includeFontPadding: false },
+  avatar: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_RADIUS, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  avatarT: { ...T.listItemTitle, includeFontPadding: false },
   cardInfo: { flex: 1, minWidth: 0 },
-  name: { fontSize: fs(14), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(3) },
-  phone: { fontSize: fs(11), color: C.muted },
+  name: { ...T.listItemTitle, color: C.text, marginBottom: ms(3) },
+  phone: { ...T.caption, color: C.muted },
   statusBadge: { borderRadius: ms(20), paddingHorizontal: ms(9), paddingVertical: ms(4), flexShrink: 0 },
-  statusT: { fontSize: fs(10.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
+  statusT: { ...T.badgeText },
   divider: { height: 1, backgroundColor: C.border, marginBottom: ms(10) },
   cardBottom: { flexDirection: "row", alignItems: "center", gap: ms(8) },
   examBadge: { flexDirection: "row", alignItems: "center", gap: ms(4), borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(3), flexShrink: 0 },
-  examT: { fontSize: fs(10.5), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
-  notes: { fontSize: fs(11), color: C.muted, flex: 1, fontStyle: "italic" },
+  examT: { ...T.badgeText },
+  notes: { ...T.caption, color: C.muted, flex: 1, fontStyle: "italic" },
 });

@@ -4,7 +4,7 @@ import request from "supertest";
 import { app } from "../app";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
-import { resetDb } from "./setup";
+import { resetDb, legacyPermissionsForRole } from "./setup";
 import type { AuthPayload } from "../middleware/auth";
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
@@ -23,13 +23,14 @@ async function makeStaff(role: "admin" | "teacher" | "frontdesk", label: string)
   return prisma.staff.create({
     data: {
       tenantId: TENANT_ID, fullName: `${label} User`, phone: `9${label.charCodeAt(0)}0000000`,
-      email: `${label.toLowerCase()}@x.test`, role, passwordHash,
+      email: `${label.toLowerCase()}@x.test`, roles: [role], passwordHash,
     },
   });
 }
 
 function tokenFor(payload: AuthPayload) {
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
+  const permissions = payload.permissions ?? legacyPermissionsForRole([payload.activeRole]);
+  return jwt.sign({ ...payload, permissions }, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
 }
 
 describe("notifications API", () => {
@@ -38,7 +39,7 @@ describe("notifications API", () => {
 
   it("returns 0 unread when there are none, and the real count once seeded", async () => {
     const staff = await makeStaff("teacher", "A");
-    const token = tokenFor({ staffId: staff.id, role: "teacher", centerId: null, tenantId: TENANT_ID });
+    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID });
 
     const before = await request(app).get("/api/notifications/unread-count").set("Authorization", `Bearer ${token}`);
     expect(before.body.count).toBe(0);
@@ -57,7 +58,7 @@ describe("notifications API", () => {
     await prisma.notification.create({ data: { tenantId: TENANT_ID, recipientId: staffA.id, type: "session_cancelled", title: "for A", body: "b" } });
     await prisma.notification.create({ data: { tenantId: TENANT_ID, recipientId: staffB.id, type: "session_cancelled", title: "for B", body: "b" } });
 
-    const token = tokenFor({ staffId: staffA.id, role: "teacher", centerId: null, tenantId: TENANT_ID });
+    const token = tokenFor({ staffId: staffA.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID });
     const res = await request(app).get("/api/notifications").set("Authorization", `Bearer ${token}`);
 
     expect(res.body.total).toBe(1);
@@ -69,7 +70,7 @@ describe("notifications API", () => {
     const staffB = await makeStaff("teacher", "B");
     const n = await prisma.notification.create({ data: { tenantId: TENANT_ID, recipientId: staffB.id, type: "session_cancelled", title: "for B", body: "b" } });
 
-    const token = tokenFor({ staffId: staffA.id, role: "teacher", centerId: null, tenantId: TENANT_ID });
+    const token = tokenFor({ staffId: staffA.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID });
     const res = await request(app).patch(`/api/notifications/${n.id}/read`).set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(404);
   });
@@ -82,7 +83,7 @@ describe("notifications API", () => {
         { tenantId: TENANT_ID, recipientId: staff.id, type: "session_rescheduled", title: "2", body: "b" },
       ],
     });
-    const token = tokenFor({ staffId: staff.id, role: "teacher", centerId: null, tenantId: TENANT_ID });
+    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID });
 
     const readAll = await request(app).patch("/api/notifications/read-all").set("Authorization", `Bearer ${token}`);
     expect(readAll.status).toBe(200);
@@ -93,7 +94,7 @@ describe("notifications API", () => {
 
   it("GET /routing returns built-in defaults for admin when unconfigured", async () => {
     const admin = await makeStaff("admin", "A");
-    const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
     const res = await request(app).get("/api/notifications/routing").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
@@ -104,7 +105,7 @@ describe("notifications API", () => {
 
   it("PATCH /routing/:type persists an override and it's reflected in GET /routing", async () => {
     const admin = await makeStaff("admin", "A");
-    const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
     const patch = await request(app)
       .patch("/api/notifications/routing/installment_overdue")
@@ -120,7 +121,7 @@ describe("notifications API", () => {
 
   it("non-admin is forbidden from reading or writing routing rules", async () => {
     const teacher = await makeStaff("teacher", "A");
-    const token = tokenFor({ staffId: teacher.id, role: "teacher", centerId: null, tenantId: TENANT_ID });
+    const token = tokenFor({ staffId: teacher.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID });
 
     const get = await request(app).get("/api/notifications/routing").set("Authorization", `Bearer ${token}`);
     expect(get.status).toBe(403);
@@ -134,7 +135,7 @@ describe("notifications API", () => {
 
   it("PATCH /api/tenants/me/settings accepts classReminderMinutes and overdueGraceDays", async () => {
     const admin = await makeStaff("admin", "A");
-    const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
     const res = await request(app)
       .patch("/api/tenants/me/settings")

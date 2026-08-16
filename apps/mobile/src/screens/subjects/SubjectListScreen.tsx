@@ -11,6 +11,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState as UIEmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
+import { AVATAR_SIZE, AVATAR_RADIUS, getAvatarFill } from "../../components/ui/avatarStyle";
+import { T } from "../../components/ui/typography";
 import type { RootStackParamList } from "../../navigation/types";
 import { ms, fs } from "../../utils/responsive";
 import {
@@ -56,12 +58,13 @@ function SubjectCard({
 }) {
   const color  = catColor(subject.examCategories, totalCats);
   const locked = subject.facultyCount > 0;
+  const fill   = getAvatarFill(color);
 
   return (
     <View style={sc.card}>
       {/* Category icon */}
-      <View style={[sc.iconWrap, { backgroundColor: color + "18" }]}>
-        <Ionicons name="book-outline" size={ms(19)} color={color} />
+      <View style={[sc.iconWrap, { backgroundColor: fill.backgroundColor, borderWidth: fill.borderWidth, borderColor: fill.borderColor }]}>
+        <Ionicons name="book-outline" size={ms(19)} color={fill.color} />
       </View>
 
       {/* Name + meta */}
@@ -113,14 +116,14 @@ function SubjectCard({
 
 const sc = StyleSheet.create({
   card:         { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(16), marginHorizontal: ms(16), marginBottom: ms(10), padding: ms(12), gap: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: ms(3) }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2 },
-  iconWrap:     { width: ms(42), height: ms(42), borderRadius: ms(13), justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  iconWrap:     { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_RADIUS, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   body:         { flex: 1, gap: ms(4) },
-  name:         { fontSize: fs(14.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, lineHeight: fs(19) },
+  name:         { ...T.listItemTitle, color: C.text },
   metaRow:      { flexDirection: "row", alignItems: "center", gap: ms(5) },
   catDot:       { width: ms(5), height: ms(5), borderRadius: ms(2.5) },
-  catT:         { fontSize: fs(11), fontFamily: "Inter_800ExtraBold", fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" },
-  metaSep:      { fontSize: fs(11), color: C.placeholder },
-  metaT:        { fontSize: fs(11), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  catT:         { ...T.badgeText },
+  metaSep:      { ...T.caption, color: C.placeholder },
+  metaT:        { ...T.caption, color: C.muted },
   actions:      { flexDirection: "row", gap: ms(6), flexShrink: 0 },
   iconBtn:      { width: ms(32), height: ms(32), borderRadius: ms(10), justifyContent: "center", alignItems: "center", backgroundColor: C.blue + "14", borderWidth: 1, borderColor: C.blue + "30" },
   delIconBtn:   { backgroundColor: C.red + "0F", borderColor: C.red + "30" },
@@ -186,8 +189,8 @@ function BannerStat({ label, value, color }: { label: string; value: number; col
 const bn = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(8), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   stat: { flex: 1, alignItems: "center" },
-  val:  { fontSize: fs(18), fontFamily: "Inter_800ExtraBold", fontWeight: "800" },
-  lbl:  { fontSize: fs(10), color: C.muted, fontFamily: "Inter_600SemiBold", fontWeight: "600", marginTop: ms(2) },
+  val:  { ...T.cardTitle },
+  lbl:  { ...T.caption, color: C.muted, marginTop: ms(2) },
   div:  { width: 1, backgroundColor: C.border },
 });
 
@@ -400,15 +403,15 @@ const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
 
   searchWrap:  { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
   searchRow:   { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), gap: ms(8), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2 },
-  searchInput: { flex: 1, fontSize: fs(13.5), color: C.text, padding: 0, includeFontPadding: false },
+  searchInput: { flex: 1, ...T.body, color: C.text, padding: 0, includeFontPadding: false },
 
   filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0, marginBottom: ms(12) },
   filterRow:    { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
   chip:        { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  chipT:       { fontSize: fs(12), fontFamily: "Inter_600SemiBold", fontWeight: "600", color: C.muted, includeFontPadding: false, lineHeight: fs(16) },
+  chipT:       { ...T.chipText, color: C.muted, includeFontPadding: false },
   chipTActive: { color: "#FFFFFF" },
 
-  overlay:     { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(16), backgroundColor: colors.bg + "EE" },
+  overlay:     { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(16), backgroundColor: colors.screenBg },
 
   fab:         { position: "absolute", bottom: ms(24), right: ms(20), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: colors.primary, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) }, shadowOpacity: 0.45, shadowRadius: ms(14), elevation: 8 },
 });

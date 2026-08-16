@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Settings2, Bell } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Settings2, Bell, RefreshCw } from "lucide-react";
 import { getTenantSettings, updateTenantSettings } from "@/api/tenants";
 import { getNotificationRouting, updateNotificationRouting } from "@/api/notifications";
+import { listJobs, runJobNow, updateJob, type Job } from "@/api/jobs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +14,9 @@ import { FormField } from "@/components/FormField";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { titleCase } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/DataTable";
+import { titleCase, formatDateTime } from "@/lib/utils";
 
 function BrandingSettings() {
   const qc = useQueryClient();
@@ -187,6 +191,150 @@ function NotificationRoutingSettings() {
   );
 }
 
+function statusBadge(status: string | undefined) {
+  if (status === "success") return <Badge variant="success">Success</Badge>;
+  if (status === "failure") return <Badge variant="danger">Failed</Badge>;
+  if (status === "running") return <Badge variant="warning">Running</Badge>;
+  return <Badge variant="outline">Never run</Badge>;
+}
+
+function JobIntervalCell({ job, onSave }: { job: Job; onSave: (minutes: number) => void }) {
+  const [value, setValue] = useState(String(job.intervalMinutes));
+
+  useEffect(() => setValue(String(job.intervalMinutes)), [job.intervalMinutes]);
+
+  return (
+    <Input
+      type="number"
+      min={1}
+      max={1440}
+      value={value}
+      className="w-20 h-8"
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => {
+        const n = Number(value);
+        if (n > 0 && n !== job.intervalMinutes) onSave(n);
+      }}
+    />
+  );
+}
+
+function SystemJobsSettings() {
+  const qc = useQueryClient();
+  const { data: jobs, isLoading } = useQuery({
+    queryKey: ["jobs"],
+    queryFn: listJobs,
+    refetchInterval: 15_000,
+  });
+
+  const runMutation = useMutation({
+    mutationFn: runJobNow,
+    onSuccess: (_, key) => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      toast({ title: `${key} completed` });
+    },
+    onError: (err: any) =>
+      toast({
+        variant: "destructive",
+        title: "Job failed",
+        description: err?.response?.data?.error ?? "Check the error detail in the table below.",
+      }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ key, payload }: { key: string; payload: { intervalMinutes?: number; isEnabled?: boolean } }) =>
+      updateJob(key, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      toast({ title: "Job updated" });
+    },
+    onError: () => toast({ variant: "destructive", title: "Update failed" }),
+  });
+
+  const columns: ColumnDef<Job>[] = [
+    {
+      id: "job",
+      header: "Job",
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium text-gray-800">{row.original.label}</p>
+          <p className="text-xs text-gray-400">{row.original.description}</p>
+        </div>
+      ),
+    },
+    {
+      id: "interval",
+      header: "Interval (min)",
+      cell: ({ row }) => (
+        <JobIntervalCell
+          job={row.original}
+          onSave={(minutes) => updateMutation.mutate({ key: row.original.key, payload: { intervalMinutes: minutes } })}
+        />
+      ),
+    },
+    {
+      id: "lastRun",
+      header: "Last Run",
+      cell: ({ row }) => (
+        <div>
+          {statusBadge(row.original.lastRun?.status)}
+          <p className="text-xs text-gray-400 mt-1">
+            {formatDateTime(row.original.lastRun?.finishedAt ?? row.original.lastRun?.startedAt)}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: "detail",
+      header: "Detail",
+      cell: ({ row }) => {
+        const run = row.original.lastRun;
+        if (!run) return <span className="text-xs text-gray-400">—</span>;
+        if (run.status === "failure") {
+          return (
+            <p className="text-xs text-red-600 max-w-xs truncate" title={run.errorMessage ?? ""}>
+              {run.errorMessage}
+            </p>
+          );
+        }
+        if (run.resultSummary) {
+          return (
+            <p className="text-xs text-gray-500">
+              {Object.entries(run.resultSummary).map(([k, v]) => `${k}: ${v}`).join(", ")}
+            </p>
+          );
+        }
+        return <span className="text-xs text-gray-400">—</span>;
+      },
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <Button
+          size="sm"
+          onClick={() => runMutation.mutate(row.original.key)}
+          disabled={runMutation.isPending || row.original.lastRun?.status === "running"}
+        >
+          <RefreshCw className={`mr-2 h-3.5 w-3.5 ${runMutation.isPending ? "animate-spin" : ""}`} />
+          Run Now
+        </Button>
+      ),
+    },
+  ];
+
+  if (isLoading) return <Skeleton className="h-64 w-full" />;
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-sm">Background Jobs</CardTitle></CardHeader>
+      <CardContent>
+        <DataTable columns={columns} data={jobs ?? []} pageSize={10} />
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   return (
     <div className="flex flex-col h-full overflow-auto">
@@ -204,6 +352,10 @@ export function SettingsPage() {
               <Bell className="mr-2 h-4 w-4" />
               Notification Routing
             </TabsTrigger>
+            <TabsTrigger value="system">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              System
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="mt-4">
@@ -212,6 +364,10 @@ export function SettingsPage() {
 
           <TabsContent value="notifications" className="mt-4">
             <NotificationRoutingSettings />
+          </TabsContent>
+
+          <TabsContent value="system" className="mt-4">
+            <SystemJobsSettings />
           </TabsContent>
         </Tabs>
       </div>

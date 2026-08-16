@@ -3,55 +3,182 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, UserPlus, BookOpen, Layers,
   Calendar, GraduationCap, UserCog, DollarSign, Settings,
-  LogOut, Building2, ChevronDown, Bell, ChevronRight,
+  LogOut, Building2, ChevronDown, Bell, ChevronRight, Globe, FileText, ShieldCheck,
 } from "lucide-react";
-import { useAuth, type StaffRole } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn, initials } from "@/lib/utils";
-import { apiClient } from "@/api/client";
+import { selectCenter as selectCenterApi } from "@/api/auth";
 
-interface NavItem { label: string; to: string; icon: React.ElementType; roles: StaffRole[] }
+// screenKey: null means always visible (Dashboard) — not part of the
+// permission grid. adminOnly mirrors ProtectedRoute's own escape hatch for
+// Settings (deliberately excluded from the grid — see ProtectedRoute.tsx).
+// Nav visibility and route access now derive from the exact same
+// staff.permissions data ProtectedRoute reads, so they can't drift apart the
+// way roles-array-here vs roles-prop-there used to.
+interface NavItem { label: string; to: string; icon: React.ElementType; screenKey: string | null; adminOnly?: boolean; end?: boolean }
+interface NavGroup { module: string; items: NavItem[] }
 
-const NAV: NavItem[] = [
-  { label: "Dashboard",     to: "/dashboard",     icon: LayoutDashboard, roles: ["admin","teacher","frontdesk"] },
-  { label: "Students",      to: "/students",      icon: Users,           roles: ["admin","frontdesk"] },
-  { label: "Leads",         to: "/leads",         icon: UserPlus,        roles: ["admin","frontdesk"] },
-  { label: "Batches",       to: "/batches",       icon: Layers,          roles: ["admin","teacher","frontdesk"] },
-  { label: "Courses",       to: "/courses",       icon: BookOpen,        roles: ["admin"] },
-  { label: "Subjects",      to: "/subjects",      icon: GraduationCap,   roles: ["admin"] },
-  { label: "Faculty",       to: "/faculty",       icon: GraduationCap,   roles: ["admin"] },
-  { label: "Staff",         to: "/staff",         icon: UserCog,         roles: ["admin"] },
-  { label: "Fees",          to: "/fees",          icon: DollarSign,      roles: ["admin","frontdesk"] },
-  { label: "Schedule",      to: "/schedule",      icon: Calendar,        roles: ["admin","teacher"] },
-  { label: "Centers",       to: "/centers",       icon: Building2,       roles: ["admin"] },
-  { label: "Notifications", to: "/notifications", icon: Bell,            roles: ["admin","teacher","frontdesk"] },
-  { label: "Settings",      to: "/settings",      icon: Settings,        roles: ["admin"] },
+// Ungrouped, pinned at the very top — Dashboard has no CRUD concept, isn't in
+// SCREEN_REGISTRY, and doesn't belong to any one module.
+const NAV_TOP: NavItem[] = [
+  { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard, screenKey: null },
 ];
 
+// Same 4 modules apps/api's SCREEN_REGISTRY groups these exact screens into
+// for the Access Control grid — reusing that taxonomy here means the sidebar
+// and the permissions page can't drift into two different groupings.
+const NAV_GROUPS: NavGroup[] = [
+  {
+    module: "Students",
+    items: [
+      { label: "Students",     to: "/students",              icon: Users,         screenKey: "students" },
+      { label: "Leads",        to: "/leads",                  icon: UserPlus,      screenKey: "leads" },
+      { label: "Applications", to: "/admission-applications", icon: FileText,      screenKey: "admission-applications" },
+    ],
+  },
+  {
+    module: "Academics",
+    items: [
+      { label: "Batches",  to: "/batches",  icon: Layers,        screenKey: "batches" },
+      { label: "Courses",  to: "/courses",  icon: BookOpen,      screenKey: "courses" },
+      { label: "Subjects", to: "/subjects", icon: GraduationCap, screenKey: "subjects" },
+      { label: "Faculty",  to: "/faculty",  icon: GraduationCap, screenKey: "faculty" },
+      { label: "Schedule", to: "/schedule", icon: Calendar,      screenKey: "schedule" },
+    ],
+  },
+  {
+    module: "Finance",
+    items: [
+      { label: "Fees", to: "/fees", icon: DollarSign, screenKey: "fees" },
+    ],
+  },
+  {
+    module: "Organization",
+    items: [
+      { label: "Staff",         to: "/staff",         icon: UserCog,   screenKey: "staff" },
+      { label: "Centers",       to: "/centers",       icon: Building2, screenKey: "centers" },
+      { label: "Notifications", to: "/notifications", icon: Bell,      screenKey: "notifications" },
+    ],
+  },
+];
+
+// Ungrouped, admin-only, pinned below a divider at the bottom — same
+// self-lockout exclusion as the permission system itself (see ProtectedRoute).
+const NAV_BOTTOM: NavItem[] = [
+  // end: true — otherwise NavLink's default prefix match treats
+  // /settings/permissions as still "within" /settings and lights up both.
+  { label: "Settings",       to: "/settings",             icon: Settings,    screenKey: null, adminOnly: true, end: true },
+  { label: "Access Control", to: "/settings/permissions", icon: ShieldCheck, screenKey: null, adminOnly: true },
+];
+
+// Which module accordions the current browser has manually collapsed —
+// persisted so a reload/nav doesn't reset a deliberate choice. Keyed to the
+// browser, not the staff account: a shared kiosk device keeps its own layout
+// preference regardless of who's logged in.
+const NAV_COLLAPSE_KEY = "nav_collapsed_groups";
+
+function loadCollapsedGroups(): Set<string> {
+  try {
+    const raw = localStorage.getItem(NAV_COLLAPSE_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
 export function AppLayout() {
-  const { staff, currentCenter, centers, logout, branding, selectCenter } = useAuth();
+  const { staff, currentCenter, centers, logout, branding, selectCenter, selectRole } = useAuth();
   const navigate = useNavigate();
   const [switchingCenter, setSwitchingCenter] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
 
-  const role = staff?.role ?? "frontdesk";
+  async function handleSelectRole(role: "admin" | "teacher" | "frontdesk") {
+    if (role === staff?.activeRole) return;
+    setSwitchingRole(true);
+    try {
+      await selectRole(role);
+      navigate("/dashboard");
+    } finally {
+      setSwitchingRole(false);
+    }
+  }
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(loadCollapsedGroups);
+
   const primary = branding?.primary ?? "#7C3AED";
-  const visibleNav = NAV.filter((n) => n.roles.includes(role));
+  const permissions = staff?.permissions ?? {};
+
+  function isVisible(item: NavItem) {
+    if (item.adminOnly) return staff?.activeRole === "admin";
+    if (item.screenKey === null) return true;
+    return permissions[item.screenKey]?.includes("r") ?? false;
+  }
+
+  function toggleGroup(module: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(module)) next.delete(module); else next.add(module);
+      localStorage.setItem(NAV_COLLAPSE_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  const visibleTop = NAV_TOP.filter(isVisible);
+  // A group with zero visible items (every screen in it denied for this
+  // role) gets no header at all — an empty "Finance" section would just be
+  // confusing chrome, not a useful signal.
+  const visibleGroups = NAV_GROUPS
+    .map((g) => ({ module: g.module, items: g.items.filter(isVisible) }))
+    .filter((g) => g.items.length > 0);
+  const visibleBottom = NAV_BOTTOM.filter(isVisible);
+
+  function renderNavLink(item: NavItem, idx: number) {
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        end={item.end}
+        className={({ isActive }) =>
+          cn(
+            "nav-pill-hover flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium animate-slide-in-left",
+            isActive
+              ? "text-white shadow-sm"
+              : "text-gray-500 hover:bg-[var(--color-primary,#7C3AED)]/10 hover:text-[var(--color-primary,#7C3AED)]"
+          )
+        }
+        style={({ isActive }) => ({
+          ...(isActive ? { background: primary, boxShadow: `0 4px 16px ${primary}45` } : {}),
+          animationDelay: `${idx * 40}ms`,
+        })}
+      >
+        {({ isActive }) => (
+          <>
+            <item.icon
+              className={cn(
+                "h-4 w-4 shrink-0 transition-transform duration-200",
+                isActive ? "text-white scale-110" : "text-gray-400 group-hover:scale-110"
+              )}
+            />
+            {item.label}
+          </>
+        )}
+      </NavLink>
+    );
+  }
 
   useEffect(() => {
     document.documentElement.style.setProperty("--color-primary", primary);
   }, [primary]);
 
-  async function handleSelectCenter(centerId: string) {
+  async function handleSelectCenter(centerId: string | null) {
     setSwitchingCenter(true);
     try {
-      const { data } = await apiClient.post<{ accessToken: string; center: { id: string; name: string } | null }>(
-        "/api/auth/select-center", { centerId }
-      );
-      selectCenter(data.center, data.accessToken);
+      const data = await selectCenterApi(centerId);
+      selectCenter(data.center, data.accessToken, data.refreshToken, data.roles, data.activeRole, data.permissions);
       navigate("/dashboard");
     } finally {
       setSwitchingCenter(false);
@@ -113,14 +240,22 @@ export function AppLayout() {
             <div className="px-3 py-3" style={{ borderBottom: "1px solid rgba(109,40,217,0.06)" }}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex w-full items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600 hover:bg-violet-50 hover:text-violet-700 transition-all group">
-                    <Building2 className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-violet-500 transition-colors" />
+                  <button className="flex w-full items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600 hover:bg-[var(--color-primary,#7C3AED)]/10 hover:text-[var(--color-primary,#7C3AED)] transition-all group">
+                    <Building2 className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-[var(--color-primary,#7C3AED)] transition-colors" />
                     <span className="truncate flex-1 text-left font-medium">{currentCenter?.name ?? "All Centers"}</span>
                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:rotate-180 transition-transform duration-200" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-52" side="right" align="start">
                   <DropdownMenuLabel>Switch Center</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => handleSelectCenter(null)}
+                    disabled={switchingCenter}
+                    className={cn(!currentCenter && "font-semibold")}
+                  >
+                    <Globe className="mr-2 h-3.5 w-3.5" />All Centers
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {centers.map((c) => (
                     <DropdownMenuItem
@@ -137,43 +272,76 @@ export function AppLayout() {
             </div>
           )}
 
+          {/* Role switcher — only shown when you actually hold more than one
+              role here; mirrors the center switcher above exactly, but along
+              the role axis. Switching re-scopes access control server-side,
+              not just this label. */}
+          {staff && staff.roles.length > 1 && (
+            <div className="px-3 py-3" style={{ borderBottom: "1px solid rgba(109,40,217,0.06)" }}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex w-full items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600 hover:bg-[var(--color-primary,#7C3AED)]/10 hover:text-[var(--color-primary,#7C3AED)] transition-all group">
+                    <UserCog className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-[var(--color-primary,#7C3AED)] transition-colors" />
+                    <span className="truncate flex-1 text-left font-medium capitalize">{staff.activeRole}</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:rotate-180 transition-transform duration-200" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-52" side="right" align="start">
+                  <DropdownMenuLabel>Acting as</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {staff.roles.map((r) => (
+                    <DropdownMenuItem
+                      key={r}
+                      onClick={() => handleSelectRole(r)}
+                      disabled={switchingRole}
+                      className={cn("capitalize", staff.activeRole === r && "font-semibold")}
+                    >
+                      <UserCog className="mr-2 h-3.5 w-3.5" />{r}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+
           {/* Nav */}
           <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-            {visibleNav.map((item, idx) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    "nav-pill-hover flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium animate-slide-in-left",
-                    isActive ? "text-white shadow-sm" : "text-gray-500 hover:bg-violet-50 hover:text-violet-700"
-                  )
-                }
-                style={({ isActive }) => ({
-                  ...(isActive ? { background: primary, boxShadow: `0 4px 16px ${primary}45` } : {}),
-                  animationDelay: `${idx * 40}ms`,
-                })}
-              >
-                {({ isActive }) => (
-                  <>
-                    <item.icon
+            {visibleTop.map((item, idx) => renderNavLink(item, idx))}
+
+            {visibleGroups.map((group) => {
+              const collapsed = collapsedGroups.has(group.module);
+              return (
+                <div key={group.module}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.module)}
+                    className="flex w-full items-center justify-between px-3 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-[var(--color-primary,#7C3AED)] transition-colors"
+                  >
+                    <span>{group.module}</span>
+                    <ChevronDown
                       className={cn(
-                        "h-4 w-4 shrink-0 transition-transform duration-200",
-                        isActive ? "text-white scale-110" : "text-gray-400 group-hover:scale-110"
+                        "h-3 w-3 shrink-0 transition-transform duration-200",
+                        collapsed && "-rotate-90"
                       )}
                     />
-                    {item.label}
-                  </>
-                )}
-              </NavLink>
-            ))}
+                  </button>
+                  {!collapsed && group.items.map((item, idx) => renderNavLink(item, idx))}
+                </div>
+              );
+            })}
+
+            {visibleBottom.length > 0 && (
+              <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(109,40,217,0.06)" }}>
+                {visibleBottom.map((item, idx) => renderNavLink(item, idx))}
+              </div>
+            )}
           </nav>
 
           {/* User footer */}
           <div className="p-3" style={{ borderTop: "1px solid rgba(109,40,217,0.06)" }}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-violet-50 transition-all duration-200 group">
+                <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[var(--color-primary,#7C3AED)]/10 transition-all duration-200 group">
                   <div className="relative shrink-0">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="text-xs font-bold text-white" style={{ background: primary }}>
@@ -184,9 +352,9 @@ export function AppLayout() {
                   </div>
                   <div className="flex-1 min-w-0 text-left">
                     <p className="text-[13px] font-semibold text-gray-800 truncate leading-tight">{staff?.fullName}</p>
-                    <p className="text-[11px] text-gray-400 capitalize leading-tight mt-0.5">{staff?.role}</p>
+                    <p className="text-[11px] text-gray-400 capitalize leading-tight mt-0.5">{staff?.activeRole}</p>
                   </div>
-                  <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-[var(--color-primary,#7C3AED)] group-hover:translate-x-0.5 transition-all shrink-0" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-52" side="right" align="end">
@@ -199,7 +367,7 @@ export function AppLayout() {
                     </Avatar>
                     <div>
                       <p className="font-semibold text-gray-900 text-sm">{staff?.fullName}</p>
-                      <p className="text-xs text-gray-500 capitalize">{staff?.role}</p>
+                      <p className="text-xs text-gray-500 capitalize">{staff?.activeRole}</p>
                     </div>
                   </div>
                 </DropdownMenuLabel>

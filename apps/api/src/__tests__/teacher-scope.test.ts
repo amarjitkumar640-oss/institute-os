@@ -4,7 +4,7 @@ import request from "supertest";
 import { app } from "../app";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
-import { resetDb } from "./setup";
+import { resetDb, legacyPermissionsForRole } from "./setup";
 import type { AuthPayload } from "../middleware/auth";
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
@@ -40,7 +40,7 @@ async function makeTeacherWithFaculty(label: string, batchId: string) {
   const staff = await prisma.staff.create({
     data: {
       tenantId: TENANT_ID, fullName: `${label} Teacher`, phone: `9${label.charCodeAt(0)}0000000`,
-      email: `${label.toLowerCase()}@teacher.test`, role: "teacher", passwordHash,
+      email: `${label.toLowerCase()}@teacher.test`, roles: ["teacher"], passwordHash,
     },
   });
   const faculty = await prisma.faculty.create({
@@ -66,7 +66,8 @@ async function makeTeacherWithFaculty(label: string, batchId: string) {
 }
 
 function tokenFor(payload: AuthPayload) {
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
+  const permissions = payload.permissions ?? legacyPermissionsForRole([payload.activeRole]);
+  return jwt.sign({ ...payload, permissions }, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
 }
 
 describe("teacher scoping", () => {
@@ -79,9 +80,9 @@ describe("teacher scoping", () => {
       const { faculty } = await makeTeacherWithFaculty("A", batch.id);
       const passwordHash = await bcrypt.hash("secret123", 10);
       const unlinked = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Unlinked", phone: "9000000099", email: "unlinked@teacher.test", role: "teacher", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Unlinked", phone: "9000000099", email: "unlinked@teacher.test", roles: ["teacher"], passwordHash },
       });
-      const token = tokenFor({ staffId: unlinked.id, role: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: null });
+      const token = tokenFor({ staffId: unlinked.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: null });
 
       const res = await request(app)
         .get(`/api/schedule/faculty/${faculty.id}/sessions`)
@@ -94,7 +95,7 @@ describe("teacher scoping", () => {
     it("lets a teacher fetch their own linked faculty's sessions", async () => {
       const batch = await makeCourseAndBatch();
       const { staff, faculty } = await makeTeacherWithFaculty("A", batch.id);
-      const token = tokenFor({ staffId: staff.id, role: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
+      const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
 
       const res = await request(app)
         .get(`/api/schedule/faculty/${faculty.id}/sessions`)
@@ -110,7 +111,7 @@ describe("teacher scoping", () => {
       const { staff: staffA } = await makeTeacherWithFaculty("A", batch.id);
       const { faculty: facultyB } = await makeTeacherWithFaculty("B", batch.id);
       const linkedA = await prisma.faculty.findFirstOrThrow({ where: { staffId: staffA.id } });
-      const tokenALinked = tokenFor({ staffId: staffA.id, role: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: linkedA.id });
+      const tokenALinked = tokenFor({ staffId: staffA.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: linkedA.id });
 
       const res = await request(app)
         .get(`/api/schedule/faculty/${facultyB.id}/sessions`)
@@ -125,13 +126,13 @@ describe("teacher scoping", () => {
       const { faculty } = await makeTeacherWithFaculty("A", batch.id);
       const passwordHash = await bcrypt.hash("secret123", 10);
       const admin = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9111111111", email: "admin@x.test", role: "admin", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9111111111", email: "admin@x.test", roles: ["admin"], passwordHash },
       });
       const frontdesk = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Front Desk", phone: "9222222222", email: "fd@x.test", role: "frontdesk", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Front Desk", phone: "9222222222", email: "fd@x.test", roles: ["frontdesk"], passwordHash },
       });
-      const adminToken = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
-      const fdToken = tokenFor({ staffId: frontdesk.id, role: "frontdesk", centerId: null, tenantId: TENANT_ID });
+      const adminToken = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
+      const fdToken = tokenFor({ staffId: frontdesk.id, roles: ["frontdesk"], activeRole: "frontdesk", centerId: null, tenantId: TENANT_ID });
 
       for (const token of [adminToken, fdToken]) {
         const res = await request(app)
@@ -147,9 +148,9 @@ describe("teacher scoping", () => {
     it("returns linked:false when the teacher's Staff account has no Faculty link", async () => {
       const passwordHash = await bcrypt.hash("secret123", 10);
       const unlinked = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Unlinked", phone: "9333333333", email: "unlinked2@teacher.test", role: "teacher", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Unlinked", phone: "9333333333", email: "unlinked2@teacher.test", roles: ["teacher"], passwordHash },
       });
-      const token = tokenFor({ staffId: unlinked.id, role: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: null });
+      const token = tokenFor({ staffId: unlinked.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: null });
 
       const res = await request(app).get("/api/dashboard/teacher").set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(200);
@@ -164,7 +165,7 @@ describe("teacher scoping", () => {
       });
       await prisma.enrollment.create({ data: { studentId: student.id, batchId: batch.id, status: "active" } });
 
-      const token = tokenFor({ staffId: staff.id, role: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
+      const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
       const res = await request(app).get("/api/dashboard/teacher").set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -177,9 +178,9 @@ describe("teacher scoping", () => {
     it("403s for a non-teacher role, same guard as other role-restricted routes", async () => {
       const passwordHash = await bcrypt.hash("secret123", 10);
       const admin = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9444444444", email: "admin2@x.test", role: "admin", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9444444444", email: "admin2@x.test", roles: ["admin"], passwordHash },
       });
-      const token = tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
 
       const res = await request(app).get("/api/dashboard/teacher").set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(403);
@@ -190,15 +191,15 @@ describe("teacher scoping", () => {
     async function makeAdminToken() {
       const passwordHash = await bcrypt.hash("secret123", 10);
       const admin = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9555555555", email: "admin3@x.test", role: "admin", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9555555555", email: "admin3@x.test", roles: ["admin"], passwordHash },
       });
-      return tokenFor({ staffId: admin.id, role: "admin", centerId: null, tenantId: TENANT_ID });
+      return tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
     }
 
     it("lets an admin link an unlinked teacher Staff account to a Faculty profile", async () => {
       const passwordHash = await bcrypt.hash("secret123", 10);
       const teacher = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Free Teacher", phone: "9666666666", email: "free@teacher.test", role: "teacher", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Free Teacher", phone: "9666666666", email: "free@teacher.test", roles: ["teacher"], passwordHash },
       });
       const faculty = await prisma.faculty.create({
         data: {
@@ -240,7 +241,7 @@ describe("teacher scoping", () => {
     it("404s linking a staffId that doesn't reference a teacher-role Staff in this tenant", async () => {
       const passwordHash = await bcrypt.hash("secret123", 10);
       const notATeacher = await prisma.staff.create({
-        data: { tenantId: TENANT_ID, fullName: "Front Desk Only", phone: "9999999998", email: "fd2@x.test", role: "frontdesk", passwordHash },
+        data: { tenantId: TENANT_ID, fullName: "Front Desk Only", phone: "9999999998", email: "fd2@x.test", roles: ["frontdesk"], passwordHash },
       });
       const faculty = await prisma.faculty.create({
         data: {

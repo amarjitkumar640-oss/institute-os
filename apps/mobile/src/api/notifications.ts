@@ -7,7 +7,8 @@ export type NotificationType =
   | "class_reminder"
   | "new_enrollment"
   | "installment_overdue"
-  | "batch_capacity";
+  | "batch_capacity"
+  | "new_application";
 
 export interface NotificationItem {
   id:        string;

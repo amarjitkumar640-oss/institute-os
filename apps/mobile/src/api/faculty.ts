@@ -20,6 +20,9 @@ export interface FacultyItem {
   joiningDate: string; // "YYYY-MM-DD"
   subjects: FacultySubject[];
   staffId: string | null; // linked login account, if any
+  // The linked staff login's own profile photo, if any — Faculty has no
+  // photo of its own, this surfaces the same person's uploaded photo.
+  photoUrl: string | null;
 }
 
 export interface CreateFacultyPayload {

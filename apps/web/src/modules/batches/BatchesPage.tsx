@@ -588,6 +588,7 @@ function EditBatchDialog({ batch, onClose }: { batch: Batch; onClose: () => void
 
 export function BatchesPage() {
   const navigate = useNavigate();
+  const { isAllCenters } = useAuth();
   const [search, setSearch]   = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
@@ -601,6 +602,14 @@ export function BatchesPage() {
     const matchStatus = statusFilter === "all" || b.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  // Only meaningful when viewing more than one center's data at once —
+  // redundant (every row would show the same name) when scoped to one.
+  const centerColumn: ColumnDef<Batch> = {
+    id: "center",
+    header: "Center",
+    cell: ({ row }) => row.original.center?.name ?? "—",
+  };
 
   const columns: ColumnDef<Batch>[] = [
     {
@@ -620,6 +629,7 @@ export function BatchesPage() {
       header: "Course",
       cell: ({ row }) => <span className="text-sm">{row.original.course.name}</span>,
     },
+    ...(isAllCenters ? [centerColumn] : []),
     {
       accessorKey: "status",
       header: "Status",
