@@ -1,20 +1,45 @@
+import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
+import { useTenant } from "@/context/TenantContext";
+import { getTenantPublic } from "@/api/auth";
+import { initials } from "@/lib/utils";
 
 export function AuthLayout() {
+  const { tenantId } = useTenant();
+  const [orgName, setOrgName] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  // Public (unauthenticated) endpoint — this layout wraps the login screen
+  // itself, so there's no session yet to read the tenant name/logo from.
+  // LoginPage fetches the same tenant for its own purposes (login method,
+  // brand color); this is a separate call rather than threading that state
+  // down, to keep the two components independent.
+  useEffect(() => {
+    if (!tenantId) return;
+    getTenantPublic(tenantId).then((t) => {
+      setOrgName(t.name);
+      setLogoUrl(t.branding.logoUrl);
+    }).catch(() => {});
+  }, [tenantId]);
+
+  const displayName = orgName || "Institute OS";
   return (
-    <div className="relative min-h-screen bg-[#EDE9FE] flex items-center justify-center p-4 overflow-hidden">
+    <div
+      className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
+      style={{ background: "color-mix(in srgb, var(--color-primary,#7C3AED) 8%, white)" }}
+    >
       {/* Animated background orbs */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="orb animate-blob absolute opacity-45" style={{ width: 380, height: 380, top: "-60px", left: "-80px", background: "#7C3AED" }} />
-        <div className="orb animate-blob-slow absolute opacity-30" style={{ width: 450, height: 450, bottom: "-80px", right: "-60px", background: "#A78BFA", animationDelay: "5s" }} />
-        <div className="orb animate-blob absolute opacity-20" style={{ width: 280, height: 280, top: "50%", right: "20%", background: "#C4B5FD", animationDelay: "9s" }} />
+        <div className="orb animate-blob absolute opacity-45" style={{ width: 380, height: 380, top: "-60px", left: "-80px", background: "var(--color-primary,#7C3AED)" }} />
+        <div className="orb animate-blob-slow absolute opacity-30" style={{ width: 450, height: 450, bottom: "-80px", right: "-60px", background: "color-mix(in srgb, var(--color-primary,#7C3AED) 60%, white)", animationDelay: "5s" }} />
+        <div className="orb animate-blob absolute opacity-20" style={{ width: 280, height: 280, top: "50%", right: "20%", background: "color-mix(in srgb, var(--color-primary,#7C3AED) 35%, white)", animationDelay: "9s" }} />
       </div>
 
       <div className="relative w-full max-w-5xl flex rounded-[28px] overflow-hidden shadow-shell bg-white animate-scale-in" style={{ minHeight: "580px" }}>
         {/* Left decorative panel */}
         <div
           className="hidden lg:flex lg:w-[44%] relative overflow-hidden flex-col"
-          style={{ background: "linear-gradient(140deg, #4C1D95 0%, #6D28D9 50%, #7C3AED 100%)" }}
+          style={{ background: "linear-gradient(140deg, color-mix(in srgb, var(--color-primary,#7C3AED) 85%, black) 0%, color-mix(in srgb, var(--color-primary,#7C3AED) 92%, black) 50%, var(--color-primary,#7C3AED) 100%)" }}
         >
           {/* Inner decorative blobs */}
           <div className="absolute top-[-20%] right-[-20%] h-80 w-80 rounded-full opacity-20 blur-3xl bg-purple-300 animate-float-slow" />
@@ -30,10 +55,14 @@ export function AuthLayout() {
           <div className="relative z-10 flex flex-col justify-between p-10 h-full">
             {/* Logo */}
             <div className="flex items-center gap-3 animate-slide-up" style={{ animationDelay: "100ms" }}>
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white font-bold text-sm border border-white/20 backdrop-blur-sm">
-                IO
-              </div>
-              <span className="text-white font-bold text-lg tracking-tight">Institute OS</span>
+              {logoUrl ? (
+                <img src={logoUrl} alt={displayName} className="h-10 w-10 rounded-2xl object-cover border border-white/20" />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white font-bold text-sm border border-white/20 backdrop-blur-sm">
+                  {initials(displayName)}
+                </div>
+              )}
+              <span className="text-white font-bold text-lg tracking-tight truncate max-w-[200px]">{displayName}</span>
             </div>
 
             {/* Hero text */}
@@ -77,13 +106,17 @@ export function AuthLayout() {
           <div className="w-full max-w-sm animate-slide-up" style={{ animationDelay: "150ms" }}>
             {/* Mobile logo */}
             <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-xl text-white font-bold text-sm"
-                style={{ background: "var(--color-primary,#7C3AED)" }}
-              >
-                IO
-              </div>
-              <span className="font-bold text-gray-900 text-lg">Institute OS</span>
+              {logoUrl ? (
+                <img src={logoUrl} alt={displayName} className="h-9 w-9 rounded-xl object-cover" />
+              ) : (
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-white font-bold text-sm"
+                  style={{ background: "var(--color-primary,#7C3AED)" }}
+                >
+                  {initials(displayName)}
+                </div>
+              )}
+              <span className="font-bold text-gray-900 text-lg truncate max-w-[200px]">{displayName}</span>
             </div>
             <Outlet />
           </div>

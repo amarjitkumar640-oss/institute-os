@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import {
-  Plus, Search, Users, CheckCircle2, BookOpen, Users2,
+  Plus, Search, Users, CheckCircle2, Users2,
   GraduationCap, Phone, Building2, Sun, Sunset, Moon,
-  Banknote, CreditCard, ArrowLeft, ArrowRight,
+  Banknote, CreditCard, ArrowLeft, ArrowRight, Camera, Loader2,
 } from "lucide-react";
-import { listStudents, admitStudent, type Student } from "@/api/students";
+import { listStudents, admitStudent, uploadStudentPhoto, type Student } from "@/api/students";
 import { getAdmissionApplication, type AdmissionApplication } from "@/api/admissionApplications";
 import { listAssignableCenters } from "@/api/centers";
 import { listBatches } from "@/api/batches";
@@ -26,191 +26,14 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate, initials } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import {
+  type Gender, type Qualification, type CoursePreference, type DurationPref,
+  type PreferredTiming, type PaymentMode, type FormErrors,
+  StepBar, OptionPills, CardSelector, QualGrid, SectionHead,
+} from "./formHelpers";
+import { EditStudentDialog } from "./EditStudentDialog";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-type Gender          = "male" | "female";
-type Qualification   = "class10" | "class12" | "graduation" | "post_graduation";
-type CoursePreference = "ssc" | "banking" | "railway" | "foundation" | "others";
-type DurationPref    = "3months" | "6months" | "1year";
-type PreferredTiming = "morning" | "midday" | "evening";
-type PaymentMode     = "cash" | "online";
-
-interface FormErrors { [key: string]: string }
-
-const STEPS = ["Personal", "Family", "Academic", "Contact", "Office"] as const;
-
-// ── Step progress bar ─────────────────────────────────────────────────────────
-
-function StepBar({ current }: { current: number }) {
-  return (
-    <div className="flex items-center px-1 py-4">
-      {STEPS.map((label, i) => {
-        const done   = i < current;
-        const active = i === current;
-        return (
-          <div key={i} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className={cn(
-                  "w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-colors",
-                  done   && "bg-[var(--color-primary,#7C3AED)] border-[var(--color-primary,#7C3AED)] text-white",
-                  active && "border-[var(--color-primary,#7C3AED)] text-[var(--color-primary,#7C3AED)] bg-white",
-                  !done && !active && "border-gray-200 text-gray-400 bg-white"
-                )}
-              >
-                {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
-              </div>
-              <span
-                className={cn(
-                  "text-[10px] font-semibold whitespace-nowrap",
-                  active ? "text-[var(--color-primary,#7C3AED)]" : done ? "text-[var(--color-primary,#7C3AED)]" : "text-gray-400"
-                )}
-              >
-                {label}
-              </span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div className={cn("flex-1 h-0.5 mb-5 mx-1", done ? "bg-[var(--color-primary,#7C3AED)]" : "bg-gray-200")} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Option pills ──────────────────────────────────────────────────────────────
-
-function OptionPills<T extends string>({
-  options, value, onSelect, color = "var(--color-primary,#7C3AED)",
-}: {
-  options: { key: T; label: string }[];
-  value: T | null | undefined;
-  onSelect: (k: T) => void;
-  color?: string;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map(({ key, label }) => {
-        const active = value === key;
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onSelect(key)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border-[1.5px] transition-colors",
-              active ? "text-white" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-            )}
-            style={active ? { background: color, borderColor: color } : {}}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Card selector (duration / timing / payment) ───────────────────────────────
-
-function CardSelector<T extends string>({
-  options, value, onSelect,
-}: {
-  options: { key: T; icon: React.ReactNode; label: string; sub: string }[];
-  value: T | null | undefined;
-  onSelect: (k: T) => void;
-}) {
-  return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
-      {options.map(({ key, icon, label, sub }) => {
-        const active = value === key;
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onSelect(key)}
-            className={cn(
-              "flex items-center gap-2.5 py-2 px-3 rounded-xl border-[1.5px] text-left transition-colors",
-              active
-                ? "border-[var(--color-primary,#7C3AED)] bg-[var(--color-primary,#7C3AED)]/5"
-                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
-            )}
-          >
-            <span
-              className={cn(
-                "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center",
-                active ? "bg-[var(--color-primary,#7C3AED)]/10 text-[var(--color-primary,#7C3AED)]" : "bg-gray-100 text-gray-400"
-              )}
-            >
-              {icon}
-            </span>
-            <div className="min-w-0">
-              <p className={cn("text-xs font-bold leading-none", active ? "text-[var(--color-primary,#7C3AED)]" : "text-gray-700")}>{label}</p>
-              <p className={cn("text-[10px] mt-0.5", active ? "text-[var(--color-primary,#7C3AED)]/70" : "text-gray-400")}>{sub}</p>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Qualification grid ────────────────────────────────────────────────────────
-
-const QUAL_OPTS: { key: Qualification; icon: React.ReactNode; label: string; sub: string }[] = [
-  { key: "class10",         icon: <BookOpen className="h-5 w-5" />,      label: "Class 10",        sub: "Secondary"         },
-  { key: "class12",         icon: <GraduationCap className="h-5 w-5" />, label: "Class 12",        sub: "Senior Secondary"  },
-  { key: "graduation",      icon: <GraduationCap className="h-5 w-5" />, label: "Graduation",      sub: "Bachelor's"        },
-  { key: "post_graduation", icon: <GraduationCap className="h-5 w-5" />, label: "Post Grad",       sub: "Master's"          },
-];
-
-function QualGrid({ value, onSelect }: { value: Qualification | null | undefined; onSelect: (k: Qualification) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {QUAL_OPTS.map(({ key, icon, label, sub }) => {
-        const active = value === key;
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onSelect(key)}
-            className={cn(
-              "flex items-center gap-2.5 py-2 px-3 rounded-xl border-[1.5px] text-left transition-colors",
-              active
-                ? "border-[var(--color-accent,#0EA5E9)] bg-[var(--color-accent,#0EA5E9)]/5"
-                : "border-gray-200 bg-white hover:border-gray-300"
-            )}
-          >
-            <span
-              className={cn(
-                "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center",
-                active ? "bg-[var(--color-accent,#0EA5E9)]/10 text-[var(--color-accent,#0EA5E9)]" : "bg-gray-100 text-gray-400"
-              )}
-            >
-              {icon}
-            </span>
-            <div className="min-w-0">
-              <p className={cn("text-xs font-bold leading-none", active ? "text-[var(--color-accent,#0EA5E9)]" : "text-gray-700")}>{label}</p>
-              <p className={cn("text-[10px] mt-0.5", active ? "text-[var(--color-accent,#0EA5E9)]/70" : "text-gray-400")}>{sub}</p>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Section header ────────────────────────────────────────────────────────────
-
-function SectionHead({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">
-      {icon} {label}
-    </div>
-  );
-}
+const ADMIT_STEPS = ["Personal", "Family", "Academic", "Contact", "Office"] as const;
 
 // ── Admit Student Dialog (multi-step) ─────────────────────────────────────────
 
@@ -232,7 +55,9 @@ function AdmitStudentDialog({
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
-  const [admitted, setAdmitted] = useState<{ studentCode: string; fullName: string; batchName?: string } | null>(null);
+  const [admitted, setAdmitted] = useState<{ studentId: string; studentCode: string; fullName: string; batchName?: string } | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoUploaded, setPhotoUploaded] = useState(false);
 
   // ── Step 1: Personal ──
   const [fullName, setFullName]   = useState("");
@@ -389,6 +214,7 @@ function AdmitStudentDialog({
       if (initialApplication) qc.invalidateQueries({ queryKey: ["admission-applications"] });
       const selectedBatch = (batches ?? []).find((b) => b.id === batchId);
       setAdmitted({
+        studentId:   result.student.id,
         studentCode: result.student.studentCode,
         fullName:    result.student.fullName,
         batchName:   selectedBatch?.name,
@@ -402,7 +228,7 @@ function AdmitStudentDialog({
   }
 
   function handleClose() {
-    setStep(0); setAdmitted(null); setErrors({});
+    setStep(0); setAdmitted(null); setErrors({}); setPhotoUploading(false); setPhotoUploaded(false);
     setFullName(""); setPhone(""); setDob(""); setGender(null); setAadhaar(""); setAddress("");
     setFatherName(""); setMotherName(""); setGuardianOccupation(""); setEmail("");
     setSelectedCourseId(null); setCourseSearch("");
@@ -448,13 +274,56 @@ function AdmitStudentDialog({
                 </div>
               )}
             </div>
+
+            {/* Photo is a separate per-student endpoint (POST /students/:id/photo),
+                so it can only happen after the student record exists — this is the
+                first point in the flow that's true. */}
+            <label
+              htmlFor="admit-photo-upload"
+              className={cn(
+                "w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors",
+                photoUploaded
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              {photoUploading
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : photoUploaded
+                  ? <CheckCircle2 className="h-4 w-4" />
+                  : <Camera className="h-4 w-4" />}
+              {photoUploading ? "Uploading photo…" : photoUploaded ? "Photo added" : "Add a photo (optional)"}
+            </label>
+            <input
+              id="admit-photo-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={photoUploading}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file || !admitted) return;
+                setPhotoUploading(true);
+                try {
+                  await uploadStudentPhoto(admitted.studentId, file);
+                  setPhotoUploaded(true);
+                  qc.invalidateQueries({ queryKey: ["students"] });
+                } catch {
+                  toast({ variant: "destructive", title: "Photo upload failed" });
+                } finally {
+                  setPhotoUploading(false);
+                }
+              }}
+            />
+
             <Button className="w-full" onClick={handleClose}>Done</Button>
           </div>
         ) : (
           <>
             {/* Step bar */}
             <div className="px-6 pb-0">
-              <StepBar current={step} />
+              <StepBar current={step} steps={ADMIT_STEPS} />
             </div>
 
             <div className="px-6 pb-6 space-y-5">
@@ -746,7 +615,7 @@ function AdmitStudentDialog({
                   </Button>
                 ) : <div />}
 
-                {step < STEPS.length - 1 ? (
+                {step < ADMIT_STEPS.length - 1 ? (
                   <Button type="button" onClick={handleNext}>
                     Next <ArrowRight className="h-4 w-4 ml-1" />
                   </Button>
@@ -771,6 +640,7 @@ export function StudentsPage() {
   const { isAllCenters } = useAuth();
   const [search, setSearch]     = useState("");
   const [showAdmit, setShowAdmit] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const applicationId = searchParams.get("applicationId");
 
@@ -857,7 +727,10 @@ export function StudentsPage() {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button size="sm" variant="ghost" onClick={() => navigate(`/students/${row.original.id}`)}>View</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={() => navigate(`/students/${row.original.id}`)}>View</Button>
+          <Button size="sm" variant="outline" onClick={() => setEditingStudent(row.original)}>Edit</Button>
+        </div>
       ),
     },
   ];
@@ -890,6 +763,9 @@ export function StudentsPage() {
         )}
       </div>
       <AdmitStudentDialog open={showAdmit} onClose={closeAdmitDialog} initialApplication={reviewingApplication} />
+      {editingStudent && (
+        <EditStudentDialog student={editingStudent} open={!!editingStudent} onClose={() => setEditingStudent(null)} />
+      )}
     </div>
   );
 }

@@ -1,25 +1,19 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Edit } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { updateStudentSchema, type UpdateStudentInput } from "@institute-os/shared";
-import { getStudent, updateStudent } from "@/api/students";
-import { listCourses, type Course } from "@/api/courses";
+import { ArrowLeft, Edit, Camera, Loader2, X, FileText, Trash2 } from "lucide-react";
+import { getStudent, uploadStudentPhoto, deleteStudentPhoto, type Student } from "@/api/students";
 import { getStudentEnrollments } from "@/api/enrollments";
 import { getFeeSchedule } from "@/api/fees";
+import { listDocumentTypes, listStudentDocuments, uploadStudentDocument, deleteStudentDocument } from "@/api/documents";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FormField } from "@/components/FormField";
 import { toast } from "@/components/ui/use-toast";
-import { formatDate, formatCurrency, titleCase } from "@/lib/utils";
+import { formatDate, formatCurrency, titleCase, initials } from "@/lib/utils";
+import { EditStudentDialog } from "./EditStudentDialog";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -30,170 +24,157 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function EditStudentDialog({ studentId, open, onClose }: { studentId: string; open: boolean; onClose: () => void }) {
+
+function StudentPhoto({ student }: { student: Student }) {
   const qc = useQueryClient();
-  const { data: student } = useQuery({ queryKey: ["student", studentId], queryFn: () => getStudent(studentId) });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [courseSearch, setCourseSearch] = useState("");
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [selectedCourseName, setSelectedCourseName] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) listCourses().then((r) => setCourses(r.data)).catch(() => {});
-  }, [open]);
-
-  useEffect(() => {
-    if (student && courses.length > 0 && !selectedCourseId) {
-      // Prefer courseId FK; fall back to matching by coursePreference for old records
-      const match = student.courseId
-        ? courses.find((c) => c.id === student.courseId)
-        : courses.find((c) => c.examCategories[0]?.key === student.coursePreference);
-      if (match) { setSelectedCourseId(match.id); setSelectedCourseName(match.name); }
-    }
-  }, [student, courses]);
-
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<UpdateStudentInput>({
-    resolver: zodResolver(updateStudentSchema),
-    values: student ? {
-      fullName: student.fullName,
-      phone: student.phone,
-      email: student.email ?? undefined,
-      address: student.address ?? undefined,
-      guardianPhone: student.guardianPhone ?? undefined,
-      fatherName: student.fatherName ?? undefined,
-      motherName: student.motherName ?? undefined,
-      gender: student.gender ?? undefined,
-      courseId: student.courseId ?? undefined,
-      coursePreference: (student.coursePreference ?? undefined) as "ssc" | "banking" | "railway" | "foundation" | "others" | undefined,
-      durationPreference: (student.durationPreference ?? undefined) as "3months" | "6months" | "1year" | undefined,
-    } : undefined,
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => uploadStudentPhoto(student.id, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["student", student.id] });
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: () => toast({ variant: "destructive", title: "Photo upload failed" }),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteStudentPhoto(student.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["student", student.id] });
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: () => toast({ variant: "destructive", title: "Could not remove photo" }),
   });
 
-  function handleCourseSelect(course: Course) {
-    setSelectedCourseId(course.id);
-    setSelectedCourseName(course.name);
-    setCourseSearch("");
-    setValue("courseId", course.id as any);
-    setValue("coursePreference", (course.examCategories[0]?.key ?? null) as any);
-    const mo = course.durationMonths;
-    setValue("durationPreference", (mo <= 3 ? "3months" : mo <= 6 ? "6months" : "1year") as any);
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) uploadMutation.mutate(file);
   }
 
-  const filteredCourses = courseSearch
-    ? courses.filter((c) => c.name.toLowerCase().includes(courseSearch.toLowerCase()) ||
-        (c.examCategories[0]?.label ?? "").toLowerCase().includes(courseSearch.toLowerCase()))
-    : [];
+  return (
+    <div className="relative shrink-0">
+      {student.photoUrl ? (
+        <img src={student.photoUrl} alt={student.fullName} className="h-14 w-14 rounded-2xl object-cover" />
+      ) : (
+        <div className="h-14 w-14 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-lg">
+          {initials(student.fullName)}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploadMutation.isPending}
+        className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-white border border-gray-200 shadow flex items-center justify-center hover:bg-gray-50"
+        title={student.photoUrl ? "Replace photo" : "Add photo"}
+      >
+        {uploadMutation.isPending
+          ? <Loader2 className="h-3 w-3 animate-spin text-gray-500" />
+          : <Camera className="h-3 w-3 text-gray-600" />}
+      </button>
+      {student.photoUrl && (
+        <button
+          type="button"
+          onClick={() => deleteMutation.mutate()}
+          disabled={deleteMutation.isPending}
+          className="absolute -bottom-1 -left-1 h-6 w-6 rounded-full bg-white border border-gray-200 shadow flex items-center justify-center hover:bg-red-50"
+          title="Remove photo"
+        >
+          <X className="h-3 w-3 text-red-500" />
+        </button>
+      )}
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+    </div>
+  );
+}
 
-  const mutation = useMutation({
-    mutationFn: (d: UpdateStudentInput) => updateStudent(studentId, d),
+function DocumentsTab({ studentId }: { studentId: string }) {
+  const qc = useQueryClient();
+  const { data: types } = useQuery({ queryKey: ["document-types"], queryFn: listDocumentTypes });
+  const { data: docs } = useQuery({ queryKey: ["student-documents", studentId], queryFn: () => listStudentDocuments(studentId) });
+
+  const uploadMutation = useMutation({
+    mutationFn: ({ documentTypeId, file }: { documentTypeId: string; file: File }) =>
+      uploadStudentDocument(studentId, documentTypeId, file),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["student", studentId] });
-      qc.invalidateQueries({ queryKey: ["students"] });
-      toast({ title: "Student updated" });
-      onClose();
+      qc.invalidateQueries({ queryKey: ["student-documents", studentId] });
+      toast({ title: "Document uploaded" });
     },
-    onError: () => toast({ variant: "destructive", title: "Update failed" }),
+    onError: () => toast({ variant: "destructive", title: "Upload failed" }),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (documentTypeId: string) => deleteStudentDocument(studentId, documentTypeId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["student-documents", studentId] });
+      toast({ title: "Document removed" });
+    },
+    onError: () => toast({ variant: "destructive", title: "Could not remove document" }),
   });
 
+  if (!types || !docs) return <Skeleton className="h-48 w-full" />;
+
+  const activeTypes = types.filter((t) => t.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
+  const docsByType = new Map(docs.map((d) => [d.documentTypeId, d]));
+
+  if (activeTypes.length === 0) {
+    return <div className="py-8 text-center text-gray-400 text-sm">No document types configured for this institute</div>;
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Edit Student</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Full Name" error={errors.fullName} required>
-              <Input {...register("fullName")} />
-            </FormField>
-            <FormField label="Phone" error={errors.phone}>
-              <Input {...register("phone")} />
-            </FormField>
-            <FormField label="Email" error={errors.email}>
-              <Input {...register("email")} type="email" />
-            </FormField>
-            <FormField label="Guardian Phone" error={errors.guardianPhone}>
-              <Input {...register("guardianPhone")} />
-            </FormField>
-            <FormField label="Father Name" error={errors.fatherName}>
-              <Input {...register("fatherName")} />
-            </FormField>
-            <FormField label="Mother Name" error={errors.motherName}>
-              <Input {...register("motherName")} />
-            </FormField>
-            <FormField label="Gender" error={errors.gender} className="col-span-2">
-              <Select
-                defaultValue={student?.gender ?? undefined}
-                onValueChange={(v) => setValue("gender", v as "male" | "female")}
-              >
-                <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-          </div>
-
-          {/* Course Preference */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Course Preference</p>
-            {selectedCourseName && (
-              <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <div className="h-2 w-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: courses.find((c) => c.id === selectedCourseId)?.examCategories[0]?.color ?? "#6B7280" }}
-                />
-                <span className="flex-1 text-sm font-medium text-gray-900">{selectedCourseName}</span>
-                <span className="text-xs text-gray-400">
-                  {courses.find((c) => c.id === selectedCourseId)?.examCategories[0]?.label} ·{" "}
-                  {courses.find((c) => c.id === selectedCourseId)?.durationMonths}mo
-                </span>
-                <button
-                  type="button"
-                  onClick={() => { setSelectedCourseId(null); setSelectedCourseName(null); setValue("courseId" as any, undefined); setValue("coursePreference", undefined); setValue("durationPreference", undefined); }}
-                  className="text-gray-400 hover:text-gray-600 text-sm leading-none"
-                >✕</button>
+    <Card>
+      <CardHeader><CardTitle className="text-sm">Documents</CardTitle></CardHeader>
+      <CardContent className="divide-y divide-gray-50">
+        {activeTypes.map((type) => {
+          const doc = docsByType.get(type.id);
+          const inputId = `doc-upload-${type.id}`;
+          const busy = uploadMutation.isPending && uploadMutation.variables?.documentTypeId === type.id;
+          return (
+            <div key={type.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+              <div className="h-9 w-9 rounded-xl bg-gray-50 flex items-center justify-center shrink-0">
+                <FileText className="h-4 w-4 text-gray-400" />
               </div>
-            )}
-            <Input
-              value={courseSearch}
-              onChange={(e) => setCourseSearch(e.target.value)}
-              placeholder={selectedCourseName ? "Search to change course…" : "Search courses…"}
-            />
-            {filteredCourses.length > 0 && (
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-50">
-                {filteredCourses.map((course) => (
-                  <button
-                    key={course.id}
-                    type="button"
-                    onClick={() => handleCourseSelect(course)}
-                    className={`w-full text-left px-3 py-2 hover:bg-gray-50 transition-colors ${selectedCourseId === course.id ? "bg-blue-50" : ""}`}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">{type.label}</p>
+                {doc ? (
+                  <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-violet-600 hover:underline">
+                    Uploaded {formatDate(doc.uploadedAt)} · View
+                  </a>
+                ) : (
+                  <p className="text-xs text-gray-400">Not uploaded</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {doc && (
+                  <Button
+                    size="sm" variant="ghost" className="text-red-600"
+                    onClick={() => deleteMutation.mutate(type.id)}
+                    disabled={deleteMutation.isPending}
                   >
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: course.examCategories[0]?.color ?? "#6B7280" }}
-                      />
-                      <span className="text-sm font-medium text-gray-900">{course.name}</span>
-                    </div>
-                    <p className="mt-0.5 pl-4 text-xs text-gray-400">
-                      {course.examCategories[0]?.label ?? "General"} · {course.durationMonths}mo
-                      {course.defaultFee > 0 ? ` · ₹${(course.defaultFee / 1000).toFixed(0)}k` : ""}
-                    </p>
-                  </button>
-                ))}
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+                <label htmlFor={inputId}>
+                  <Button size="sm" variant="outline" disabled={busy} asChild>
+                    <span>{busy ? "Uploading…" : doc ? "Replace" : "Upload"}</span>
+                  </Button>
+                </label>
+                <input
+                  id={inputId}
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) uploadMutation.mutate({ documentTypeId: type.id, file });
+                  }}
+                />
               </div>
-            )}
-            {courseSearch && filteredCourses.length === 0 && (
-              <p className="text-xs text-gray-400 px-1">No courses match "{courseSearch}"</p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={isSubmitting}>Save Changes</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -322,6 +303,7 @@ export function StudentDetailPage() {
         <Button variant="ghost" size="icon" onClick={() => navigate("/students")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
+        <StudentPhoto student={student} />
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900">{student.fullName}</h1>
           <p className="text-sm text-gray-500">{student.studentCode} &middot; {student.phone}</p>
@@ -338,6 +320,7 @@ export function StudentDetailPage() {
             <TabsTrigger value="academic">Academic</TabsTrigger>
             <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
             <TabsTrigger value="fees">Fees</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
           <TabsContent value="info" className="mt-4">
@@ -409,11 +392,15 @@ export function StudentDetailPage() {
           <TabsContent value="fees" className="mt-4">
             <FeeTab studentId={id!} />
           </TabsContent>
+
+          <TabsContent value="documents" className="mt-4">
+            <DocumentsTab studentId={id!} />
+          </TabsContent>
         </Tabs>
       </div>
 
-      {showEdit && id && (
-        <EditStudentDialog studentId={id} open={showEdit} onClose={() => setShowEdit(false)} />
+      {showEdit && (
+        <EditStudentDialog student={student} open={showEdit} onClose={() => setShowEdit(false)} />
       )}
     </div>
   );

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
-import { useThemeColors, useBrandLogoUrl, darken, lighten } from "../../context/ThemeContext";
+import { useThemeColors, darken, lighten } from "../../context/ThemeContext";
 import { ms, fs } from "../../utils/responsive";
 import { T } from "./typography";
 
@@ -40,14 +40,26 @@ function Waves() {
   );
 }
 
+// This build's real tenant name, inlined at bundle time (see .env) — used
+// as an immediate fallback below instead of leaving the name line blank
+// while OrgProvider's live/cached fetch is still in flight, same reasoning
+// as ThemeContext.tsx's BAKED_PRIMARY_COLOR.
+const BAKED_TENANT_NAME = process.env.EXPO_PUBLIC_TENANT_NAME || null;
+
 // Branded app-boot screen, shown while fonts load and again while the
 // tenant's org/branding and auth session are being resolved — reads live
-// tenant colors/logo the same way every other screen does, so it needs no
-// tenant-specific config of its own. `orgName` is only known once the
-// OrgProvider fetch resolves; falls back to the product name until then.
+// tenant colors the same way every other screen does, so it needs no
+// tenant-specific config of its own. `orgName` (the live-fetched value,
+// which reflects an admin's actual configured org name) takes priority when
+// available; BAKED_TENANT_NAME covers the gap before that fetch resolves.
+//
+// Logo is always the local bundled asset, never the remote-hosted
+// useBrandLogoUrl() — swapping to that mid-splash once branding resolves
+// produced a visible flicker (a different, non-transparent image popping in
+// partway through), which is worse than just staying on one consistent logo
+// for this transient screen's lifetime.
 export function AppSplashScreen({ orgName }: { orgName?: string | null }) {
-  const colors  = useThemeColors();
-  const logoUrl = useBrandLogoUrl();
+  const colors = useThemeColors();
 
   // Logo entrance: a quick scale+fade pop on mount rather than appearing
   // instantly — runs once per mount, which (post the boot-sequence fix) is
@@ -80,12 +92,17 @@ export function AppSplashScreen({ orgName }: { orgName?: string | null }) {
           style={[styles.badge, { opacity: badgeOpacity, transform: [{ scale: badgeScale }] }]}
         >
           <Image
-            source={logoUrl ? { uri: logoUrl } : require("../../../assets/institute-logo.png")}
+            source={require("../../../assets/institute-logo.png")}
             style={styles.logo}
             resizeMode="contain"
           />
         </Animated.View>
-        <Text style={styles.name}>{orgName || "Institute OS"}</Text>
+        {/* BAKED_TENANT_NAME (known instantly, baked at build time) avoids
+            the blank-then-appears flicker a generic "Institute OS" fallback
+            caused — falls back to a single space only in the (untestable
+            outside this exact tenant build) case where even that isn't set,
+            so the layout never jumps once orgName resolves. */}
+        <Text style={styles.name}>{orgName || BAKED_TENANT_NAME || " "}</Text>
         <Text style={styles.tagline}>Getting things ready…</Text>
       </View>
 
@@ -104,14 +121,10 @@ const styles = StyleSheet.create({
   fill:   { flex: 1, alignItems: "center", justifyContent: "center" },
   center: { alignItems: "center", paddingHorizontal: ms(32) },
   badge: {
-    width: ms(88), height: ms(88), borderRadius: ms(24),
-    backgroundColor: "rgba(255,255,255,.97)",
     alignItems: "center", justifyContent: "center",
     marginBottom: ms(20),
-    shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
   },
-  logo: { width: ms(56), height: ms(56) },
+  logo: { width: ms(120), height: ms(120) },
   name: {
     ...T.displayMedium,
     color: "#fff", textAlign: "center",

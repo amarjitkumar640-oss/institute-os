@@ -61,3 +61,17 @@ export async function updateStudent(id: string, payload: UpdateStudentInput): Pr
   const { data } = await apiClient.patch<Student>(`/api/students/${id}`, payload);
   return data;
 }
+
+export async function uploadStudentPhoto(id: string, file: File): Promise<Student> {
+  const formData = new FormData();
+  formData.append("photo", file);
+  const { data } = await apiClient.post<Student>(`/api/students/${id}/photo`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteStudentPhoto(id: string): Promise<Student> {
+  const { data } = await apiClient.delete<Student>(`/api/students/${id}/photo`);
+  return data;
+}

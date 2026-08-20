@@ -39,6 +39,16 @@ export type FcmPushOptions = {
   // Recipient's live unread count, shown on the iOS app icon. Android's
   // launcher-derived badge isn't controllable via this payload the same way.
   badge?: number;
+  // Shown as a colored large icon on the right side of the notification
+  // (Android only — expo-notifications reads RemoteMessage.notification.imageUrl
+  // and sets it via setLargeIcon). FCM's own image-notification feature
+  // would normally also expand this into a full-width picture on tap — that
+  // expand behavior is suppressed by a patched expo-notifications build (see
+  // patches/expo-notifications+56.0.22.patch, which sets bigLargeIcon(null)
+  // so the icon never grows/moves to the bottom). Distinct from the small
+  // status-bar icon, which can never be colored on ColorOS and instead
+  // falls back to the real app icon (a separate, working fix).
+  imageUrl?: string | null;
 };
 
 // Send FCM push to one or more device tokens. Fire-and-forget — errors are
@@ -61,7 +71,7 @@ export function sendFcm(
     messaging
       .send({
         token,
-        notification: { title, body },
+        notification: { title, body, ...(opts.imageUrl && { imageUrl: opts.imageUrl }) },
         data: safeData,
         android: {
           priority: "high",

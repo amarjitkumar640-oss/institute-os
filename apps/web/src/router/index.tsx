@@ -6,6 +6,7 @@ import { ProtectedRoute } from "./ProtectedRoute";
 import { LoginPage } from "@/modules/auth/LoginPage";
 import { TenantEntryPage } from "@/modules/auth/TenantEntryPage";
 import { ApplyPage } from "@/modules/apply/ApplyPage";
+import { DownloadPage } from "@/modules/download/DownloadPage";
 import { CenterPickPage } from "@/modules/auth/CenterPickPage";
 import { DashboardPage } from "@/modules/dashboard/DashboardPage";
 import { StudentsPage } from "@/modules/students/StudentsPage";
@@ -24,6 +25,7 @@ import { SchedulePage } from "@/modules/schedule/SchedulePage";
 import { CentersPage } from "@/modules/centers/CentersPage";
 import { CenterDetailPage } from "@/modules/centers/CenterDetailPage";
 import { NotificationsPage } from "@/modules/notifications/NotificationsPage";
+import { ProfilePage } from "@/modules/profile/ProfilePage";
 import { SettingsPage } from "@/modules/settings/SettingsPage";
 import { PermissionsPage } from "@/modules/permissions/PermissionsPage";
 
@@ -33,6 +35,8 @@ export const router = createBrowserRouter([
   { path: "/org/:slug", element: <TenantEntryPage /> },
   // Public self-service admission form — fully unauthenticated, no nav shell.
   { path: "/apply/:tenantSlug", element: <ApplyPage /> },
+  // Public shareable APK download link — fully unauthenticated, no nav shell.
+  { path: "/download/:tenantSlug", element: <DownloadPage /> },
   {
     element: <AuthLayout />,
     children: [
@@ -56,6 +60,14 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: "/dashboard", element: <DashboardPage /> },
+      {
+        path: "/profile",
+        element: (
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "/students",
         element: (

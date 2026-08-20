@@ -12,21 +12,25 @@
     "development": {
       "extends": "base",
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development"
     },
     "preview": {
       "extends": "base",
       "distribution": "internal",
+      "channel": "preview",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
-      "extends": "base"
+      "extends": "base",
+      "channel": "production"
     },
 
     "default-institute": {
       "extends": "production",
+      "channel": "default-institute",
       "env": {
         "EXPO_PUBLIC_TENANT_ID": "00000000-0000-0000-0000-000000000001",
         "TENANT_SLUG": "default",
@@ -38,6 +42,7 @@
 
     "default-institute-preview": {
       "extends": "preview",
+      "channel": "default-institute-preview",
       "env": {
         "EXPO_PUBLIC_TENANT_ID": "00000000-0000-0000-0000-000000000001",
         "TENANT_SLUG": "default",

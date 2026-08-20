@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Search, DollarSign } from "lucide-react";
 import { listFeeSchedules, getFeeSummary, type ScheduleListItem } from "@/api/fees";
@@ -25,7 +25,11 @@ export function FeesPage() {
   const navigate = useNavigate();
   const { isAllCenters } = useAuth();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  // Supports deep-linking from the dashboard's "Overdue Fees" alert
+  // (/fees?status=overdue) — read once on mount, not kept in sync with the
+  // URL afterwards (the Select below is the source of truth from then on).
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(searchParams.get("status") ?? undefined);
 
   const { data: schedules, isLoading } = useQuery({
     queryKey: ["fee-schedules", search, statusFilter],

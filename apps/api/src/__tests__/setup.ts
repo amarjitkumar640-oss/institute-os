@@ -44,6 +44,7 @@ export async function resetDb() {
   await prisma.notificationRoutingRule.deleteMany();
   await prisma.jobRun.deleteMany();
   await prisma.jobConfig.deleteMany();
+  await prisma.passwordResetToken.deleteMany();
   await prisma.staff.deleteMany();
   await prisma.subject.deleteMany();
 }

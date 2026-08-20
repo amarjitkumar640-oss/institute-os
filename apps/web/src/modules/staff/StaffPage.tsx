@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Search, UserCog, Key } from "lucide-react";
+import { Plus, Search, UserCog, Key, Building2, X } from "lucide-react";
 import { useForm, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { listStaff, createStaff, updateStaff, resetPassword, type Staff } from "@/api/staff";
+import { listAssignableCenters, assignStaffToCenter, removeStaffFromCenter } from "@/api/centers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -180,10 +181,14 @@ function EditStaffDialog({ staff, open, onClose }: { staff: Staff; open: boolean
 
 function ResetPasswordDialog({ staffId, open, onClose }: { staffId: string; open: boolean; onClose: () => void }) {
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const mismatch = confirm.length > 0 && password !== confirm;
 
   async function handleReset() {
     if (password.length < 6) { toast({ variant: "destructive", title: "Password must be at least 6 characters" }); return; }
+    if (password !== confirm) { toast({ variant: "destructive", title: "Passwords do not match" }); return; }
     setLoading(true);
     try {
       await resetPassword(staffId, password);
@@ -200,12 +205,146 @@ function ResetPasswordDialog({ staffId, open, onClose }: { staffId: string; open
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Reset Password</DialogTitle></DialogHeader>
-        <FormField label="New Password">
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" />
-        </FormField>
+        <div className="space-y-4">
+          <FormField label="New Password">
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" />
+          </FormField>
+          <FormField label="Confirm New Password" error={mismatch ? ({ message: "Passwords do not match" } as FieldError) : undefined}>
+            <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Re-enter password" />
+          </FormField>
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleReset} disabled={loading}>Reset Password</Button>
+          <Button onClick={handleReset} disabled={loading || !password || mismatch}>Reset Password</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ManageCentersDialog({ staff, open, onClose, onUpdated }: {
+  staff: Staff;
+  open: boolean;
+  onClose: () => void;
+  onUpdated: (assignments: Staff["centerAssignments"]) => void;
+}) {
+  const { data: centers, isLoading } = useQuery({ queryKey: ["centers-assignable"], queryFn: listAssignableCenters, enabled: open });
+  const [assignments, setAssignments] = useState(staff.centerAssignments);
+  const [pendingRoles, setPendingRoles] = useState<Record<string, ("admin" | "teacher" | "frontdesk")[]>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  function getAssignment(centerId: string) {
+    return assignments.find((a) => a.center.id === centerId);
+  }
+  function getRolesForCenter(centerId: string): ("admin" | "teacher" | "frontdesk")[] {
+    return pendingRoles[centerId] ?? getAssignment(centerId)?.roles ?? ["frontdesk"];
+  }
+
+  async function assign(centerId: string, centerName: string) {
+    const roles = getRolesForCenter(centerId);
+    if (roles.length === 0) return;
+    setBusyId(centerId);
+    try {
+      await assignStaffToCenter(centerId, staff.id, roles);
+      const next = [...assignments.filter((a) => a.center.id !== centerId), { roles, center: { id: centerId, name: centerName } }];
+      setAssignments(next);
+      setPendingRoles((prev) => { const p = { ...prev }; delete p[centerId]; return p; });
+      onUpdated(next);
+      toast({ title: "Center assignment saved" });
+    } catch {
+      toast({ variant: "destructive", title: "Could not save assignment" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(centerId: string) {
+    setBusyId(centerId);
+    try {
+      await removeStaffFromCenter(centerId, staff.id);
+      const next = assignments.filter((a) => a.center.id !== centerId);
+      setAssignments(next);
+      onUpdated(next);
+      toast({ title: "Removed from center" });
+    } catch {
+      toast({ variant: "destructive", title: "Could not remove assignment" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Manage Center Access — {staff.fullName}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-gray-500 -mt-2">
+          Assign roles per center. A staff member may hold different roles at different centers.
+        </p>
+        {isLoading ? (
+          <div className="space-y-2 py-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+        ) : (centers ?? []).length === 0 ? (
+          <div className="py-8 text-center text-gray-400 text-sm">No centers yet. Create one first.</div>
+        ) : (
+          <div className="max-h-96 overflow-auto space-y-2">
+            {(centers ?? []).map((center) => {
+              const assignment = getAssignment(center.id);
+              const isAssigned = !!assignment;
+              const selectedRoles = getRolesForCenter(center.id);
+              const rolesChanged = pendingRoles[center.id] !== undefined &&
+                !(assignment && assignment.roles.length === selectedRoles.length && assignment.roles.every((r) => selectedRoles.includes(r)));
+              const isBusy = busyId === center.id;
+
+              return (
+                <div key={center.id} className={`rounded-lg border p-3 ${isAssigned ? "border-green-300" : "border-gray-200"}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${isAssigned ? "bg-green-500" : "bg-gray-300"}`} />
+                      <span className="text-sm font-medium text-gray-900">{center.name}</span>
+                    </div>
+                    {isAssigned && (
+                      <button
+                        className="text-gray-400 hover:text-red-600"
+                        onClick={() => remove(center.id)}
+                        disabled={isBusy}
+                        title="Remove from center"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 mb-2">
+                    {ROLE_OPTIONS.map((opt) => (
+                      <label key={opt.value} className="flex items-center gap-1.5 text-sm">
+                        <Checkbox
+                          checked={selectedRoles.includes(opt.value)}
+                          onCheckedChange={(checked) =>
+                            setPendingRoles((prev) => ({
+                              ...prev,
+                              [center.id]: checked ? [...selectedRoles, opt.value] : selectedRoles.filter((r) => r !== opt.value),
+                            }))
+                          }
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={isAssigned && !rolesChanged ? "outline" : "default"}
+                    disabled={isBusy || selectedRoles.length === 0 || (isAssigned && !rolesChanged)}
+                    onClick={() => assign(center.id, center.name)}
+                  >
+                    {isAssigned ? (rolesChanged ? "Save Changes" : "Assigned") : "Assign"}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -224,6 +363,7 @@ export function StaffPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
+  const [managingCenters, setManagingCenters] = useState<Staff | null>(null);
 
   const { data: staff, isLoading } = useQuery({ queryKey: ["staff"], queryFn: listStaff });
 
@@ -247,12 +387,20 @@ export function StaffPage() {
       header: "Name",
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <div
-            className="h-9 w-9 rounded-2xl flex items-center justify-center text-xs font-bold text-white shrink-0"
-            style={{ background: "var(--color-primary,#7C3AED)" }}
-          >
-            {initials(row.original.fullName)}
-          </div>
+          {row.original.photoUrl ? (
+            <img
+              src={row.original.photoUrl}
+              alt={row.original.fullName}
+              className="h-9 w-9 rounded-2xl object-cover shrink-0"
+            />
+          ) : (
+            <div
+              className="h-9 w-9 rounded-2xl flex items-center justify-center text-xs font-bold text-white shrink-0"
+              style={{ background: "var(--color-primary,#7C3AED)" }}
+            >
+              {initials(row.original.fullName)}
+            </div>
+          )}
           <div>
             <p className="font-semibold text-gray-900 text-sm">{row.original.fullName}</p>
             <p className="text-xs text-gray-400">{row.original.phone}</p>
@@ -304,7 +452,10 @@ export function StaffPage() {
       cell: ({ row }) => (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setEditing(row.original)}>Edit</Button>
-          <Button size="sm" variant="ghost" onClick={() => setResettingPassword(row.original.id)}>
+          <Button size="sm" variant="ghost" onClick={() => setManagingCenters(row.original)} title="Manage Centers">
+            <Building2 className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setResettingPassword(row.original.id)} title="Reset Password">
             <Key className="h-4 w-4" />
           </Button>
         </div>
@@ -338,6 +489,17 @@ export function StaffPage() {
       {editing && <EditStaffDialog staff={editing} open={!!editing} onClose={() => setEditing(null)} />}
       {resettingPassword && (
         <ResetPasswordDialog staffId={resettingPassword} open={!!resettingPassword} onClose={() => setResettingPassword(null)} />
+      )}
+      {managingCenters && (
+        <ManageCentersDialog
+          staff={managingCenters}
+          open={!!managingCenters}
+          onClose={() => setManagingCenters(null)}
+          onUpdated={(assignments) => {
+            setManagingCenters((prev) => prev && { ...prev, centerAssignments: assignments });
+            qc.invalidateQueries({ queryKey: ["staff"] });
+          }}
+        />
       )}
     </div>
   );

@@ -171,8 +171,29 @@ model Tenant {
   notificationRoutingRules NotificationRoutingRule[]
   admissionApplications    AdmissionApplication[]
   permissionGrants         PermissionGrant[]
+  appReleases              AppRelease[]
 
   @@map("tenants")
+}
+
+// Tenant-scoped (unlike JobConfig/JobRun) — each tenant's mobile app is a
+// distinct Android build (own package name), so release tracks are genuinely
+// independent per tenant, not platform-wide.
+model AppRelease {
+  id          String   @id @default(uuid())
+  tenantId    String
+  platform    String   @default("android")
+  versionName String
+  versionCode Int
+  s3Key       String
+  changelog   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, platform, isActive, versionCode])
+  @@map("app_releases")
 }
 
 // ── Core models ───────────────────────────────────────────────────────────────
@@ -244,10 +265,32 @@ model Staff {
   markedFacultyAttendances FacultyAttendance[]
   jobRuns                  JobRun[]
   permissionGrantsUpdated  PermissionGrant[]
+  passwordResetTokens      PasswordResetToken[]
 
   @@unique([tenantId, phone])
   @@unique([tenantId, username])
   @@map("staff")
+}
+
+// One row per forgot-password request. Only a hash of the code/token is ever
+// stored (never the raw value) — same "never persist the real secret"
+// convention as Staff.passwordHash. `channel` records whether this was
+// delivered by email (long random token, ~1hr TTL) or SMS (short numeric
+// code, ~15min TTL) — driven by the tenant's loginMethod at request time, see
+// auth.service.ts's requestPasswordReset(). Single-use: consumed by setting
+// usedAt, never deleted, so a reused/expired code has an audit trail.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  staffId   String
+  staff     Staff     @relation(fields: [staffId], references: [id])
+  tokenHash String    @unique
+  channel   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([staffId])
+  @@map("password_reset_tokens")
 }
 
 model Subject {

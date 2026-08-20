@@ -60,6 +60,16 @@ module.exports = {
     // on screen before the real (maroon) splash took over.
     primaryColor: SPLASH_COLOR,
     userInterfaceStyle: "light",
+    // Non-Play-Store update delivery. "fingerprint" (not "appVersion")
+    // detects native-surface changes automatically — this app has already
+    // shipped native changes without a human remembering to bump a version
+    // number, so an OTA update becomes unavailable rather than crashing on
+    // launch when the native code doesn't match.
+    runtimeVersion: { policy: "fingerprint" },
+    updates: {
+      url: "https://u.expo.dev/b99fad5a-cb3e-410d-b188-6023edc980eb",
+      fallbackToCacheTimeout: 0,
+    },
     ios: {
       supportsTablet: true,
       bundleIdentifier: IOS_BUNDLE_ID,
@@ -72,13 +82,21 @@ module.exports = {
     },
     android: {
       adaptiveIcon: {
-        // Matches SPLASH_COLOR — the fallback android-icon-background.png
-        // below is now a plain fill of this same color, so the two stay in
-        // sync (this value only takes effect if backgroundImage is absent).
+        // The foreground artwork already bakes in its own opaque circular
+        // fill (generated with proper adaptive-icon safe-zone padding — the
+        // circle occupies ~65% of the canvas, matching Android's ~66% safe
+        // zone), so no separate backgroundImage is needed. This color only
+        // shows in the thin margin outside that circle on launchers whose
+        // mask shape doesn't match a plain circle.
         backgroundColor: SPLASH_COLOR,
         foregroundImage: tenantAsset("android-icon-foreground.png", "./assets/android-icon-foreground.png"),
-        backgroundImage: tenantAsset("android-icon-background.png", "./assets/android-icon-background.png"),
-        monochromeImage: tenantAsset("android-icon-monochrome.png", "./assets/android-icon-monochrome.png"),
+        // Deliberately no monochromeImage — declaring one made ColorOS's
+        // notification panel render a themed, tinted-gray silhouette there
+        // instead of falling back to the real colorful app icon (verified by
+        // comparing against an app with no themed icon at all, which shows
+        // its true icon in that same spot). Omitting it trades away the
+        // Android 13+ "themed home-screen icon" look in favor of the
+        // notification panel showing real brand color.
       },
       statusBar: {
         translucent: true,
@@ -88,6 +106,12 @@ module.exports = {
       predictiveBackGestureEnabled: false,
       softwareKeyboardLayoutMode: "pan",
       package: ANDROID_PKG,
+      // Shared, monotonically-increasing across every tenant build (not a
+      // per-tenant track) — matches how `version` above already applies
+      // uniformly across every EAS profile. Bumped by the release script
+      // (apps/mobile/scripts/publish-release.ts) via this env var, not by
+      // hand — see that script and eas.json's build profiles.
+      versionCode: Number(process.env.APP_VERSION_CODE || "1"),
       ...(googleServicesFile() && { googleServicesFile: googleServicesFile() }),
     },
     web: {
@@ -113,17 +137,34 @@ module.exports = {
       // plugin file for why this matters (eliminates a white flash between
       // the native splash handing off and RN's first JS frame painting).
       "./plugins/withSplashWindowBackground",
+      "expo-updates",
+      // Non-Play-Store manual APK install flow — see the plugin file for
+      // why this needs its own permission + FileProvider setup.
+      "./plugins/withApkInstaller",
       [
         "expo-notifications",
         {
-          // Fallback icon tint for any push that doesn't set its own
-          // android.notification.color (the API sets one explicitly per
-          // notification type — see notification.service.ts's TYPE_META).
-          // Was "#ffffff" — white-on-white made the icon invisible.
-          icon: tenantAsset("android-icon-monochrome.png", "./assets/android-icon-monochrome.png"),
+          // Deliberately no custom `icon` — expo-notifications falls back to
+          // context.applicationInfo.icon (the real, full-color app icon) when
+          // none is set, which is what makes ColorOS's notification panel
+          // show the actual colorful logo instead of a themed monochrome
+          // silhouette (see the adaptiveIcon comment above for the full
+          // reasoning). `color` is harmless to keep — it only affects
+          // monochrome-icon tinting, which no longer applies, but the API
+          // still sends a per-notification color as a no-op-safe default.
           color: SPLASH_COLOR,
         },
       ],
+      // Tried a static manifest large-icon meta-data entry here instead of
+      // sending a per-notification FCM imageUrl below, specifically to avoid
+      // imageUrl's "expands into a big picture on tap" behavior — reverted.
+      // Verified via `adb shell dumpsys notification` that
+      // expo-notifications' own code for reading that meta-data returns
+      // null at runtime even with the manifest entry and drawable both
+      // 100% correctly present in the built APK (checked at the byte
+      // level). Real limitation in the library itself, not fixable from
+      // this app's config — see firebase.ts's FcmPushOptions.imageUrl
+      // comment for where the colored icon actually comes from now.
       [
         "expo-build-properties",
         {

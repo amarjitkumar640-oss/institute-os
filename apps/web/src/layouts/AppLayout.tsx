@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Users, UserPlus, BookOpen, Layers,
   Calendar, GraduationCap, UserCog, DollarSign, Settings,
   LogOut, Building2, ChevronDown, Bell, ChevronRight, Globe, FileText, ShieldCheck,
+  UserCircle, CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { getMyProfile } from "@/api/staff";
+import { getTenantSettings } from "@/api/tenants";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { cn, initials } from "@/lib/utils";
 import { selectCenter as selectCenterApi } from "@/api/auth";
@@ -96,6 +101,16 @@ export function AppLayout() {
   const navigate = useNavigate();
   const [switchingCenter, setSwitchingCenter] = useState(false);
   const [switchingRole, setSwitchingRole] = useState(false);
+
+  // Just for the photo — everything else in the sidebar footer already comes
+  // from the lean session-scoped `staff` above. Cached across the whole app
+  // shell so this fires once per session, not once per page.
+  const { data: myProfile } = useQuery({ queryKey: ["my-profile"], queryFn: getMyProfile, staleTime: 5 * 60 * 1000 });
+  // `staff`/`branding` (from the login/session payload) never carry the
+  // tenant's actual name, only its colors/logo — fetched separately here so
+  // the sidebar shows the institute's real name instead of the product name.
+  const { data: tenantSettings } = useQuery({ queryKey: ["tenant-settings"], queryFn: getTenantSettings, staleTime: 5 * 60 * 1000 });
+  const orgName = tenantSettings?.name ?? "Institute OS";
 
   async function handleSelectRole(role: "admin" | "teacher" | "frontdesk") {
     if (role === staff?.activeRole) return;
@@ -219,18 +234,26 @@ export function AppLayout() {
                 className="absolute inset-0 rounded-2xl animate-ping-slow opacity-60"
                 style={{ background: `${primary}30` }}
               />
-              <div
-                className="relative flex h-9 w-9 items-center justify-center rounded-2xl text-white font-bold text-sm"
-                style={{
-                  background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
-                  boxShadow: `0 4px 14px ${primary}50`,
-                }}
-              >
-                IO
-              </div>
+              {tenantSettings?.branding.logoUrl ? (
+                <img
+                  src={tenantSettings.branding.logoUrl}
+                  alt={orgName}
+                  className="relative h-9 w-9 rounded-2xl object-cover shrink-0"
+                />
+              ) : (
+                <div
+                  className="relative flex h-9 w-9 items-center justify-center rounded-2xl text-white font-bold text-sm"
+                  style={{
+                    background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
+                    boxShadow: `0 4px 14px ${primary}50`,
+                  }}
+                >
+                  {initials(orgName)}
+                </div>
+              )}
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900 leading-tight">Institute OS</p>
+              <p className="text-sm font-bold text-gray-900 leading-tight truncate max-w-[140px]">{orgName}</p>
               <p className="text-[10px] text-gray-400 leading-tight">Management Suite</p>
             </div>
           </div>
@@ -265,38 +288,6 @@ export function AppLayout() {
                       className={cn(currentCenter?.id === c.id && "font-semibold")}
                     >
                       <Building2 className="mr-2 h-3.5 w-3.5" />{c.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
-
-          {/* Role switcher — only shown when you actually hold more than one
-              role here; mirrors the center switcher above exactly, but along
-              the role axis. Switching re-scopes access control server-side,
-              not just this label. */}
-          {staff && staff.roles.length > 1 && (
-            <div className="px-3 py-3" style={{ borderBottom: "1px solid rgba(109,40,217,0.06)" }}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex w-full items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600 hover:bg-[var(--color-primary,#7C3AED)]/10 hover:text-[var(--color-primary,#7C3AED)] transition-all group">
-                    <UserCog className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-[var(--color-primary,#7C3AED)] transition-colors" />
-                    <span className="truncate flex-1 text-left font-medium capitalize">{staff.activeRole}</span>
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:rotate-180 transition-transform duration-200" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-52" side="right" align="start">
-                  <DropdownMenuLabel>Acting as</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {staff.roles.map((r) => (
-                    <DropdownMenuItem
-                      key={r}
-                      onClick={() => handleSelectRole(r)}
-                      disabled={switchingRole}
-                      className={cn("capitalize", staff.activeRole === r && "font-semibold")}
-                    >
-                      <UserCog className="mr-2 h-3.5 w-3.5" />{r}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -344,6 +335,7 @@ export function AppLayout() {
                 <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[var(--color-primary,#7C3AED)]/10 transition-all duration-200 group">
                   <div className="relative shrink-0">
                     <Avatar className="h-8 w-8">
+                      {myProfile?.photoUrl && <AvatarImage src={myProfile.photoUrl} alt={staff?.fullName} />}
                       <AvatarFallback className="text-xs font-bold text-white" style={{ background: primary }}>
                         {initials(staff?.fullName ?? "?")}
                       </AvatarFallback>
@@ -361,6 +353,7 @@ export function AppLayout() {
                 <DropdownMenuLabel className="font-normal py-2.5">
                   <div className="flex items-center gap-2.5">
                     <Avatar className="h-8 w-8">
+                      {myProfile?.photoUrl && <AvatarImage src={myProfile.photoUrl} alt={staff?.fullName} />}
                       <AvatarFallback className="text-xs font-bold text-white" style={{ background: primary }}>
                         {initials(staff?.fullName ?? "?")}
                       </AvatarFallback>
@@ -371,6 +364,42 @@ export function AppLayout() {
                     </div>
                   </div>
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/profile")} className="gap-2">
+                  <UserCircle className="h-4 w-4" />My Profile
+                </DropdownMenuItem>
+
+                {/* Role switcher — only shown when you actually hold more than
+                    one role here. Switching re-scopes access control
+                    server-side, not just this label. Folded into this same
+                    popup (was its own separate sidebar row before) as a
+                    submenu, so it doesn't crowd the main menu with every
+                    role listed flat. */}
+                {staff && staff.roles.length > 1 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="gap-2">
+                        <UserCog className="h-4 w-4" />
+                        <span className="flex-1">Switch Role</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {staff.roles.map((r) => (
+                          <DropdownMenuItem
+                            key={r}
+                            onClick={() => handleSelectRole(r)}
+                            disabled={switchingRole}
+                            className={cn("capitalize gap-2", staff.activeRole === r && "font-semibold")}
+                          >
+                            {r}
+                            {staff.activeRole === r && <CheckCircle2 className="h-3.5 w-3.5 ml-auto text-[var(--color-primary,#7C3AED)]" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </>
+                )}
+
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => { logout(); navigate("/login"); }}

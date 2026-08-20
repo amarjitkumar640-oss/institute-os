@@ -25,6 +25,8 @@ setupNotifications();
 import { OrgProvider } from "./src/context/OrgContext";
 import { AuthProvider } from "./src/context/AuthContext";
 import { NotificationBadgeProvider } from "./src/context/NotificationBadgeContext";
+import { AppUpdateProvider } from "./src/context/AppUpdateContext";
+import { registerOtaUpdateListener } from "./src/lib/otaUpdates";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 
 // Apply Inter Regular as the default font for every Text in the app.
@@ -49,6 +51,11 @@ export default function App() {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
+  // JS-only OTA update checks — separate from the manual-APK flow
+  // (AppUpdateProvider below), which handles changes that need a new
+  // native build.
+  useEffect(() => registerOtaUpdateListener(), []);
+
   // Always mount the full provider tree — including while fonts are still
   // loading — so AppSplashScreen renders from exactly one place (inside
   // RootNavigator) instead of a second, separate instance here. Two mounts
@@ -62,8 +69,10 @@ export default function App() {
         <OrgProvider>
           <AuthProvider>
             <NotificationBadgeProvider>
-              <RootNavigator fontsLoaded={fontsLoaded} />
-              <AndroidNavBarBackground />
+              <AppUpdateProvider>
+                <RootNavigator fontsLoaded={fontsLoaded} />
+                <AndroidNavBarBackground />
+              </AppUpdateProvider>
             </NotificationBadgeProvider>
           </AuthProvider>
         </OrgProvider>

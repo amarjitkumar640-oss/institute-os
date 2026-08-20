@@ -1,12 +1,18 @@
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import { createElement } from "react";
 import { prisma } from "../../lib/prisma";
 import { env } from "../../lib/env";
 import { LoginInput, normalizePhone } from "@institute-os/shared";
 import type { StaffRole } from "@prisma/client";
 import type { AuthPayload } from "../../middleware/auth";
 import { resolvePermissions, pickActiveRole } from "../permissions/permissions.service";
-import { getSignedPhotoUrl } from "../../lib/s3";
+import { getSignedPhotoUrl, resolveLogoUrl } from "../../lib/s3";
+import { sendEmail } from "../../lib/email";
+import { sendSms } from "../../lib/sms";
+import { renderEmail } from "../../emails/render";
+import PasswordResetEmail from "../../emails/templates/PasswordResetEmail";
 
 export async function login({ tenantId, identifier, password }: LoginInput) {
   const trimmed = identifier.trim();
@@ -90,9 +96,119 @@ export async function login({ tenantId, identifier, password }: LoginInput) {
       accent:     staff.tenant.brandAccent,
       background: staff.tenant.brandBackground,
       headerBg:   staff.tenant.brandHeaderBg,
-      logoUrl:    staff.tenant.logoUrl,
+      // A stored logoUrl can be a private-bucket object key (uploaded, not
+      // pasted as an external link) — resolveLogoUrl signs it into a usable
+      // URL the same way every other tenant-lookup route already does
+      // (tenants.routes.ts). Missed here before, so the sidebar/login logo
+      // silently failed to load for any tenant with an uploaded (not
+      // externally-linked) logo.
+      logoUrl:    await resolveLogoUrl(staff.tenant.logoUrl),
     },
   };
+}
+
+// Same identifier resolution as login() — kept as its own helper since
+// requestPasswordReset/resetPassword both need it and login()'s version
+// isn't exported.
+async function findStaffByIdentifier(tenantId: string, identifier: string) {
+  const trimmed = identifier.trim();
+  return prisma.staff.findFirst({
+    where: {
+      tenantId,
+      OR: [
+        { phone: normalizePhone(trimmed) },
+        { email: { equals: trimmed, mode: "insensitive" } },
+        { username: trimmed },
+      ],
+    },
+    include: { tenant: true },
+  });
+}
+
+function hashResetCode(code: string): string {
+  return crypto.createHash("sha256").update(code).digest("hex");
+}
+
+// "not-found" and "sent" must map to the exact same client-visible response
+// (see auth.routes.ts) — that's what keeps this from being an enumeration
+// oracle. "delivery-failed" is safe to surface distinctly: it only happens
+// AFTER we've already confirmed the account exists, so distinguishing it
+// leaks a fact about the mail/SMS provider's health, never about identity.
+export async function requestPasswordReset(tenantId: string, identifier: string): Promise<"sent" | "not-found" | "delivery-failed"> {
+  const staff = await findStaffByIdentifier(tenantId, identifier);
+  if (!staff || !staff.isActive || !staff.tenant.isActive) return "not-found";
+
+  // Delivery channel mirrors the tenant's own login method — a phone-login
+  // tenant's staff think of their phone as their identity, an
+  // email/username-login tenant's staff think of their email as theirs.
+  const bySms = staff.tenant.loginMethod === "phone";
+  const code = bySms
+    ? String(crypto.randomInt(100000, 1000000)) // 6-digit — short enough to type from an SMS
+    : crypto.randomBytes(32).toString("hex");     // long random token, embedded in an emailed link
+  const expiresAt = new Date(Date.now() + (bySms ? 15 : 60) * 60 * 1000);
+
+  await prisma.passwordResetToken.create({
+    data: { staffId: staff.id, tokenHash: hashResetCode(code), channel: bySms ? "sms" : "email", expiresAt },
+  });
+
+  let delivered: boolean;
+  if (bySms) {
+    // Staff.phone is stored as bare digits (see normalizePhone) — Twilio
+    // needs E.164. This app's phone-login tenants are India-only today
+    // (same assumption already baked into en-IN formatting elsewhere in
+    // this codebase), so a bare 10-digit number gets a +91 prefix.
+    const e164 = staff.phone.length === 10 ? `+91${staff.phone}` : `+${staff.phone}`;
+    delivered = await sendSms(e164, `Your Institute OS password reset code is ${code}. It expires in 15 minutes. Do not share this code.`);
+  } else {
+    // LoginPage reads these three params on mount and jumps straight into
+    // the "enter new password" step, pre-filled — there's no separate
+    // /reset-password route, this is intentionally the same page.
+    const link = `${env.WEB_APP_URL}/login?resetTenantId=${tenantId}&resetIdentifier=${encodeURIComponent(identifier.trim())}&resetCode=${code}`;
+    const html = await renderEmail(createElement(PasswordResetEmail, {
+      firstName:    staff.fullName.split(" ")[0],
+      resetUrl:     link,
+      expiresIn:    "1 hour",
+      // Falls back to the template's own default when the tenant hasn't set
+      // a brand color — same "null means use the default brand" convention
+      // as everywhere else brandPrimary is read (see Tenant model comment).
+      primaryColor: staff.tenant.brandPrimary ?? undefined,
+    }));
+    delivered = await sendEmail(staff.email, "Reset your Institute OS password", html);
+  }
+
+  return delivered ? "sent" : "delivery-failed";
+}
+
+// Shared by resetPassword() and validateResetCode() — a matching row that's
+// unused and unexpired, or null for every failure mode (no such staff,
+// wrong/expired/already-used code) without distinguishing which.
+async function findValidResetToken(tenantId: string, identifier: string, code: string) {
+  const staff = await findStaffByIdentifier(tenantId, identifier);
+  if (!staff) return null;
+  return prisma.passwordResetToken.findFirst({
+    where: { staffId: staff.id, tokenHash: hashResetCode(code), usedAt: null, expiresAt: { gt: new Date() } },
+  });
+}
+
+// Read-only check — lets the client tell "this link is expired/already used"
+// apart from "here's the reset form" BEFORE the user fills anything in,
+// without actually consuming the token. Same anti-enumeration posture as
+// requestPasswordReset/resetPassword: a bogus identifier and an
+// expired/reused/wrong code all just resolve to `false`, indistinguishably.
+export async function validateResetCode(tenantId: string, identifier: string, code: string): Promise<boolean> {
+  return (await findValidResetToken(tenantId, identifier, code)) !== null;
+}
+
+export async function resetPassword(tenantId: string, identifier: string, code: string, newPassword: string): Promise<boolean> {
+  const record = await findValidResetToken(tenantId, identifier, code);
+  if (!record) return false;
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.$transaction([
+    prisma.staff.update({ where: { id: record.staffId }, data: { passwordHash } }),
+    prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+  ]);
+  return true;
 }
 
 export function refreshAccessToken(refreshToken: string): string | null {

@@ -6,6 +6,7 @@ export interface Staff {
   email: string;
   phone: string;
   username: string | null;
+  photoUrl: string | null;
   // A staff member can hold more than one role at once (e.g. admin +
   // teacher at the same center).
   roles: ("admin" | "teacher" | "frontdesk")[];
@@ -52,4 +53,22 @@ export async function updateStaff(id: string, payload: UpdateStaffPayload): Prom
 
 export async function resetPassword(id: string, password: string): Promise<void> {
   await apiClient.post(`/api/staff/${id}/reset-password`, { password });
+}
+
+export async function getMyProfile(): Promise<Staff> {
+  const { data } = await apiClient.get<Staff>("/api/staff/me");
+  return data;
+}
+
+export async function uploadMyPhoto(file: File): Promise<{ photoUrl: string }> {
+  const formData = new FormData();
+  formData.append("photo", file);
+  const { data } = await apiClient.post<{ photoUrl: string }>("/api/staff/me/photo", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteMyPhoto(): Promise<void> {
+  await apiClient.delete("/api/staff/me/photo");
 }

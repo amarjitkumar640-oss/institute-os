@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { clearTokens, getStoredRefreshToken, registerAuthFailureHandler, setTokens } from "@/api/client";
-import { selectRole as selectRoleApi } from "@/api/auth";
+import { selectCenter as selectCenterApi, selectRole as selectRoleApi } from "@/api/auth";
 import { queryClient } from "@/context/QueryProvider";
 
 export type StaffRole = "admin" | "teacher" | "frontdesk";
@@ -48,7 +48,11 @@ export interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  login: (data: LoginResponse) => void;
+  // Resolves the center-pick step itself when a cached preference from a
+  // previous session applies (see lastCenterKey below) — the returned flag
+  // is the authoritative answer for whether /pick-center is still needed,
+  // since by the time this resolves that decision may already be made.
+  login: (data: LoginResponse) => Promise<{ needsCenterPick: boolean }>;
   selectCenter: (
     center: { id: string; name: string } | null,
     newToken: string,
@@ -79,6 +83,10 @@ export interface LoginResponse {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const STORAGE_KEY = "auth_state";
+// Mirrors apps/mobile's AuthContext.tsx lastCenterKey — remembers which
+// center (or "__all__" for All Centers mode) a staff member picked last, so
+// a later login can skip the picker screen entirely, same as mobile.
+const lastCenterKey = (staffId: string) => `last_center_${staffId}`;
 
 function loadFromStorage(): AuthState | null {
   try {
@@ -120,15 +128,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     registerAuthFailureHandler(logout);
   }, [logout]);
 
-  const login = useCallback((data: LoginResponse) => {
+  const login = useCallback(async (data: LoginResponse): Promise<{ needsCenterPick: boolean }> => {
     setTokens(data.accessToken, data.refreshToken);
+
+    // 0 or 1 centers: login already resolved it, no pick screen needed.
+    if (data.centers.length <= 1) {
+      const next: AuthState = {
+        staff: data.staff,
+        centers: data.centers,
+        currentCenter: data.currentCenter,
+        centerPicked: true,
+        branding: data.branding,
+        accessToken: data.accessToken,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setState(next);
+      queryClient.invalidateQueries();
+      return { needsCenterPick: false };
+    }
+
+    // 2+ centers — check for a preference saved by a previous selectCenter()
+    // call (see lastCenterKey) before falling back to showing the picker,
+    // same as apps/mobile's AuthContext.login().
+    let savedId: string | null = null;
+    try {
+      savedId = localStorage.getItem(lastCenterKey(data.staff.id));
+    } catch {}
+
+    const wantsAllCenters = savedId === "__all__";
+    const preferred = savedId && !wantsAllCenters ? data.centers.find((c) => c.id === savedId) : undefined;
+
+    if (wantsAllCenters || preferred) {
+      try {
+        const sd = await selectCenterApi(wantsAllCenters ? null : preferred!.id);
+        setTokens(sd.accessToken, sd.refreshToken);
+        const next: AuthState = {
+          staff: { ...data.staff, roles: sd.roles, activeRole: sd.activeRole, permissions: sd.permissions },
+          centers: data.centers,
+          currentCenter: sd.center,
+          centerPicked: true,
+          branding: data.branding,
+          accessToken: sd.accessToken,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        setState(next);
+        queryClient.invalidateQueries();
+        return { needsCenterPick: false };
+      } catch {
+        // Saved center no longer valid (removed/reassigned) or the request
+        // failed — fall through to the normal picker below rather than
+        // leaving the user stuck on a broken auto-select.
+      }
+    }
+
     const next: AuthState = {
       staff: data.staff,
       centers: data.centers,
       currentCenter: data.currentCenter,
-      // 0 or 1 centers: login already resolved it, no pick screen needed.
-      // 2+: stays false until they actually go through /pick-center.
-      centerPicked: data.centers.length <= 1,
+      centerPicked: false,
       branding: data.branding,
       accessToken: data.accessToken,
     };
@@ -137,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // No page reload happens on login — anything already mounted (rare, but
     // possible via the browser back button) must refetch under the new token.
     queryClient.invalidateQueries();
+    return { needsCenterPick: true };
   }, []);
 
   const selectCenter = useCallback((
@@ -163,6 +221,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         accessToken: newToken,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      // Persist preference so next login auto-selects this center (or
+      // all-centers mode) — mirrors apps/mobile's selectCenter().
+      if (prev.staff) {
+        try {
+          localStorage.setItem(lastCenterKey(prev.staff.id), center ? center.id : "__all__");
+        } catch {}
+      }
       return next;
     });
     // The new token scopes every request to a different center — every

@@ -11,6 +11,10 @@ import { getTenantBySlug } from "@/api/auth";
 // A fresh /org/:slug visit always overwrites whichever of the two was active.
 
 const STORAGE_KEY = "resolved_tenant_id";
+// Written alongside STORAGE_KEY whenever a tenant's branding is known, and
+// read synchronously by index.html's inline script before React mounts —
+// see that file for why (avoids a flash of the default color on load).
+const PRIMARY_STORAGE_KEY = "resolved_tenant_primary";
 const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID as string | undefined;
 
 interface TenantContextValue {
@@ -38,6 +42,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       const tenant = await getTenantBySlug(slug);
       setTenantId(tenant.id);
       localStorage.setItem(STORAGE_KEY, tenant.id);
+      const primary = tenant.branding.primary ?? "#7C3AED";
+      localStorage.setItem(PRIMARY_STORAGE_KEY, primary);
+      document.documentElement.style.setProperty("--color-primary", primary);
       return true;
     } catch {
       return false;

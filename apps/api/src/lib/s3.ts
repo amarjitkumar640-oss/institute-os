@@ -33,6 +33,27 @@ export async function deletePhoto(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
 }
 
+// Freshly minted per request, never a stored link (same private-bucket
+// reasoning as resolveLogoUrl). 30 minutes, not the 1hr photo default —
+// long enough to complete a 50-100MB APK download even on slow mobile
+// bandwidth (~27min worst case at 0.5 Mbps), without leaving a private
+// link valid far longer than a download should ever take.
+export async function getSignedApkUrl(key: string): Promise<string> {
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }), { expiresIn: 1800 });
+}
+
+// `logoUrl` is either a plain external URL (an admin pasted a link to an
+// already-public image) or an object key in our own private bucket (set via
+// the logo upload flow) — the bucket doesn't support public-read objects
+// (Oracle's S3-compat layer doesn't honor per-object ACLs the way AWS does),
+// so a stored key must be signed into a short-lived URL on every read,
+// exactly like student photos.
+export async function resolveLogoUrl(logoUrl: string | null): Promise<string | null> {
+  if (!logoUrl) return null;
+  if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) return logoUrl;
+  return getSignedPhotoUrl(logoUrl);
+}
+
 // Every uploaded object lives under {tenantId}/{centerId}/... so objects are
 // physically organized per institute and per branch, not just isolated by DB
 // query filters. centerId can be null (e.g. a student before center
