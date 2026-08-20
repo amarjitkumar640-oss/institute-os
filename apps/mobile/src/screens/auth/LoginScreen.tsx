@@ -24,6 +24,7 @@ import { useOrg } from "../../context/OrgContext";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, useBrandLogoUrl, type ThemeColors } from "../../context/ThemeContext";
 import { LOGIN_ILLUSTRATION_SVG } from "../../components/illustrations/LoginIllustration";
+import { ForgotPasswordSheet } from "../../components/auth/ForgotPasswordSheet";
 
 const { height: SCREEN_H } = Dimensions.get("window");
 const CARD_H = Math.min(Math.round(SCREEN_H * 0.50), 420);
@@ -130,6 +131,7 @@ export function LoginScreen() {
   const [serverError,     setServerError]     = useState("");
   const [submitting,      setSubmitting]      = useState(false);
   const [rememberMe,      setRememberMe]      = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // ── Animated values ───────────────────────────────────────────────────────────
   const floatY        = useRef(new Animated.Value(0)).current;
@@ -285,6 +287,7 @@ export function LoginScreen() {
     // "height" behavior on top of that double-compensates, and the two don't
     // reliably un-shift in sync on dismiss (content stays partly lifted).
     // iOS has no such native mechanism, so it still needs "padding" here.
+    <>
     <KeyboardAvoidingView
       style={s.kav}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -415,7 +418,7 @@ export function LoginScreen() {
                   </View>
                   <Text style={s.rememberLabel}>Remember me</Text>
                 </TouchableOpacity>
-                <TouchableOpacity activeOpacity={0.7}>
+                <TouchableOpacity activeOpacity={0.7} onPress={() => setShowForgotPassword(true)}>
                   <Text style={[s.forgot, { color: colors.primary }]}>Forgot password?</Text>
                 </TouchableOpacity>
               </View>
@@ -428,40 +431,48 @@ export function LoginScreen() {
                 </View>
               ) : null}
 
-            </ScrollView>
+              {/* Login Now button — sits right after the fields instead of being
+                  flex-pushed to the bottom of the card's fixed height, which left
+                  a large empty gap above it. */}
+              <Animated.View style={[s.btnWrap, { opacity: btnOpacity, transform: [{ scale: btnScale }] }]}>
+                <TouchableOpacity
+                  onPress={handleSubmit}
+                  onPressIn={onPressIn}
+                  onPressOut={onPressOut}
+                  disabled={submitting}
+                  activeOpacity={1}
+                >
+                  <Animated.View style={{ transform: [{ scale: pressScale }] }}>
+                    <View style={[s.btn, { backgroundColor: colors.primary }]}>
+                      {submitting ? (
+                        <>
+                          <ActivityIndicator size="small" color="#fff" style={s.btnIcon} />
+                          <Text style={s.btnLabel}>Signing in…</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={s.btnLabel}>Login Now</Text>
+                          <Ionicons name="arrow-forward" size={18} color="#fff" style={s.btnIconRight} />
+                        </>
+                      )}
+                    </View>
+                  </Animated.View>
+                </TouchableOpacity>
+              </Animated.View>
 
-            {/* Login Now button — pinned to bottom of card */}
-            <Animated.View style={[s.btnWrap, { opacity: btnOpacity, transform: [{ scale: btnScale }] }]}>
-              <TouchableOpacity
-                onPress={handleSubmit}
-                onPressIn={onPressIn}
-                onPressOut={onPressOut}
-                disabled={submitting}
-                activeOpacity={1}
-              >
-                <Animated.View style={{ transform: [{ scale: pressScale }] }}>
-                  <View style={[s.btn, { backgroundColor: colors.primary }]}>
-                    {submitting ? (
-                      <>
-                        <ActivityIndicator size="small" color="#fff" style={s.btnIcon} />
-                        <Text style={s.btnLabel}>Signing in…</Text>
-                      </>
-                    ) : (
-                      <>
-                        <Text style={s.btnLabel}>Login Now</Text>
-                        <Ionicons name="arrow-forward" size={18} color="#fff" style={s.btnIconRight} />
-                      </>
-                    )}
-                  </View>
-                </Animated.View>
-              </TouchableOpacity>
-            </Animated.View>
+            </ScrollView>
 
           </Animated.View>
 
         </View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
+    <ForgotPasswordSheet
+      visible={showForgotPassword}
+      onClose={() => setShowForgotPassword(false)}
+      loginMethod={loginMethod}
+    />
+    </>
   );
 }
 
@@ -535,7 +546,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   btnWrap: {
     paddingHorizontal: 24,
     paddingBottom: 20,
-    paddingTop: 8,
+    paddingTop: 80,
   },
 
   // ── Field label + input ───────────────────────────────────────────────────────

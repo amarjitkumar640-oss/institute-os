@@ -18,8 +18,17 @@
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #C4B5FD; border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: #A78BFA; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--color-primary, #7C3AED) 45%, white); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--color-primary, #7C3AED) 65%, white); }
+
+/* ── Table row hover ──
+   Tailwind's opacity modifier (e.g. bg-primary/10) can't resolve --color-primary
+   at build time since it's only ever known at runtime (set via JS per tenant),
+   so it silently fails to generate any rule. color-mix() sidesteps that.
+   Selector is qualified with `tr` (not just the class) so its specificity
+   reliably beats TableRow's own baked-in `hover:bg-gray-50/50` default,
+   regardless of which rule Tailwind's build happens to emit later. */
+tr.table-row-hover:hover { background: color-mix(in srgb, var(--color-primary, #7C3AED) 10%, white); }
 
 @layer utilities {
   /* ── Hover lift ── */

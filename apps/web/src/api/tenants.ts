@@ -9,6 +9,7 @@ export interface TenantSettings {
     primary: string | null;
     secondary: string | null;
     accent: string | null;
+    background: string | null;
     logoUrl: string | null;
   };
   classReminderMinutes: number;
@@ -19,6 +20,7 @@ export interface UpdateSettingsPayload {
   primary?: string | null;
   secondary?: string | null;
   accent?: string | null;
+  background?: string | null;
   logoUrl?: string | null;
   loginMethod?: "phone" | "email_username";
   classReminderMinutes?: number;
@@ -30,7 +32,7 @@ export async function getTenantSettings(): Promise<TenantSettings> {
   return data;
 }
 
-export async function updateTenantSettings(payload: UpdateSettingsPayload): Promise<TenantSettings["branding"] & Omit<UpdateSettingsPayload, "primary" | "secondary" | "accent" | "logoUrl">> {
+export async function updateTenantSettings(payload: UpdateSettingsPayload): Promise<TenantSettings["branding"] & Omit<UpdateSettingsPayload, "primary" | "secondary" | "accent" | "background" | "logoUrl">> {
   const { data } = await apiClient.patch("/api/tenants/me/settings", payload);
   return data;
 }

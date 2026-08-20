@@ -51,7 +51,7 @@ export function DataTable<TData, TValue>({ columns, data, pageSize = 20 }: DataT
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className={`border-b border-purple-50/50 transition-all duration-200 hover:bg-violet-50/50 hover:translate-x-0.5 animate-slide-up ${idx % 2 === 1 ? "bg-gray-50/30" : ""}`}
+                  className={`border-b border-purple-50/50 transition-all duration-200 table-row-hover hover:translate-x-0.5 animate-slide-up ${idx % 2 === 1 ? "bg-gray-50/30" : ""}`}
                   style={{ animationDelay: `${Math.min(idx, 14) * 35}ms` }}
                 >
                   {row.getVisibleCells().map((cell) => (

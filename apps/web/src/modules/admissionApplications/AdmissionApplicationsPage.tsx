@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import { FileText } from "lucide-react";
 import {
@@ -73,7 +73,12 @@ function RejectDialog({ application, open, onClose }: { application: AdmissionAp
 
 export function AdmissionApplicationsPage() {
   const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  // Supports deep-linking from the dashboard's "Pending Applications" alert
+  // and recent-admissions rows (/admission-applications?status=...) — read
+  // once on mount, not kept in sync with the URL afterwards (the tab buttons
+  // below are the source of truth from then on).
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "pending");
   const [rejecting, setRejecting] = useState<AdmissionApplication | null>(null);
 
   const { data: applications, isLoading } = useQuery({

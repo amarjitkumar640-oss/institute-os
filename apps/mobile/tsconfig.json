@@ -2,5 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  // scripts/ runs standalone via `npx tsx` (its own on-the-fly transpiler,
+  // Node-targeted, not part of the RN app bundle) — excluded here so its
+  // Node-only imports (fs, etc.) don't need to fit this app's RN-oriented
+  // tsconfig.
+  "exclude": ["node_modules", "android", "ios", "scripts"]
 }

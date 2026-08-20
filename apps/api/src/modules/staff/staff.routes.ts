@@ -81,6 +81,37 @@ staffRouter.delete("/me/photo", requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── GET /api/staff/me — the caller's own profile, for a self-service "My
+// Profile" screen. No requirePermission gate, same reasoning as the photo
+// routes above: viewing your own record isn't gated by staff.read (which a
+// teacher/frontdesk staff member may not hold at all). ──
+staffRouter.get("/me", requireAuth, async (req, res) => {
+  const staff = await prisma.staff.findUnique({
+    where: { id: req.auth!.staffId },
+    select: {
+      id:        true,
+      fullName:  true,
+      email:     true,
+      phone:     true,
+      username:  true,
+      photoUrl:  true,
+      roles:     true,
+      isActive:  true,
+      createdAt: true,
+      linkedFaculty: { select: { id: true } },
+      centerAssignments: {
+        select: {
+          roles:  true,
+          center: { select: { id: true, name: true } },
+        },
+        orderBy: { center: { name: "asc" } },
+      },
+    },
+  });
+  if (!staff) return res.status(404).json({ error: "Staff not found" });
+  res.json({ ...staff, photoUrl: staff.photoUrl ? await getSignedPhotoUrl(staff.photoUrl) : null });
+});
+
 // ── POST /api/staff — create a new staff account ──────────────────────────────
 const createStaffSchema = z.object({
   fullName: z.string().min(1),

@@ -81,3 +81,22 @@ export async function getTenantBySlug(slug: string): Promise<TenantBySlug> {
   const { data } = await apiClient.get<TenantBySlug>(`/api/tenants/slug/${slug}/public`);
   return data;
 }
+
+// Always resolves — the API returns { ok: true } whether or not the
+// identifier matched an account, so the UI can't distinguish "sent" from
+// "no such user" (by design, to avoid leaking which identifiers exist).
+export async function forgotPassword(tenantId: string, identifier: string): Promise<void> {
+  await apiClient.post("/api/auth/forgot-password", { tenantId, identifier });
+}
+
+export async function resetPassword(tenantId: string, identifier: string, code: string, password: string): Promise<void> {
+  await apiClient.post("/api/auth/reset-password", { tenantId, identifier, code, password });
+}
+
+// Read-only — checks a code without consuming it, so the emailed-link flow
+// can show "this link is expired" up front instead of only discovering it's
+// bad after the user has filled in a new password and hit submit.
+export async function validateResetCode(tenantId: string, identifier: string, code: string): Promise<boolean> {
+  const { data } = await apiClient.post<{ valid: boolean }>("/api/auth/validate-reset-code", { tenantId, identifier, code });
+  return data.valid;
+}

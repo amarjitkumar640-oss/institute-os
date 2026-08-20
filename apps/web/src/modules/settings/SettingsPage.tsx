@@ -24,12 +24,14 @@ function BrandingSettings() {
   const [primary, setPrimary] = useState("");
   const [secondary, setSecondary] = useState("");
   const [accent, setAccent] = useState("");
+  const [background, setBackground] = useState("");
 
   useEffect(() => {
     if (settings) {
       setPrimary(settings.branding.primary ?? "#C0392B");
       setSecondary(settings.branding.secondary ?? "#");
       setAccent(settings.branding.accent ?? "#");
+      setBackground(settings.branding.background ?? "#");
     }
   }, [settings]);
 
@@ -69,7 +71,7 @@ function BrandingSettings() {
       <Card>
         <CardHeader><CardTitle className="text-sm">Brand Colors</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <FormField label="Primary Color">
               <div className="flex items-center gap-2">
                 <input type="color" value={primary} onChange={(e) => setPrimary(e.target.value)} className="h-9 w-12 rounded border border-gray-200" />
@@ -88,8 +90,14 @@ function BrandingSettings() {
                 <Input value={accent} onChange={(e) => setAccent(e.target.value)} className="font-mono text-sm" maxLength={7} />
               </div>
             </FormField>
+            <FormField label="Background Color">
+              <div className="flex items-center gap-2">
+                <input type="color" value={background || "#000000"} onChange={(e) => setBackground(e.target.value)} className="h-9 w-12 rounded border border-gray-200" />
+                <Input value={background} onChange={(e) => setBackground(e.target.value)} className="font-mono text-sm" maxLength={7} />
+              </div>
+            </FormField>
           </div>
-          <Button onClick={() => mutation.mutate({ primary, secondary, accent })} disabled={mutation.isPending}>
+          <Button onClick={() => mutation.mutate({ primary, secondary, accent, background })} disabled={mutation.isPending}>
             Save Colors
           </Button>
         </CardContent>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Plus, Search, UserPlus } from "lucide-react";
@@ -165,7 +166,11 @@ const STATUSES = ["new", "contacted", "visited", "converted", "lost"] as const;
 export function LeadsPage() {
   const { isAllCenters } = useAuth();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  // Supports deep-linking from the dashboard's "Stale Leads" alert
+  // (/leads?status=new) — read once on mount, not kept in sync with the
+  // URL afterwards (the filter buttons below are the source of truth from then on).
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "all");
   const [showCreate, setShowCreate] = useState(false);
   const [convertingLead, setConvertingLead] = useState<Lead | null>(null);
 

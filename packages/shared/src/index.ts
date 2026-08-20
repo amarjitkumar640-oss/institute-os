@@ -393,3 +393,14 @@ export const setFacultyAttendanceSchema = z.object({
   })),
 });
 export type SetFacultyAttendanceInput = z.infer<typeof setFacultyAttendanceSchema>;
+
+// ── App releases (non-Play-Store APK updates) ───────────────────────────────
+
+export const createAppReleaseSchema = z.object({
+  tenantId:    z.string().uuid(),
+  versionName: z.string().min(1),
+  versionCode: z.number().int().positive(),
+  s3Key:       z.string().min(1),
+  changelog:   z.string().optional(),
+});
+export type CreateAppReleaseInput = z.infer<typeof createAppReleaseSchema>;

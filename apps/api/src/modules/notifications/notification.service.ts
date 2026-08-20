@@ -1,5 +1,6 @@
 import { NotificationType, StaffRole, PrismaClient, Prisma } from "@prisma/client";
 import { sendFcm } from "../../lib/firebase";
+import { resolveLogoUrl } from "../../lib/s3";
 
 // Built-in recipient roles for broadcast-style notification types, used when
 // a tenant hasn't configured a NotificationRoutingRule override. Only the
@@ -35,12 +36,16 @@ const TYPE_META: Record<NotificationType, { channelId: string; color: string }> 
 async function sendPush(
   db:       PrismaClient,
   staffIds: string[],
+  tenantId: string,
   type:     NotificationType,
   title:    string,
   body:     string,
   data?:    Prisma.InputJsonValue,
 ) {
   if (staffIds.length === 0) return;
+
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { logoUrl: true } });
+  const imageUrl = await resolveLogoUrl(tenant?.logoUrl ?? null);
 
   const tokenRows = await db.pushToken.findMany({
     where:  { staffId: { in: staffIds } },
@@ -77,6 +82,7 @@ async function sendPush(
       color:     meta.color,
       threadId:  type,
       badge:     badgeByStaff.get(staffId) ?? 1,
+      imageUrl,
     });
   }
 }
@@ -94,7 +100,7 @@ export async function notify(
   const notification = await db.notification.create({
     data: { recipientId, tenantId, type, title, body, data },
   });
-  sendPush(db, [recipientId], type, title, body, data).catch(console.error);
+  sendPush(db, [recipientId], tenantId, type, title, body, data).catch(console.error);
   return notification;
 }
 
@@ -136,7 +142,7 @@ export async function notifyByRole(
   await db.notification.createMany({
     data: recipientIds.map((recipientId) => ({ recipientId, tenantId, type, title, body, data })),
   });
-  sendPush(db, recipientIds, type, title, body, data).catch(console.error);
+  sendPush(db, recipientIds, tenantId, type, title, body, data).catch(console.error);
   return recipientIds;
 }
 

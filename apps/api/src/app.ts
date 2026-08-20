@@ -22,6 +22,7 @@ import { admissionsPublicRouter } from "./modules/admissions/admissions.public.r
 import { admissionApplicationsRouter } from "./modules/admissions/admissionApplications.routes";
 import { jobsRouter } from "./modules/jobs/jobs.routes";
 import { permissionsRouter } from "./modules/permissions/permissions.routes";
+import { appReleasesRouter } from "./modules/app-releases/app-releases.routes";
 import { errorHandler }  from "./middleware/errorHandler";
 
 export const app = express();
@@ -60,6 +61,7 @@ app.use("/api/schedule", scheduleRouter);
 app.use("/api/document-types", documentTypesRouter);
 app.use("/api/exam-categories", examCategoriesRouter);
 app.use("/api/tenants", tenantsRouter);
+app.use("/api/app-releases", appReleasesRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/public", admissionsPublicRouter);
 app.use("/api/admission-applications", admissionApplicationsRouter);

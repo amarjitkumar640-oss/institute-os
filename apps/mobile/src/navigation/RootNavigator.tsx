@@ -11,6 +11,7 @@ import { AlertProvider } from "../context/AlertContext";
 import { NetworkProvider } from "../context/NetworkContext";
 import { AppLockProvider, useAppLock } from "../context/AppLockContext";
 import { NetworkBanner } from "../components/ui/NetworkBanner";
+import { UpdateBanner } from "../components/ui/UpdateBanner";
 import { AppSplashScreen } from "../components/ui/AppSplashScreen";
 import { AppLockScreen } from "../screens/lock/AppLockScreen";
 import type { RootStackParamList } from "./types";
@@ -57,6 +58,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 function RootNavigatorInner({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { staff, isLoading, pendingCenters, noCentersAssigned } = useAuth();
   const { name: orgName, isLoading: orgLoading } = useOrg();
+  const { hasPin, isLocked, pinLoaded } = useAppLock();
   const navRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
 
   // Navigate to the relevant screen when user taps a push notification.
@@ -79,11 +81,15 @@ function RootNavigatorInner({ fontsLoaded }: { fontsLoaded: boolean }) {
     return () => { sub?.remove(); };
   }, []);
 
-  // Waits on fonts, auth session restore, and the tenant's org/branding
-  // fetch — the single gate for the splash, so AppSplashScreen mounts once
-  // (not once here and once more in App.tsx while fonts were loading) and
-  // stays mounted continuously until all three are ready.
-  if (!fontsLoaded || isLoading || orgLoading) {
+  // Waits on fonts, auth session restore, the tenant's org/branding fetch,
+  // AND the PIN-lock check — the single gate for the splash, so
+  // AppSplashScreen mounts exactly once for the whole boot sequence and
+  // stays mounted continuously until all four are ready. This used to be
+  // split across two components (this gate, plus a separate AppLockGate
+  // wrapper checking pinLoaded on its own) — each rendered its own
+  // AppSplashScreen, so the splash's entrance animation actually played
+  // twice in a row as the app moved from one gate to the other.
+  if (!fontsLoaded || isLoading || orgLoading || !pinLoaded) {
     return <AppSplashScreen orgName={orgName} />;
   }
 
@@ -96,6 +102,10 @@ function RootNavigatorInner({ fontsLoaded }: { fontsLoaded: boolean }) {
   // AuthContext.tsx). Screens past this point assume at least one
   // assignment, so this must gate before the normal Stack ever mounts.
   if (noCentersAssigned) return <NoCenterAssignedScreen />;
+
+  // Only lock when a PIN has been configured AND the app is currently
+  // locked — staff is already guaranteed non-null past this point.
+  if (hasPin && isLocked) return <AppLockScreen />;
 
   return (
     <NavigationContainer ref={navRef}>
@@ -154,23 +164,6 @@ function RootNavigatorInner({ fontsLoaded }: { fontsLoaded: boolean }) {
   );
 }
 
-function AppLockGate({ children }: { children: React.ReactNode }) {
-  const { staff } = useAuth();
-  const { hasPin, isLocked, pinLoaded } = useAppLock();
-
-  // Wait for SecureStore check before deciding — prevents flash of lock screen.
-  // Renders the same branded splash as RootNavigatorInner's own loading gate
-  // (not null) — this check runs concurrently with fonts/org/auth loading,
-  // so a blank render here showed as the logo disappearing mid-boot once the
-  // native splash handoff itself stopped leaving a blank gap of its own.
-  if (!pinLoaded) return <AppSplashScreen />;
-
-  // Only lock when a PIN has been configured AND the app is currently locked
-  const showLock = !!staff && hasPin && isLocked;
-  if (showLock) return <AppLockScreen />;
-  return <>{children}</>;
-}
-
 function ThemedStatusBar() {
   const colors = useThemeColors();
   const barStyle = colors.headerText === "#FFFFFF" ? "light-content" : "dark-content";
@@ -183,10 +176,9 @@ export function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
       <AlertProvider>
         <ThemedStatusBar />
         <AppLockProvider>
-          <AppLockGate>
-            <RootNavigatorInner fontsLoaded={fontsLoaded} />
-          </AppLockGate>
+          <RootNavigatorInner fontsLoaded={fontsLoaded} />
           <NetworkBanner />
+          <UpdateBanner />
         </AppLockProvider>
       </AlertProvider>
     </NetworkProvider>
