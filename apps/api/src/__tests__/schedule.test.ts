@@ -70,6 +70,24 @@ function hhmmOffset(minutesFromNow: number): string {
 }
 
 describe("session completion date validation", () => {
+  // Pin the clock to a fixed midday moment for this whole block. hhmmOffset
+  // builds same-day "before/after now" timestamps as bare HH:MM strings, and
+  // sessionHasEnded (schedule.service.ts) compares those as strings — which
+  // silently breaks whenever an offset crosses midnight (e.g. 70 minutes
+  // from 23:35 wraps to "00:45", which then string-compares as EARLIER than
+  // "23:35" even though it's actually still in the future). Freezing "now"
+  // at noon keeps every offset used below safely within the same day,
+  // regardless of what real-world time the suite happens to run at — only
+  // Date is faked (setTimeout/etc left real) so the actual DB/HTTP calls
+  // these tests make still run normally.
+  beforeAll(() => {
+    jest.useFakeTimers({
+      doNotFake: ["setTimeout", "setInterval", "setImmediate", "clearTimeout", "clearInterval", "clearImmediate", "nextTick", "queueMicrotask", "hrtime", "performance"],
+    });
+    jest.setSystemTime(new Date("2026-01-15T12:00:00"));
+  });
+  afterAll(() => jest.useRealTimers());
+
   beforeEach(resetDb);
   afterAll(async () => prisma.$disconnect());
 
