@@ -17,6 +17,9 @@ apps/mobile/*.p12
 apps/mobile/*.key
 apps/mobile/*.mobileprovision
 
+# Firebase service account key (sensitive — never commit)
+apps/api/firebase-service-account.json
+
 # Docker volumes
 infra/minio-data/
 infra/postgres-data/

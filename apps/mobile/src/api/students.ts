@@ -26,6 +26,8 @@ export interface StudentItem {
   passYear:           string | null;
   board:              string | null;
   whatsapp:           string | null;
+  courseId:           string | null;
+  course?:            { name: string } | null;
   coursePreference:   CoursePreference | null;
   durationPreference: DurationPref | null;
   preferredTiming:    BatchTiming | null;
@@ -35,6 +37,7 @@ export interface StudentItem {
   createdAt:          string;
   centerId?:          string | null;
   center?:            { id: string; name: string } | null;
+  activeEnrollment?:  { id: string; batchId: string; batchName: string } | null;
 }
 
 export interface AdmitStudentPayload {
@@ -54,6 +57,7 @@ export interface AdmitStudentPayload {
   passYear?:          string | null;
   board?:             string | null;
   whatsapp?:          string | null;
+  courseId?:          string | null;
   coursePreference?:  CoursePreference | null;
   durationPreference?: DurationPref | null;
   batchId?:           string | null;
@@ -61,6 +65,8 @@ export interface AdmitStudentPayload {
   paymentMode?:       PaymentMode | null;
   amountPaid?:        number | null;
   tcAcknowledged?:    boolean;
+  centerId?:          string; // only needed when the session has no center pinned
+  applicationId?:     string; // set when carried through from a self-service AdmissionApplication
 }
 
 export interface AdmitStudentResult {
@@ -75,7 +81,7 @@ export type AdmitStudentResponse =
 
 export type UpdateStudentPayload = Partial<Omit<AdmitStudentPayload, "batchId">>;
 
-export async function listStudents(params?: { batchId?: string }): Promise<StudentItem[]> {
+export async function listStudents(params?: { batchId?: string; centerId?: string }): Promise<StudentItem[]> {
   const { data } = await apiClient.get<StudentItem[]>("/students", { params });
   return data;
 }
@@ -104,6 +110,17 @@ export async function uploadStudentPhoto(
     return { ok: true, student: data };
   } catch (err: any) {
     return { ok: false, error: err?.response?.data?.error ?? "Upload failed" };
+  }
+}
+
+export async function deleteStudentPhoto(
+  id: string,
+): Promise<{ ok: true; student: StudentItem } | { ok: false; error: string }> {
+  try {
+    const { data } = await apiClient.delete<StudentItem>(`/students/${id}/photo`);
+    return { ok: true, student: data };
+  } catch (err: any) {
+    return { ok: false, error: err?.response?.data?.error ?? "Could not remove photo" };
   }
 }
 

@@ -1,12 +1,11 @@
 import { apiClient } from "./client";
 import { AxiosError } from "axios";
-
-export type ExamCategory = "ssc" | "banking" | "railway" | "foundation";
+import type { ExamCategoryItem } from "./examCategories";
 
 export interface FacultySubject {
   id: string;
   name: string;
-  examCategory: ExamCategory | null;
+  examCategories: ExamCategoryItem[];
 }
 
 export interface FacultyItem {
@@ -20,6 +19,10 @@ export interface FacultyItem {
   isActive: boolean;
   joiningDate: string; // "YYYY-MM-DD"
   subjects: FacultySubject[];
+  staffId: string | null; // linked login account, if any
+  // The linked staff login's own profile photo, if any — Faculty has no
+  // photo of its own, this surfaces the same person's uploaded photo.
+  photoUrl: string | null;
 }
 
 export interface CreateFacultyPayload {
@@ -30,6 +33,7 @@ export interface CreateFacultyPayload {
   experienceYears: number;
   joiningDate: string; // "YYYY-MM-DD"
   subjectIds: string[];
+  centerId?: string; // only needed when the session has no center pinned
 }
 
 export interface UpdateFacultyPayload {
@@ -41,13 +45,14 @@ export interface UpdateFacultyPayload {
   joiningDate?: string;
   isActive?: boolean;
   subjectIds?: string[];
+  staffId?: string | null;
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
 export async function listFaculty(params?: {
   search?: string;
-  examCategory?: ExamCategory;
+  examCategoryId?: string;
   isActive?: boolean;
   page?: number;
   limit?: number;
@@ -93,6 +98,8 @@ export async function createFaculty(
 export type UpdateFacultyResponse =
   | { ok: true; faculty: FacultyItem }
   | { ok: false; conflict: true; field: "email" | "phone"; message: string }
+  | { ok: false; staffConflict: true; message: string }
+  | { ok: false; staffNotFound: true; message: string }
   | { ok: false; notFound: true };
 
 export async function updateFaculty(
@@ -104,13 +111,20 @@ export async function updateFaculty(
     return { ok: true, faculty: data };
   } catch (err) {
     const ax = err as AxiosError<{ error: string; field?: string }>;
+    const field = ax.response?.data?.field;
+    if (ax.response?.status === 409 && field === "staffId") {
+      return { ok: false, staffConflict: true, message: ax.response.data?.error ?? "That teacher account is already linked to another faculty profile." };
+    }
     if (ax.response?.status === 409) {
       return {
         ok: false,
         conflict: true,
-        field: (ax.response.data?.field ?? "email") as "email" | "phone",
+        field: (field ?? "email") as "email" | "phone",
         message: ax.response.data?.error ?? "Another faculty member with this information already exists.",
       };
+    }
+    if (ax.response?.status === 404 && field === "staffId") {
+      return { ok: false, staffNotFound: true, message: ax.response.data?.error ?? "No teacher account found with that ID." };
     }
     if (ax.response?.status === 404) return { ok: false, notFound: true };
     throw err;

@@ -3,39 +3,51 @@ import { z } from "zod";
 export const staffRoleSchema = z.enum(["admin", "teacher", "frontdesk"]);
 export type StaffRole = z.infer<typeof staffRoleSchema>;
 
-export const examCategorySchema = z.enum(["ssc", "banking", "railway", "foundation"]);
-export type ExamCategory = z.infer<typeof examCategorySchema>;
-
 export const batchStatusSchema = z.enum(["upcoming", "running", "completed"]);
 export const enrollmentStatusSchema = z.enum(["active", "paused", "completed", "dropped"]);
 export const leadStatusSchema = z.enum(["new", "contacted", "visited", "converted", "lost"]);
 
+// The whole app only ever deals in plain 10-digit Indian mobile numbers (no
+// country-code UI anywhere), so phone handling stays simple: strip
+// everything but digits, no "+"/E.164 normalization. Still useful for
+// tolerating loosely-formatted phone input at login.
+export function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+export const staffLoginMethodSchema = z.enum(["phone", "email_username"]);
+export type StaffLoginMethod = z.infer<typeof staffLoginMethodSchema>;
+
+// The organization is known up front (baked into the app build), so login no
+// longer needs to guess a format or resolve a tenant from a bare identifier —
+// it just needs to know which tenant to look the identifier up within.
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  tenantId:   z.string().uuid(),
+  identifier: z.string().trim().min(1, "Enter your email, username, or phone number"),
+  password:   z.string().min(1),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const createSubjectSchema = z.object({
   name: z.string().min(1).max(120),
-  examCategory: examCategorySchema.nullable().optional(),
+  examCategoryIds: z.array(z.string().uuid()).default([]),
 });
 export type CreateSubjectInput = z.infer<typeof createSubjectSchema>;
 
 export const updateSubjectSchema = z.object({
   name: z.string().min(1).max(120).optional(),
-  examCategory: examCategorySchema.nullable().optional(),
+  examCategoryIds: z.array(z.string().uuid()).optional(),
 });
 export type UpdateSubjectInput = z.infer<typeof updateSubjectSchema>;
 
 export const subjectQuerySchema = z.object({
-  examCategory: examCategorySchema.optional(),
-  search:       z.string().max(100).optional(),
+  examCategoryId: z.string().uuid().optional(),
+  search:         z.string().max(100).optional(),
 });
 
 export const createCourseSchema = z.object({
   name: z.string().min(1).max(120),
-  examCategory: examCategorySchema,
+  examCategoryIds: z.array(z.string().uuid()).default([]),
   durationMonths: z.number().int().positive().max(60),
   defaultFee: z.number().nonnegative().max(10_000_000),
 });
@@ -45,10 +57,10 @@ export const updateCourseSchema = createCourseSchema.partial();
 export type UpdateCourseInput = z.infer<typeof updateCourseSchema>;
 
 export const courseQuerySchema = z.object({
-  examCategory: examCategorySchema.optional(),
-  search:       z.string().max(100).optional(),
-  page:         z.coerce.number().int().positive().default(1),
-  limit:        z.coerce.number().int().positive().max(100).default(20),
+  examCategoryId: z.string().uuid().optional(),
+  search:         z.string().max(100).optional(),
+  page:           z.coerce.number().int().positive().default(1),
+  limit:          z.coerce.number().int().positive().max(100).default(20),
 });
 
 export const createBatchSchema = z.object({
@@ -70,10 +82,11 @@ export const updateBatchSchema = z.object({
 export const createLeadSchema = z.object({
   name: z.string().min(1),
   phone: z.string().min(1),
-  targetExam: examCategorySchema,
+  targetExamId: z.string().uuid(),
   source: z.string().min(1),
   assignedTo: z.string().uuid().nullable().optional(),
   notes: z.string().optional(),
+  centerId: z.string().uuid().optional(),
 });
 
 export const convertLeadSchema = z.object({
@@ -92,6 +105,7 @@ export const createFacultySchema = z.object({
   experienceYears: z.number().int().min(0).max(50).default(0),
   joiningDate:     z.coerce.date(),
   subjectIds:      z.array(z.string().uuid()).default([]),
+  centerId:        z.string().uuid().optional(),
 });
 export type CreateFacultyInput = z.infer<typeof createFacultySchema>;
 
@@ -104,15 +118,16 @@ export const updateFacultySchema = z.object({
   joiningDate:     z.coerce.date().optional(),
   isActive:        z.boolean().optional(),
   subjectIds:      z.array(z.string().uuid()).optional(),
+  staffId:         z.string().uuid().nullable().optional(),
 });
 export type UpdateFacultyInput = z.infer<typeof updateFacultySchema>;
 
 export const facultyQuerySchema = z.object({
-  search:      z.string().max(100).optional(),
-  examCategory: examCategorySchema.optional(),
-  isActive:    z.coerce.boolean().optional(),
-  page:        z.coerce.number().int().positive().default(1),
-  limit:       z.coerce.number().int().positive().max(100).default(20),
+  search:         z.string().max(100).optional(),
+  examCategoryId: z.string().uuid().optional(),
+  isActive:       z.coerce.boolean().optional(),
+  page:           z.coerce.number().int().positive().default(1),
+  limit:          z.coerce.number().int().positive().max(100).default(20),
 });
 
 export const createStudentSchema = z.object({
@@ -122,6 +137,7 @@ export const createStudentSchema = z.object({
   dob:           z.coerce.date().nullable().optional(),
   address:       z.string().nullable().optional(),
   guardianPhone: z.string().nullable().optional(),
+  centerId:      z.string().uuid().optional(),
 });
 
 export const admitStudentSchema = z.object({
@@ -143,6 +159,7 @@ export const admitStudentSchema = z.object({
   qualification:      z.enum(["class10", "class12", "graduation", "post_graduation"]).nullable().optional(),
   passYear:           z.string().max(4).nullable().optional(),
   board:              z.string().max(100).nullable().optional(),
+  courseId:           z.string().uuid().nullable().optional(),
   coursePreference:   z.enum(["ssc", "banking", "railway", "foundation", "others"]).nullable().optional(),
   durationPreference: z.enum(["3months", "6months", "1year"]).nullable().optional(),
   whatsapp:           z.string().max(20).nullable().optional(),
@@ -153,11 +170,15 @@ export const admitStudentSchema = z.object({
   amountPaid:         z.number().nonnegative().nullable().optional(),
   // T&C acknowledgment — front desk confirms student was informed
   tcAcknowledged:     z.boolean().optional(),
+  centerId:           z.string().uuid().optional(),
+  // Set when this admission is carried through from a self-service
+  // AdmissionApplication — closes the loop by stamping studentId back onto it.
+  applicationId:      z.string().uuid().nullable().optional(),
 });
 export type AdmitStudentInput = z.infer<typeof admitStudentSchema>;
 
 export const updateStudentSchema = admitStudentSchema
-  .omit({ batchId: true })
+  .omit({ batchId: true, applicationId: true })
   .partial()
   .refine((d) => !d.fullName || d.fullName.length >= 1, { path: ["fullName"], message: "Name required" });
 export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
@@ -166,6 +187,50 @@ export const createEnrollmentSchema = z.object({
   studentId: z.string().uuid(),
   batchId: z.string().uuid(),
 });
+
+// ─── Admission Applications (public self-service form) ────────────────────────
+
+// Student-fillable subset of admitStudentSchema. Deliberately excludes
+// aadhaar (no ID numbers on an unauthenticated public page), plus everything
+// that's frontdesk/office-use: batchId, preferredTiming, paymentMode,
+// amountPaid, applicationId. `centerId` IS included here — unlike the admit
+// flow, it's the applicant's own preference for which branch to attend, not
+// an office assignment. `tcAccepted` replaces admitStudentSchema's optional
+// `tcAcknowledged` with a required checkbox — the applicant's own acceptance
+// of terms, not frontdesk confirming they informed someone.
+export const submitAdmissionApplicationSchema = admitStudentSchema
+  .pick({
+    fullName: true,
+    phone: true,
+    email: true,
+    dob: true,
+    address: true,
+    gender: true,
+    fatherName: true,
+    motherName: true,
+    guardianOccupation: true,
+    guardianEmail: true,
+    guardianPhone: true,
+    qualification: true,
+    passYear: true,
+    board: true,
+    courseId: true,
+    coursePreference: true,
+    durationPreference: true,
+    whatsapp: true,
+    centerId: true,
+  })
+  .extend({
+    tcAccepted: z.boolean().refine((v) => v === true, {
+      message: "You must accept the terms and conditions to apply",
+    }),
+  });
+export type SubmitAdmissionApplicationInput = z.infer<typeof submitAdmissionApplicationSchema>;
+
+export const rejectAdmissionApplicationSchema = z.object({
+  reason: z.string().min(1).max(300),
+});
+export type RejectAdmissionApplicationInput = z.infer<typeof rejectAdmissionApplicationSchema>;
 
 // ─── Fee Templates ────────────────────────────────────────────────────────────
 
@@ -306,3 +371,36 @@ export const sessionQuerySchema = z.object({
   status: sessionStatusSchema.optional(),
 });
 export type SessionQueryInput = z.infer<typeof sessionQuerySchema>;
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+
+export const attendanceStatusSchema = z.enum(["present", "absent"]);
+export type AttendanceStatusInput = z.infer<typeof attendanceStatusSchema>;
+
+export const setAttendanceSchema = z.object({
+  marks: z.array(z.object({
+    studentId: z.string().uuid(),
+    status:    attendanceStatusSchema,
+  })),
+});
+export type SetAttendanceInput = z.infer<typeof setAttendanceSchema>;
+
+export const setFacultyAttendanceSchema = z.object({
+  date:  dateStr,
+  marks: z.array(z.object({
+    facultyId: z.string().uuid(),
+    status:    attendanceStatusSchema,
+  })),
+});
+export type SetFacultyAttendanceInput = z.infer<typeof setFacultyAttendanceSchema>;
+
+// ── App releases (non-Play-Store APK updates) ───────────────────────────────
+
+export const createAppReleaseSchema = z.object({
+  tenantId:    z.string().uuid(),
+  versionName: z.string().min(1),
+  versionCode: z.number().int().positive(),
+  s3Key:       z.string().min(1),
+  changelog:   z.string().optional(),
+});
+export type CreateAppReleaseInput = z.infer<typeof createAppReleaseSchema>;

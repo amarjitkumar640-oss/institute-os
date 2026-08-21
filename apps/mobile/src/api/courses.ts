@@ -1,11 +1,10 @@
 import { apiClient } from "./client";
 import { AxiosError } from "axios";
-
-export type ExamCategory = "ssc" | "banking" | "railway" | "foundation";
+import type { ExamCategoryItem } from "./examCategories";
 
 export interface CreateCoursePayload {
   name: string;
-  examCategory: ExamCategory;
+  examCategoryIds?: string[];
   durationMonths: number;
   defaultFee: number;
 }
@@ -13,7 +12,7 @@ export interface CreateCoursePayload {
 export interface CourseItem {
   id: string;
   name: string;
-  examCategory: ExamCategory;
+  examCategories: ExamCategoryItem[];
   durationMonths: number;
   defaultFee: number;
   batchCount: number;
@@ -54,8 +53,22 @@ export async function createCourse(
   }
 }
 
+export interface CourseNameItem {
+  id: string;
+  name: string;
+}
+
+// Deliberately open to any authenticated staff (unlike listCourses(), which
+// requires courses.read) — for populating course-filter chips on screens
+// like the student list, so a role without access to the full Courses
+// management screen (e.g. teacher) can still filter by course.
+export async function listCourseNames(): Promise<CourseNameItem[]> {
+  const { data } = await apiClient.get<CourseNameItem[]>("/courses/names");
+  return data;
+}
+
 export async function listCourses(params?: {
-  examCategory?: ExamCategory;
+  examCategoryId?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -74,7 +87,7 @@ export async function listCourses(params?: {
 
 export interface UpdateCoursePayload {
   name?: string;
-  examCategory?: ExamCategory;
+  examCategoryIds?: string[];
   durationMonths?: number;
   defaultFee?: number;
 }

@@ -8,45 +8,50 @@ import {
 } from "@institute-os/shared";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+import { requirePermission } from "../../middleware/permission";
 import { validateBody } from "../../middleware/validate";
 
 export const subjectsRouter = Router();
+
+const SUBJECT_INCLUDE = {
+  examCategories: { include: { examCategory: true } },
+  _count:         { select: { facultySubjects: true } },
+} as const;
 
 // ── Serialize ──────────────────────────────────────────────────────────────────
 
 function serialize(s: {
   id: string;
   name: string;
-  examCategory: string | null;
+  examCategories: { examCategory: { id: string; key: string; label: string; color: string } }[];
   _count?: { facultySubjects: number };
 }) {
   return {
-    id:           s.id,
-    name:         s.name,
-    examCategory: s.examCategory,
-    facultyCount: s._count?.facultySubjects ?? 0,
+    id:             s.id,
+    name:           s.name,
+    examCategories: s.examCategories.map((ec) => ec.examCategory),
+    facultyCount:   s._count?.facultySubjects ?? 0,
   };
 }
 
 // ── GET / ──────────────────────────────────────────────────────────────────────
 
-subjectsRouter.get("/", requireAuth, async (req, res) => {
+subjectsRouter.get("/", requireAuth, requirePermission("subjects", "read"), async (req, res) => {
   const query = subjectQuerySchema.safeParse(req.query);
-  const { examCategory, search } = query.success
+  const { examCategoryId, search } = query.success
     ? query.data
-    : { examCategory: undefined, search: undefined };
+    : { examCategoryId: undefined, search: undefined };
 
-  const where: Record<string, unknown> = {};
-  if (examCategory) where.examCategory = examCategory;
+  const where: Record<string, unknown> = { tenantId: req.auth!.tenantId };
+  if (examCategoryId) where.examCategories = { some: { examCategoryId } };
   if (search?.trim()) {
     where.name = { contains: search.trim(), mode: "insensitive" };
   }
 
   const subjects = await prisma.subject.findMany({
     where,
-    orderBy: [{ examCategory: "asc" }, { name: "asc" }],
-    include: { _count: { select: { facultySubjects: true } } },
+    orderBy: { name: "asc" },
+    include: SUBJECT_INCLUDE,
   });
 
   res.json(subjects.map(serialize));
@@ -54,10 +59,10 @@ subjectsRouter.get("/", requireAuth, async (req, res) => {
 
 // ── GET /:id ───────────────────────────────────────────────────────────────────
 
-subjectsRouter.get("/:id", requireAuth, async (req, res) => {
-  const subject = await prisma.subject.findUnique({
-    where: { id: req.params.id },
-    include: { _count: { select: { facultySubjects: true } } },
+subjectsRouter.get("/:id", requireAuth, requirePermission("subjects", "read"), async (req, res) => {
+  const subject = await prisma.subject.findFirst({
+    where: { id: req.params.id, tenantId: req.auth!.tenantId },
+    include: SUBJECT_INCLUDE,
   });
   if (!subject) return res.status(404).json({ error: "Subject not found" });
   res.json(serialize(subject));
@@ -68,12 +73,13 @@ subjectsRouter.get("/:id", requireAuth, async (req, res) => {
 subjectsRouter.post(
   "/",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("subjects", "write"),
   validateBody(createSubjectSchema),
   async (req, res) => {
-    const { name, examCategory } = req.body as CreateSubjectInput;
+    const { name, examCategoryIds } = req.body as CreateSubjectInput;
+    const tenantId = req.auth!.tenantId;
 
-    const existing = await prisma.subject.findUnique({ where: { name } });
+    const existing = await prisma.subject.findUnique({ where: { tenantId_name: { tenantId, name } } });
     if (existing) {
       return res
         .status(409)
@@ -81,8 +87,14 @@ subjectsRouter.post(
     }
 
     const subject = await prisma.subject.create({
-      data: { name, examCategory: examCategory ?? null },
-      include: { _count: { select: { facultySubjects: true } } },
+      data: {
+        tenantId,
+        name,
+        examCategories: examCategoryIds.length
+          ? { create: examCategoryIds.map((examCategoryId) => ({ examCategoryId })) }
+          : undefined,
+      },
+      include: SUBJECT_INCLUDE,
     });
 
     res.status(201).json(serialize(subject));
@@ -94,16 +106,17 @@ subjectsRouter.post(
 subjectsRouter.patch(
   "/:id",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("subjects", "edit"),
   validateBody(updateSubjectSchema),
   async (req, res) => {
-    const subject = await prisma.subject.findUnique({ where: { id: req.params.id } });
+    const tenantId = req.auth!.tenantId;
+    const subject = await prisma.subject.findFirst({ where: { id: req.params.id, tenantId } });
     if (!subject) return res.status(404).json({ notFound: true });
 
-    const { name, examCategory } = req.body as UpdateSubjectInput;
+    const { name, examCategoryIds } = req.body as UpdateSubjectInput;
 
     if (name && name !== subject.name) {
-      const conflict = await prisma.subject.findUnique({ where: { name } });
+      const conflict = await prisma.subject.findUnique({ where: { tenantId_name: { tenantId, name } } });
       if (conflict) {
         return res
           .status(409)
@@ -111,13 +124,22 @@ subjectsRouter.patch(
       }
     }
 
-    const updated = await prisma.subject.update({
-      where: { id: req.params.id },
-      data: {
-        ...(name !== undefined ? { name } : {}),
-        ...(examCategory !== undefined ? { examCategory: examCategory ?? null } : {}),
-      },
-      include: { _count: { select: { facultySubjects: true } } },
+    const updated = await prisma.$transaction(async (tx) => {
+      if (examCategoryIds !== undefined) {
+        // Full replace: delete all then re-insert, same pattern as Faculty's subjectIds
+        await tx.subjectExamCategory.deleteMany({ where: { subjectId: req.params.id } });
+        if (examCategoryIds.length) {
+          await tx.subjectExamCategory.createMany({
+            data: examCategoryIds.map((examCategoryId) => ({ subjectId: req.params.id, examCategoryId })),
+          });
+        }
+      }
+
+      return tx.subject.update({
+        where: { id: req.params.id },
+        data:  { ...(name !== undefined ? { name } : {}) },
+        include: SUBJECT_INCLUDE,
+      });
     });
 
     res.json(serialize(updated));
@@ -129,10 +151,10 @@ subjectsRouter.patch(
 subjectsRouter.delete(
   "/:id",
   requireAuth,
-  requireRole("admin"),
+  requirePermission("subjects", "delete"),
   async (req, res) => {
-    const subject = await prisma.subject.findUnique({
-      where: { id: req.params.id },
+    const subject = await prisma.subject.findFirst({
+      where: { id: req.params.id, tenantId: req.auth!.tenantId },
       include: { _count: { select: { facultySubjects: true } } },
     });
     if (!subject) return res.status(404).json({ notFound: true });

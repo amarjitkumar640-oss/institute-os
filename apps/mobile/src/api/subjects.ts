@@ -1,18 +1,17 @@
 import { apiClient } from "./client";
-
-export type ExamCategory = "ssc" | "banking" | "railway" | "foundation";
+import type { ExamCategoryItem } from "./examCategories";
 
 export interface SubjectItem {
-  id:           string;
-  name:         string;
-  examCategory: ExamCategory | null;
-  facultyCount: number;
+  id:             string;
+  name:           string;
+  examCategories: ExamCategoryItem[];
+  facultyCount:   number;
 }
 
 // ── List ──────────────────────────────────────────────────────────────────────
 
 export interface ListSubjectsParams {
-  examCategory?: ExamCategory;
+  examCategoryId?: string;
   search?: string;
 }
 
@@ -24,8 +23,8 @@ export async function listSubjects(params?: ListSubjectsParams): Promise<Subject
 // ── Create ────────────────────────────────────────────────────────────────────
 
 export interface CreateSubjectPayload {
-  name:         string;
-  examCategory: ExamCategory | null;
+  name:            string;
+  examCategoryIds: string[];
 }
 
 export type CreateSubjectResponse =
@@ -48,8 +47,8 @@ export async function createSubject(payload: CreateSubjectPayload): Promise<Crea
 // ── Update ────────────────────────────────────────────────────────────────────
 
 export interface UpdateSubjectPayload {
-  name?:         string;
-  examCategory?: ExamCategory | null;
+  name?:            string;
+  examCategoryIds?: string[];
 }
 
 export type UpdateSubjectResponse =

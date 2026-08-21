@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
+import type { ExamCategoryItem } from "./examCategories";
 
 export type BatchStatus  = "upcoming" | "running" | "completed";
-export type ExamCategory = "ssc" | "banking" | "railway" | "foundation";
 
 export interface BatchItem {
   id:            string;
@@ -17,7 +17,7 @@ export interface BatchItem {
   course: {
     id:             string;
     name:           string;
-    examCategory:   ExamCategory;
+    examCategories: ExamCategoryItem[];
     durationMonths: number;
     defaultFee:     string;
   };

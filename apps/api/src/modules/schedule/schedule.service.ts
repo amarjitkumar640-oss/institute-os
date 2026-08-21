@@ -29,15 +29,28 @@ const SESSION_INCLUDE = {
 
 // ── Slots ─────────────────────────────────────────────────────────────────────
 
-export async function listSlots(prisma: PrismaClient, batchId: string) {
+export async function listSlots(
+  prisma: PrismaClient,
+  batchId: string,
+  tenantId: string,
+  facultyId?: string,
+) {
   return prisma.classSlot.findMany({
-    where:   { batchId, isActive: true },
+    where: {
+      batchId,
+      isActive: true,
+      batch: { tenantId },
+      ...(facultyId ? { facultyId } : {}),
+    },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
     include: SLOT_INCLUDE,
   });
 }
 
-export async function createSlot(prisma: PrismaClient, batchId: string, data: CreateSlotInput) {
+export async function createSlot(prisma: PrismaClient, batchId: string, tenantId: string, data: CreateSlotInput) {
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, tenantId } });
+  if (!batch) return null;
+
   return prisma.classSlot.create({
     data: {
       batchId,
@@ -54,7 +67,10 @@ export async function createSlot(prisma: PrismaClient, batchId: string, data: Cr
   });
 }
 
-export async function updateSlot(prisma: PrismaClient, slotId: string, data: UpdateSlotInput) {
+export async function updateSlot(prisma: PrismaClient, slotId: string, tenantId: string, data: UpdateSlotInput) {
+  const existing = await prisma.classSlot.findFirst({ where: { id: slotId, batch: { tenantId } } });
+  if (!existing) return null;
+
   const slot = await prisma.classSlot.update({
     where: { id: slotId },
     data: {
@@ -83,7 +99,10 @@ export async function updateSlot(prisma: PrismaClient, slotId: string, data: Upd
   return slot;
 }
 
-export async function deleteSlot(prisma: PrismaClient, slotId: string) {
+export async function deleteSlot(prisma: PrismaClient, slotId: string, tenantId: string) {
+  const existing = await prisma.classSlot.findFirst({ where: { id: slotId, batch: { tenantId } } });
+  if (!existing) return null;
+
   return prisma.classSlot.update({
     where: { id: slotId },
     data:  { isActive: false },
@@ -95,16 +114,19 @@ export async function deleteSlot(prisma: PrismaClient, slotId: string) {
 export async function listSessions(
   prisma: PrismaClient,
   batchId: string,
-  params: { from: string; to: string; status?: string },
+  tenantId: string,
+  params: { from: string; to: string; status?: string; facultyId?: string },
 ) {
   return prisma.classSession.findMany({
     where: {
       batchId,
+      batch: { tenantId },
       scheduledDate: {
         gte: new Date(params.from + "T00:00:00.000Z"),
         lte: new Date(params.to   + "T23:59:59.999Z"),
       },
-      ...(params.status ? { status: params.status as any } : {}),
+      ...(params.status    ? { status:    params.status    as any } : {}),
+      ...(params.facultyId ? { facultyId: params.facultyId }       : {}),
     },
     orderBy: [{ scheduledDate: "asc" }, { startTime: "asc" }],
     include: SESSION_INCLUDE,
@@ -114,8 +136,12 @@ export async function listSessions(
 export async function createAdHocSession(
   prisma: PrismaClient,
   batchId: string,
+  tenantId: string,
   data: CreateAdHocSessionInput,
 ) {
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, tenantId } });
+  if (!batch) return null;
+
   return prisma.classSession.create({
     data: {
       batchId,
@@ -133,11 +159,52 @@ export async function createAdHocSession(
   });
 }
 
+// Thrown by patchSession — a session can't be marked completed until it has
+// actually ended (a same-day session before its end time, or any future
+// day). Cancelling a not-yet-ended session is still fine (that's the normal
+// "this won't run" case); only "completed" implies it already ran.
+export class SessionNotYetEndedError extends Error {
+  constructor() {
+    super("Cannot mark this session as completed before it has ended");
+  }
+}
+
+// Mirrors the date/time comparison style the class-reminder sweep already
+// uses (sweep.ts): the date is compared as a UTC "YYYY-MM-DD" string, the
+// time-of-day as the server's local "HH:MM" via toTimeString(). Those two
+// aren't strictly on the same axis, but that's the existing house
+// convention for this kind of check, not something introduced here.
+function sessionHasEnded(scheduledDate: Date, endTime: string): boolean {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const scheduledDateStr = scheduledDate.toISOString().slice(0, 10);
+  if (scheduledDateStr < todayStr) return true;
+  if (scheduledDateStr > todayStr) return false;
+  const nowHHMM = now.toTimeString().slice(0, 5);
+  return nowHHMM >= endTime;
+}
+
 export async function patchSession(
   prisma: PrismaClient,
   sessionId: string,
+  tenantId: string,
   data: PatchSessionInput,
 ) {
+  const existing = await prisma.classSession.findFirst({ where: { id: sessionId, batch: { tenantId } } });
+  if (!existing) return null;
+
+  if (data.status === "completed") {
+    // Effective date/end-time are whichever this same PATCH ends up setting
+    // them to, not necessarily the session's current values — a
+    // reschedule-and-complete in one call is validated against the new
+    // schedule, not the old one.
+    const effectiveDate = data.scheduledDate !== undefined ? new Date(data.scheduledDate) : existing.scheduledDate;
+    const effectiveEndTime = data.endTime !== undefined ? data.endTime : existing.endTime;
+    if (!sessionHasEnded(effectiveDate, effectiveEndTime)) {
+      throw new SessionNotYetEndedError();
+    }
+  }
+
   return prisma.classSession.update({
     where: { id: sessionId },
     data: {
@@ -155,13 +222,43 @@ export async function patchSession(
   });
 }
 
+// ── Auto-generate sessions on slot create/update ─────────────────────────────
+// Called fire-and-forget after a slot is created or its faculty/subject changes.
+// Generates from today (or validFrom if later) through min(batch.endDate, +90 days).
+
+export async function autoGenerateSessions(
+  prisma: PrismaClient,
+  batchId: string,
+  tenantId: string,
+  validFrom: string | null,
+): Promise<void> {
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, tenantId } });
+  if (!batch) return;
+
+  const todayStr  = new Date().toISOString().slice(0, 10);
+  const fromStr   = validFrom && validFrom > todayStr ? validFrom : todayStr;
+  const batchEnd  = batch.endDate.toISOString().slice(0, 10);
+  const cap       = new Date();
+  cap.setDate(cap.getDate() + 90);
+  const capStr    = cap.toISOString().slice(0, 10);
+  const toStr     = batchEnd < capStr ? batchEnd : capStr;
+
+  if (fromStr <= toStr) {
+    await generateSessions(prisma, batchId, tenantId, { from: fromStr, to: toStr });
+  }
+}
+
 // ── Generate sessions from slots ──────────────────────────────────────────────
 
 export async function generateSessions(
   prisma: PrismaClient,
   batchId: string,
+  tenantId: string,
   params: GenerateSessionsInput,
-): Promise<{ created: number }> {
+): Promise<{ created: number } | null> {
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, tenantId } });
+  if (!batch) return null;
+
   const slots = await prisma.classSlot.findMany({
     where: { batchId, isActive: true },
   });
@@ -229,11 +326,13 @@ export async function generateSessions(
 export async function listFacultySessions(
   prisma: PrismaClient,
   facultyId: string,
+  tenantId: string,
   params: { from: string; to: string },
 ) {
   return prisma.classSession.findMany({
     where: {
       facultyId,
+      batch: { tenantId },
       scheduledDate: {
         gte: new Date(params.from + "T00:00:00.000Z"),
         lte: new Date(params.to   + "T23:59:59.999Z"),
@@ -248,7 +347,8 @@ export async function listFacultySessions(
 
 export async function listTodaySessions(
   prisma: PrismaClient,
-  centerId?: string,
+  tenantId: string,
+  centerIds: string[],
 ) {
   const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
 
@@ -259,9 +359,71 @@ export async function listTodaySessions(
         lte: new Date(todayStr + "T23:59:59.999Z"),
       },
       status: "scheduled",
-      ...(centerId ? { batch: { centerId } } : {}),
+      batch: { tenantId, centerId: { in: centerIds } },
     },
     orderBy: { startTime: "asc" },
     include: SESSION_INCLUDE,
   });
+}
+
+// ── Session attendance ────────────────────────────────────────────────────────
+// Roster = the session's batch's currently-active enrollments, each paired with
+// its existing mark for this specific session (or null if not yet taken).
+
+async function buildAttendanceRoster(prisma: PrismaClient, sessionId: string, batchId: string) {
+  const [enrollments, marks] = await Promise.all([
+    prisma.enrollment.findMany({
+      where: { batchId, status: "active" },
+      select: { studentId: true, student: { select: { fullName: true } } },
+      orderBy: { student: { fullName: "asc" } },
+    }),
+    prisma.sessionAttendance.findMany({
+      where: { classSessionId: sessionId },
+      select: { studentId: true, status: true },
+    }),
+  ]);
+
+  const markMap = new Map(marks.map((m) => [m.studentId, m.status]));
+  return enrollments.map((e) => ({
+    studentId: e.studentId,
+    fullName:  e.student.fullName,
+    status:    markMap.get(e.studentId) ?? null,
+  }));
+}
+
+export async function getSessionRoster(prisma: PrismaClient, sessionId: string, tenantId: string) {
+  const session = await prisma.classSession.findFirst({
+    where: { id: sessionId, batch: { tenantId } },
+    select: { batchId: true },
+  });
+  if (!session) return null;
+  return buildAttendanceRoster(prisma, sessionId, session.batchId);
+}
+
+export async function setSessionAttendance(
+  prisma: PrismaClient,
+  sessionId: string,
+  batchId: string,
+  marks: { studentId: string; status: "present" | "absent" }[],
+  markedById: string | null,
+) {
+  // Only students actively enrolled in this session's batch may be marked —
+  // silently drop anything else rather than trusting client-supplied IDs.
+  const inScope = new Set(
+    (await prisma.enrollment.findMany({
+      where: { batchId, status: "active", studentId: { in: marks.map((m) => m.studentId) } },
+      select: { studentId: true },
+    })).map((e) => e.studentId),
+  );
+
+  await Promise.all(
+    marks.filter((m) => inScope.has(m.studentId)).map((m) =>
+      prisma.sessionAttendance.upsert({
+        where:  { classSessionId_studentId: { classSessionId: sessionId, studentId: m.studentId } },
+        update: { status: m.status, markedById, markedAt: new Date() },
+        create: { classSessionId: sessionId, studentId: m.studentId, status: m.status, markedById },
+      }),
+    ),
+  );
+  return buildAttendanceRoster(prisma, sessionId, batchId);
 }

@@ -46,8 +46,12 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config as typeof error.config & { _retry?: boolean };
+    const isAuthEndpoint =
+      original?.url?.includes("/auth/login") ||
+      original?.url?.includes("/auth/refresh") ||
+      (original?.url?.includes("/tenants/") && original?.url?.includes("/public"));
 
-    if (error?.response?.status !== 401 || original._retry) {
+    if (error?.response?.status !== 401 || original._retry || isAuthEndpoint) {
       return Promise.reject(error);
     }
 

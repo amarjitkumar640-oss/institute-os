@@ -1,0 +1,33 @@
+services:
+  api-qa:
+    image: ghcr.io/amarjitkumar640-oss/institute-os-api:quality
+    restart: always
+    env_file:
+      - .env.quality
+    depends_on:
+      - postgres-qa
+    expose:
+      - "4000"
+
+  # One image serves every tenant — the tenant is resolved at runtime from
+  # the URL (/org/:slug), not baked in at build time. See apps/web/Dockerfile.
+  web-qa:
+    image: ghcr.io/amarjitkumar640-oss/institute-os-web:quality
+    restart: always
+    expose:
+      - "80"
+
+  postgres-qa:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: institute
+      POSTGRES_DB: institute_os_qa
+    env_file:
+      - .env.quality
+    volumes:
+      - postgres-qa-data:/var/lib/postgresql/data
+    # deliberately no "ports:" — unreachable from outside this Docker network
+
+volumes:
+  postgres-qa-data:

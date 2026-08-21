@@ -5,11 +5,17 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
+import { useThemeColors } from "../../context/ThemeContext";
 import { C } from "../../theme";
+import { T } from "./typography";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type AlertType   = "error" | "warning" | "info" | "success";
+// "brand" is distinct from the other four: its color comes from the tenant's
+// theme at render time (see `meta` below), not a fixed semantic hex — for
+// confirmations that aren't a warning (e.g. logging out) but still deserve
+// more presence than a plain info dialog.
+export type AlertType   = "error" | "warning" | "info" | "success" | "brand";
 export type ButtonStyle = "primary" | "danger" | "cancel";
 
 export interface AlertButton {
@@ -22,16 +28,20 @@ export interface AlertConfig {
   title:    string;
   message?: string;
   type?:    AlertType;
+  icon?:    string;
   buttons?: AlertButton[];
 }
 
 // ── Meta ──────────────────────────────────────────────────────────────────────
+// These are structural/semantic (error/warning/info/success), not brand
+// tokens — fixed app-wide regardless of tenant branding. "brand" isn't here;
+// it's computed from useThemeColors() where `meta` is built below.
 
-const TYPE_META: Record<AlertType, { icon: string; color: string; bg: string }> = {
-  error:   { icon: "alert-circle",       color: C.red,    bg: "#FEF0F0" },
-  warning: { icon: "warning",            color: C.orange, bg: "#FFF8EE" },
-  info:    { icon: "information-circle", color: C.blue,   bg: "#EEF4FF" },
-  success: { icon: "checkmark-circle",   color: C.green,  bg: "#EAF7F1" },
+const TYPE_META: Record<Exclude<AlertType, "brand">, { icon: string; color: string; bg: string }> = {
+  error:   { icon: "alert-circle",       color: C.red,    bg: C.redBg },
+  warning: { icon: "warning",            color: C.orange, bg: C.orangeBg },
+  info:    { icon: "information-circle", color: C.blue,   bg: C.blueBg },
+  success: { icon: "checkmark-circle",   color: C.green,  bg: C.greenBg },
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -43,6 +53,7 @@ interface Props {
 }
 
 export function AppAlert({ visible, config, onClose }: Props) {
+  const colors = useThemeColors();
   const scale   = useRef(new Animated.Value(0.88)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -66,7 +77,9 @@ export function AppAlert({ visible, config, onClose }: Props) {
   if (!config) return null;
 
   const type    = config.type ?? "info";
-  const meta    = TYPE_META[type];
+  const meta    = type === "brand"
+    ? { icon: config.icon ?? "log-out-outline", color: colors.primary, bg: colors.primary + "17" }
+    : { ...TYPE_META[type], icon: config.icon ?? TYPE_META[type].icon };
   const buttons = config.buttons ?? [{ label: "OK" }];
   const isMulti = buttons.length > 2;
   const isTwo   = buttons.length === 2;
@@ -106,7 +119,7 @@ export function AppAlert({ visible, config, onClose }: Props) {
                         <Text style={[
                           s.multiRowT,
                           isDanger  && { color: C.red },
-                          isCancel  && { color: C.muted, fontWeight: "500" },
+                          isCancel  && { color: C.muted, fontFamily: "Inter_500Medium", fontWeight: "500" },
                         ]}>
                           {btn.label}
                         </Text>
@@ -137,8 +150,8 @@ export function AppAlert({ visible, config, onClose }: Props) {
           <TouchableWithoutFeedback>
             <Animated.View style={[s.card, { opacity, transform: [{ scale }] }]}>
               {/* Icon */}
-              <View style={[s.iconCircle, { backgroundColor: meta.bg }]}>
-                <Ionicons name={meta.icon as any} size={ms(32)} color={meta.color} />
+              <View style={[s.iconBadge, { backgroundColor: meta.bg }]}>
+                <Ionicons name={meta.icon as any} size={ms(24)} color={meta.color} />
               </View>
 
               {/* Text */}
@@ -159,16 +172,16 @@ export function AppAlert({ visible, config, onClose }: Props) {
                         s.btn,
                         isTwo  && s.btnHalf,
                         !isTwo && s.btnFull,
-                        isCancel ? s.btnOutline
+                        isCancel ? s.btnFlat
                           : isDanger ? s.btnDanger
-                          : s.btnPrimary,
+                          : { backgroundColor: colors.primary },
                       ]}
                       onPress={() => handlePress(btn)}
                       activeOpacity={0.78}
                     >
                       <Text style={[
                         s.btnT,
-                        isCancel && s.btnOutlineT,
+                        isCancel && s.btnFlatT,
                       ]}>
                         {btn.label}
                       </Text>
@@ -197,67 +210,65 @@ const s = StyleSheet.create({
   card: {
     width:           "100%",
     backgroundColor: C.card,
-    borderRadius:    ms(24),
+    borderRadius:    ms(22),
     overflow:        "hidden",
     shadowColor:     "#1A0010",
-    shadowOffset:    { width: 0, height: ms(12) },
-    shadowOpacity:   0.22,
-    shadowRadius:    ms(24),
+    shadowOffset:    { width: 0, height: ms(10) },
+    shadowOpacity:   0.16,
+    shadowRadius:    ms(20),
     elevation:       16,
   },
 
   // Icon
-  iconCircle: {
-    width:           ms(68),
-    height:          ms(68),
-    borderRadius:    ms(34),
+  iconBadge: {
+    width:           ms(48),
+    height:          ms(48),
+    borderRadius:    ms(16),
     alignItems:      "center",
     justifyContent:  "center",
     alignSelf:       "center",
-    marginTop:       ms(28),
-    marginBottom:    ms(16),
+    marginTop:       ms(24),
+    marginBottom:    ms(14),
   },
 
   // Text
   title: {
-    fontSize:      fs(17),
-    fontWeight:    "800",
+    ...T.cardTitle,
     color:         C.text,
     textAlign:     "center",
     paddingHorizontal: ms(24),
-    marginBottom:  ms(8),
+    marginBottom:  ms(6),
   },
   message: {
-    fontSize:      fs(13.5),
+    ...T.bodySmall,
     color:         C.muted,
     textAlign:     "center",
-    lineHeight:    fs(20),
     paddingHorizontal: ms(24),
     marginBottom:  ms(4),
+    lineHeight:    ms(18),
   },
 
   // Button area
   btnArea: {
-    padding:    ms(20),
+    padding:    ms(18),
     paddingTop: ms(16),
+    gap:        ms(8),
   },
   btnRow: {
     flexDirection: "row",
-    gap:           ms(10),
   },
   btn: {
-    height:         ms(48),
-    borderRadius:   ms(14),
+    height:         ms(46),
+    borderRadius:   ms(13),
     alignItems:     "center",
     justifyContent: "center",
   },
   btnFull:    { width: "100%" },
   btnHalf:    { flex: 1 },
-  btnPrimary: { backgroundColor: C.primary },
   btnDanger:  { backgroundColor: C.red },
-  btnOutline: { borderWidth: 1.5, borderColor: C.border, backgroundColor: "transparent" },
-  btnT:       { fontSize: fs(14), fontWeight: "700", color: "#fff" },
-  btnOutlineT:{ color: C.text },
+  btnFlat:    { backgroundColor: C.inputBg },
+  btnT:       { ...T.buttonText, color: "#fff" },
+  btnFlatT:   { color: C.text },
 
   // Multi-action
   multiHeader: {
@@ -266,18 +277,16 @@ const s = StyleSheet.create({
     paddingBottom:     ms(14),
   },
   multiTitle: {
-    fontSize:   fs(16),
-    fontWeight: "800",
+    ...T.cardTitle,
     color:      C.text,
     marginBottom: ms(4),
   },
   multiMsg: {
-    fontSize:   fs(12.5),
+    ...T.bodySmall,
     color:      C.muted,
-    lineHeight: fs(18),
   },
   divider:       { height: 1, backgroundColor: C.border, marginHorizontal: ms(0) },
   multiRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(20), paddingVertical: ms(16) },
   multiRowCancel:{ paddingVertical: ms(14), justifyContent: "center" },
-  multiRowT:     { fontSize: fs(14.5), fontWeight: "600", color: C.text },
+  multiRowT:     { ...T.listItemTitle, color: C.text },
 });

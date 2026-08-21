@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Institute OS</title>
+    <script>
+      // Applies the last-known tenant brand color before the app renders, so
+      // a return visit paints the correct theme on the very first frame
+      // instead of flashing the CSS default (#7C3AED) then correcting once
+      // React mounts and re-fetches. Written by TenantContext.tsx/LoginPage.tsx
+      // whenever a tenant's branding is resolved.
+      (function () {
+        try {
+          var cached = localStorage.getItem("resolved_tenant_primary");
+          if (cached) document.documentElement.style.setProperty("--color-primary", cached);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

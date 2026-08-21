@@ -17,14 +17,15 @@ export interface CenterStaffItem {
   email:    string;
   phone:    string | null;
   isActive: boolean;
-  role:     "admin" | "teacher" | "frontdesk";
+  // A staff member can hold more than one role at once at the same center.
+  roles:    ("admin" | "teacher" | "frontdesk")[];
 }
 
 export interface AllStaffItem {
   id:       string;
   fullName: string;
   email:    string;
-  role:     "admin" | "teacher" | "frontdesk";
+  roles:    ("admin" | "teacher" | "frontdesk")[];
   isActive: boolean;
 }
 
@@ -54,9 +55,9 @@ export async function fetchCenterStaff(centerId: string): Promise<CenterStaffIte
 export async function assignStaffToCenter(
   centerId: string,
   staffId: string,
-  role: "admin" | "teacher" | "frontdesk"
+  roles: ("admin" | "teacher" | "frontdesk")[]
 ): Promise<void> {
-  await apiClient.post(`/centers/${centerId}/staff`, { staffId, role });
+  await apiClient.post(`/centers/${centerId}/staff`, { staffId, roles });
 }
 
 export async function removeStaffFromCenter(centerId: string, staffId: string): Promise<void> {

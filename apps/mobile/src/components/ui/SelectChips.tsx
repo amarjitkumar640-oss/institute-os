@@ -2,6 +2,9 @@ import React from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ms, fs } from "../../utils/responsive";
+import { useThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
+import { T } from "./typography";
 
 export interface SelectOption {
   label: string;
@@ -10,9 +13,10 @@ export interface SelectOption {
   color?: string;
 }
 
-interface Props {
+interface SingleProps {
   label: string;
   options: SelectOption[];
+  multiple?: false;
   value: string | undefined;
   onChange: (v: string) => void;
   error?: string;
@@ -20,14 +24,41 @@ interface Props {
   scrollable?: boolean;
 }
 
-const PRIMARY = "#8B1E3F";
+interface MultiProps {
+  label: string;
+  options: SelectOption[];
+  multiple: true;
+  value: string[];
+  onChange: (v: string[]) => void;
+  error?: string;
+  scrollable?: boolean;
+}
 
-export function SelectChips({ label, options, value, onChange, error, scrollable = false }: Props) {
+type Props = SingleProps | MultiProps;
+
+export function SelectChips(props: Props) {
+  const colors = useThemeColors();
+  const { label, options, error, scrollable = false } = props;
   const hasError = !!error;
 
+  function isSelected(value: string): boolean {
+    return props.multiple ? props.value.includes(value) : props.value === value;
+  }
+
+  function handlePress(value: string) {
+    if (props.multiple) {
+      const next = props.value.includes(value)
+        ? props.value.filter((v) => v !== value)
+        : [...props.value, value];
+      props.onChange(next);
+    } else {
+      props.onChange(value);
+    }
+  }
+
   const chips = options.map((opt) => {
-    const selected = value === opt.value;
-    const accentColor = opt.color ?? PRIMARY;
+    const selected = isSelected(opt.value);
+    const accentColor = opt.color ?? colors.primary;
     return (
       <TouchableOpacity
         key={opt.value}
@@ -36,7 +67,7 @@ export function SelectChips({ label, options, value, onChange, error, scrollable
           selected && { backgroundColor: accentColor, borderColor: accentColor },
           hasError && !selected && s.chipError,
         ]}
-        onPress={() => onChange(opt.value)}
+        onPress={() => handlePress(opt.value)}
         activeOpacity={0.75}
       >
         {selected && (
@@ -66,7 +97,7 @@ export function SelectChips({ label, options, value, onChange, error, scrollable
 
       {hasError && (
         <View style={s.errorRow}>
-          <Ionicons name="alert-circle-outline" size={13} color="#C0392B" />
+          <Ionicons name="alert-circle-outline" size={13} color={C.red} />
           <Text style={s.errorT}>{error}</Text>
         </View>
       )}
@@ -76,25 +107,25 @@ export function SelectChips({ label, options, value, onChange, error, scrollable
 
 const s = StyleSheet.create({
   wrap:        { marginBottom: ms(20) },
-  label:       { fontSize: fs(12.5), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(9), letterSpacing: 0.3 },
+  label:       { fontSize: fs(12.5), fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text, marginBottom: ms(9), letterSpacing: 0.3 },
   chipRow:     { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   scroll:      { flexShrink: 0 },
   scrollContent:{ flexDirection: "row", gap: ms(8), paddingRight: ms(4) },
   chip:        {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: ms(9),
-    paddingHorizontal: ms(16),
-    borderRadius: ms(20),
+    paddingVertical: ms(6),
+    paddingHorizontal: ms(14),
+    borderRadius: ms(16),
     borderWidth: 1.5,
-    borderColor: "#E8E3DC",
-    backgroundColor: "#FFFFFF",
+    borderColor: C.border,
+    backgroundColor: C.card,
     gap: ms(5),
   },
-  chipError:   { borderColor: "#C0392B" },
+  chipError:   { borderColor: C.red },
   chipIcon:    { flexShrink: 0 },
-  chipT:       { fontSize: fs(13), fontWeight: "600", color: "#8A7F82", includeFontPadding: false },
-  chipTOn:     { color: "#FFFFFF" },
+  chipT:       { ...T.caption, color: C.muted, includeFontPadding: false },
+  chipTOn:     { color: "#fff" },
   errorRow:    { flexDirection: "row", alignItems: "center", marginTop: ms(5), gap: ms(4) },
-  errorT:      { fontSize: fs(11.5), color: "#C0392B", flex: 1 },
+  errorT:      { fontSize: fs(11.5), color: C.red, flex: 1 },
 });

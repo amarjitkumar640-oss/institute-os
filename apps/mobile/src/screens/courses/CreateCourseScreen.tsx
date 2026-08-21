@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,11 +6,11 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  StatusBar,
   TextInput,
   Animated,
   ActivityIndicator,
   TouchableOpacity,
+  Keyboard,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,15 +21,21 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { FormField } from "../../components/ui/FormField";
 import { SelectChips } from "../../components/ui/SelectChips";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
-import { createCourse, type ExamCategory } from "../../api/courses";
+import { T } from "../../components/ui/typography";
+import { createCourse } from "../../api/courses";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { ms, fs } from "../../utils/responsive";
 import { useAlert } from "../../context/AlertContext";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { C } from "../../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateCourse">;
 
+const GENERAL_VALUE = "general";
+
 interface FormState {
   name: string;
-  examCategory: ExamCategory | "";
+  examCategoryIds: string[];
   durationMonths: string;
   defaultFee: string;
 }
@@ -44,33 +50,31 @@ interface FormErrors {
 
 interface CreatedCourse {
   name: string;
-  examCategory: ExamCategory;
+  examCategories: ExamCategoryItem[];
   durationMonths: number;
   defaultFee: number;
 }
 
-const EXAM_OPTIONS = [
-  { label: "SSC",        value: "ssc",        color: "#8B1E3F" },
-  { label: "Banking",    value: "banking",     color: "#2563A8" },
-  { label: "Railway",    value: "railway",     color: "#1B9C63" },
-  { label: "Foundation", value: "foundation",  color: "#7B3FA0" },
-];
-
-const CATEGORY_LABEL: Record<string, string> = {
-  ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation",
-};
-
 const INITIAL_FORM: FormState = {
-  name: "", examCategory: "", durationMonths: "", defaultFee: "",
+  name: "", examCategoryIds: [], durationMonths: "", defaultFee: "",
 };
+
+// "General" and specific categories are mutually exclusive. `displayValue` is
+// what was shown to SelectChips before the tap; `next` is what it computed
+// after toggling — comparing General's presence across the two tells us
+// whether the user tapped General itself vs. a specific category.
+function resolveCategorySelection(displayValue: string[], next: string[]): string[] {
+  const wasGeneral = displayValue.includes(GENERAL_VALUE);
+  const nowGeneral = next.includes(GENERAL_VALUE);
+  if (!wasGeneral && nowGeneral) return [];
+  return next.filter((v) => v !== GENERAL_VALUE);
+}
 
 function validate(form: FormState): FormErrors {
   const errors: FormErrors = {};
   const name = form.name.trim();
   if (!name) errors.name = "Course name is required.";
   else if (name.length > 120) errors.name = "Course name must be 120 characters or fewer.";
-
-  if (!form.examCategory) errors.examCategory = "Please select an exam category.";
 
   const months = Number(form.durationMonths);
   if (!form.durationMonths.trim()) errors.durationMonths = "Duration is required.";
@@ -87,10 +91,34 @@ function validate(form: FormState): FormErrors {
 
 export function CreateCourseScreen({ navigation }: Props) {
   const { showConfirm } = useAlert();
+  const colors = useThemeColors();
+  const s = useThemedStyles(makeSStyles);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // RN auto-scrolls to keep a focused field visible above the keyboard but
+  // never scrolls back on dismiss — undo that so the form returns to its
+  // original scroll position once the keyboard is fully gone.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return () => sub.remove();
+  }, []);
+
   const [form, setForm]               = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors]           = useState<FormErrors>({});
   const [loading, setLoading]         = useState(false);
   const [createdCourse, setCreatedCourse] = useState<CreatedCourse | null>(null);
+  const [categories, setCategories]   = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  const examOptions = [
+    { label: "General (All Categories)", value: GENERAL_VALUE, color: C.muted },
+    ...categories.map((c) => ({ label: c.label, value: c.id, color: c.color })),
+  ];
 
   const durationRef   = useRef<TextInput>(null);
   const feeRef        = useRef<TextInput>(null);
@@ -140,10 +168,10 @@ export function CreateCourseScreen({ navigation }: Props) {
 
     try {
       const result = await createCourse({
-        name:           form.name.trim(),
-        examCategory:   form.examCategory as ExamCategory,
-        durationMonths: Number(form.durationMonths),
-        defaultFee:     Number(form.defaultFee),
+        name:            form.name.trim(),
+        examCategoryIds: form.examCategoryIds,
+        durationMonths:  Number(form.durationMonths),
+        defaultFee:      Number(form.defaultFee),
       });
 
       if (!result.ok) {
@@ -153,7 +181,7 @@ export function CreateCourseScreen({ navigation }: Props) {
 
       showSuccessCard({
         name:           result.course.name,
-        examCategory:   result.course.examCategory,
+        examCategories: result.course.examCategories,
         durationMonths: result.course.durationMonths,
         defaultFee:     result.course.defaultFee,
       });
@@ -170,12 +198,12 @@ export function CreateCourseScreen({ navigation }: Props) {
   }
 
   const isDirty =
-    form.name !== "" || form.examCategory !== "" ||
+    form.name !== "" || form.examCategoryIds.length > 0 ||
     form.durationMonths !== "" || form.defaultFee !== "";
 
   function handleBack() {
     if (isDirty) {
-      showConfirm("Discard Changes?", "You have unsaved changes. Are you sure you want to go back?", () => navigation.goBack(), { confirmLabel: "Discard", cancelLabel: "Stay", destructive: true });
+      showConfirm("Discard Changes?", "You have unsaved changes. Are you sure you want to go back?", () => navigation.goBack(), { confirmLabel: "Discard", cancelLabel: "Stay", brand: true, icon: "arrow-undo-outline" });
     } else {
       navigation.goBack();
     }
@@ -183,7 +211,6 @@ export function CreateCourseScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScreenHeader title="New Course" onBack={handleBack} />
 
@@ -193,6 +220,7 @@ export function CreateCourseScreen({ navigation }: Props) {
         keyboardVerticalOffset={0}
       >
         <ScrollView
+          ref={scrollRef}
           style={s.scroll}
           contentContainerStyle={s.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -200,10 +228,7 @@ export function CreateCourseScreen({ navigation }: Props) {
         >
           {/* Basic Info */}
           <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <View style={s.sectionDot} />
-              <Text style={s.sectionTitle}>Basic Information</Text>
-            </View>
+            <SectionHead icon="document-text-outline" title="Basic Information" color={colors.primary} />
 
             <FormField
               label="COURSE NAME"
@@ -211,6 +236,7 @@ export function CreateCourseScreen({ navigation }: Props) {
               onChangeText={(v) => setField("name", v)}
               placeholder="e.g. SSC CGL Complete Course"
               error={errors.name}
+              required
               maxLength={120}
               clearable
               icon="book-outline"
@@ -221,19 +247,20 @@ export function CreateCourseScreen({ navigation }: Props) {
 
             <SelectChips
               label="EXAM CATEGORY"
-              options={EXAM_OPTIONS}
-              value={form.examCategory || undefined}
-              onChange={(v) => setField("examCategory", v as ExamCategory)}
+              options={examOptions}
+              multiple
+              value={form.examCategoryIds.length ? form.examCategoryIds : [GENERAL_VALUE]}
+              onChange={(next) => setField("examCategoryIds", resolveCategorySelection(
+                form.examCategoryIds.length ? form.examCategoryIds : [GENERAL_VALUE],
+                next,
+              ))}
               error={errors.examCategory}
             />
           </View>
 
           {/* Schedule & Fee */}
           <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <View style={[s.sectionDot, { backgroundColor: "#E8752C" }]} />
-              <Text style={s.sectionTitle}>Schedule & Fee</Text>
-            </View>
+            <SectionHead icon="calendar-outline" title="Schedule & Fee" color={colors.primary} />
 
             <FormField
               label="DURATION (MONTHS)"
@@ -242,6 +269,7 @@ export function CreateCourseScreen({ navigation }: Props) {
               placeholder="e.g. 12"
               keyboardType="number-pad"
               error={errors.durationMonths}
+              required
               icon="time-outline"
               hint="Enter number of months (1 – 60)"
               returnKeyType="next"
@@ -256,6 +284,7 @@ export function CreateCourseScreen({ navigation }: Props) {
               placeholder="e.g. 15000"
               keyboardType="decimal-pad"
               error={errors.defaultFee}
+              required
               icon="wallet-outline"
               hint="This fee will be the default for new enrollments"
               returnKeyType="done"
@@ -268,32 +297,32 @@ export function CreateCourseScreen({ navigation }: Props) {
               <Text style={s.submitErrorT}>{errors.submit}</Text>
             </View>
           )}
-
-          <View style={s.buttonGroup}>
-            <PrimaryButton
-              label="Create Course"
-              onPress={handleSubmit}
-              loading={loading}
-              disabled={loading}
-              icon="checkmark-circle-outline"
-            />
-            {isDirty && !loading && (
-              <PrimaryButton
-                label="Reset Form"
-                onPress={handleReset}
-                variant="outline"
-                icon="refresh-outline"
-              />
-            )}
-          </View>
         </ScrollView>
+
+        <View style={s.footer}>
+          <PrimaryButton
+            label="Create Course"
+            onPress={handleSubmit}
+            loading={loading}
+            disabled={loading}
+            icon="checkmark-circle-outline"
+          />
+          {isDirty && !loading && (
+            <PrimaryButton
+              label="Reset Form"
+              onPress={handleReset}
+              variant="outline"
+              icon="refresh-outline"
+            />
+          )}
+        </View>
       </KeyboardAvoidingView>
 
       {/* ── Full-screen loader overlay ─────────────────────────────── */}
       {loading && (
         <View style={s.loaderOverlay}>
           <View style={s.loaderCard}>
-            <ActivityIndicator size="large" color="#8B1E3F" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={s.loaderTitle}>Creating Course…</Text>
             <Text style={s.loaderSub}>Please wait a moment</Text>
           </View>
@@ -308,7 +337,7 @@ export function CreateCourseScreen({ navigation }: Props) {
             {/* Animated checkmark */}
             <Animated.View style={[s.checkWrap, { transform: [{ scale: checkScale }] }]}>
               <LinearGradient
-                colors={["#1B9C63", "#16A085"]}
+                colors={[C.green, "#16A085"]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={s.checkCircle}
               >
@@ -321,22 +350,18 @@ export function CreateCourseScreen({ navigation }: Props) {
 
             {/* Details */}
             <View style={s.detailBox}>
-              <DetailRow icon="book-outline"   label="Course Name" value={createdCourse.name} color="#8B1E3F" />
-              <DetailRow icon="layers-outline" label="Category"    value={CATEGORY_LABEL[createdCourse.examCategory] ?? createdCourse.examCategory} color="#2563A8" />
-              <DetailRow icon="time-outline"   label="Duration"    value={`${createdCourse.durationMonths} months`} color="#E8752C" />
-              <DetailRow icon="wallet-outline" label="Default Fee" value={`₹${createdCourse.defaultFee.toLocaleString("en-IN")}`} color="#1B9C63" last />
+              <DetailRow icon="book-outline"   label="Course Name" value={createdCourse.name} color={colors.primary} />
+              <DetailRow icon="layers-outline" label="Category"    value={createdCourse.examCategories.length ? createdCourse.examCategories.map((c) => c.label).join(", ") : "General (All Categories)"} color={C.blue} />
+              <DetailRow icon="time-outline"   label="Duration"    value={`${createdCourse.durationMonths} months`} color={C.orange} />
+              <DetailRow icon="wallet-outline" label="Default Fee" value={`₹${createdCourse.defaultFee.toLocaleString("en-IN")}`} color={C.green} last />
             </View>
 
             {/* CTA button */}
             <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
-              <LinearGradient
-                colors={["#8B1E3F", "#A52341"]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={s.doneBtn}
-              >
+              <View style={[s.doneBtn, { backgroundColor: colors.primary }]}>
                 <Ionicons name="list-outline" size={ms(18)} color="#fff" />
                 <Text style={s.doneBtnT}>View All Courses</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
           </Animated.View>
@@ -345,6 +370,23 @@ export function CreateCourseScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 }
+
+function SectionHead({ icon, title, color }: { icon: string; title: string; color: string }) {
+  return (
+    <View style={sh.wrap}>
+      <View style={[sh.iconBox, { backgroundColor: color + "18" }]}>
+        <Ionicons name={icon as any} size={ms(16)} color={color} />
+      </View>
+      <Text style={[sh.label, { color }]}>{title.toUpperCase()}</Text>
+    </View>
+  );
+}
+
+const sh = StyleSheet.create({
+  wrap:    { flexDirection: "row", alignItems: "center", gap: ms(10), marginBottom: ms(12) },
+  iconBox: { width: ms(34), height: ms(34), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
+  label:   { ...T.sectionHeading, letterSpacing: 1 },
+});
 
 function DetailRow({
   icon, label, value, color, last = false,
@@ -366,48 +408,45 @@ function DetailRow({
 
 const dr = StyleSheet.create({
   row:       { flexDirection: "row", alignItems: "center", paddingVertical: ms(10), gap: ms(12) },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0EDE8" },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   iconWrap:  { width: ms(32), height: ms(32), borderRadius: ms(8), justifyContent: "center", alignItems: "center", flexShrink: 0 },
   textWrap:  { flex: 1 },
-  label:     { fontSize: fs(10), color: "#8A7F82", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: ms(1) },
-  value:     { fontSize: fs(13), color: "#2B1B1F", fontWeight: "700" },
+  label:     { ...T.sectionHeading, color: C.muted, marginBottom: ms(1) },
+  value:     { ...T.listItemTitle, color: C.text },
 });
 
-const s = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: "#8B1E3F" },
+const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:          { flex: 1, backgroundColor: colors.screenBg },
   flex:          { flex: 1 },
-  scroll:        { flex: 1, backgroundColor: "#FFFBF0" },
-  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(24), paddingBottom: ms(40) },
+  scroll:        { flex: 1, backgroundColor: colors.screenBg },
+  scrollContent: { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(20) },
 
-  section:       { backgroundColor: "#FFFFFF", borderRadius: ms(18), padding: ms(18), marginBottom: ms(16), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), marginBottom: ms(18) },
-  sectionDot:    { width: ms(4), height: ms(18), borderRadius: ms(2), backgroundColor: "#8B1E3F" },
-  sectionTitle:  { fontSize: fs(12), fontWeight: "800", color: "#8A7F82", letterSpacing: 1, textTransform: "uppercase" },
+  section:       { backgroundColor: C.card, borderRadius: ms(18), padding: ms(14), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 
   submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },
-  submitErrorT:  { fontSize: fs(13), color: "#C0392B", lineHeight: fs(18) },
+  submitErrorT:  { ...T.body, color: C.red },
 
-  buttonGroup:   { gap: ms(12) },
+  footer:        { gap: ms(12), paddingHorizontal: ms(20), paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
 
   // Full-screen loader
-  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(255,251,240,0.96)", justifyContent: "center", alignItems: "center" },
-  loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: "#FFFFFF", borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
-  loaderTitle:   { fontSize: fs(16), fontWeight: "800", color: "#2B1B1F", marginTop: ms(4) },
-  loaderSub:     { fontSize: fs(12), color: "#8A7F82" },
+  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
+  loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },
+  loaderTitle:   { ...T.cardTitle, color: C.text, marginTop: ms(4) },
+  loaderSub:     { ...T.bodySmall, color: C.muted },
 
   // Full-screen success
-  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFBF0", justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
-  successCard:    { width: "100%", backgroundColor: "#FFFFFF", borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
+  successOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", paddingHorizontal: ms(20) },
+  successCard:    { width: "100%", backgroundColor: C.card, borderRadius: ms(28), padding: ms(24), alignItems: "center", shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(24), elevation: 12 },
 
   checkWrap:     { marginBottom: ms(20) },
   checkCircle:   { width: ms(88), height: ms(88), borderRadius: ms(44), justifyContent: "center", alignItems: "center" },
 
-  successTitle:  { fontSize: fs(22), fontWeight: "800", color: "#2B1B1F", marginBottom: ms(6) },
-  successSub:    { fontSize: fs(13), color: "#8A7F82", marginBottom: ms(24), textAlign: "center" },
+  successTitle:  { ...T.displayMedium, color: C.text, marginBottom: ms(6) },
+  successSub:    { ...T.body, color: C.muted, marginBottom: ms(24), textAlign: "center" },
 
-  detailBox:     { width: "100%", backgroundColor: "#FAFAFA", borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: "#F0EDE8" },
+  detailBox:     { width: "100%", backgroundColor: C.inputBg, borderRadius: ms(16), paddingHorizontal: ms(16), marginBottom: ms(24), borderWidth: 1, borderColor: C.border },
 
   doneBtnWrap:   { width: "100%" },
   doneBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), borderRadius: ms(16), paddingVertical: ms(16) },
-  doneBtnT:      { fontSize: fs(15), fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.3 },
+  doneBtnT:      { ...T.buttonText, color: "#FFFFFF" },
 });

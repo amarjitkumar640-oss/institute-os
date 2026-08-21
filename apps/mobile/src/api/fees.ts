@@ -76,16 +76,23 @@ export interface ScheduleInstallment {
 export interface StudentFeeSchedule {
   id:             string;
   enrollmentId:   string;
-  totalFee:       string;
-  discountAmount: string;
-  discountReason: string | null;
-  effectiveFee:   string;
-  creditBalance:  string;
+  totalFee:       string | number;
+  discountAmount: string | number;
+  discountReason?: string | null;
+  effectiveFee:   string | number;
+  creditBalance:  string | number;
   status:         FeeScheduleStatus;
-  createdAt:      string;
-  updatedAt:      string;
-  installments:   ScheduleInstallment[];
+  createdAt?:     string;
+  updatedAt?:     string;
+  // List view returns installments; detail view always includes them
+  installments?:  ScheduleInstallment[];
   transactions?:  PaymentTransaction[];
+  // Flat fields returned by the list endpoint
+  student?:       { id: string; fullName: string; studentCode: string; phone?: string; whatsapp?: string | null };
+  batch?:         { id: string; name: string };
+  paidAmount?:    number;
+  pendingAmount?: number;
+  // Nested fields returned by the detail endpoint
   enrollment?:    {
     student: { id: string; fullName: string; studentCode: string; phone: string; whatsapp?: string | null };
     batch:   { id: string; name: string };
@@ -93,10 +100,9 @@ export interface StudentFeeSchedule {
 }
 
 export interface FeeSummary {
-  collectedThisMonth: number;
-  pending:            number;
-  overdueCount:       number;
-  activeSchedules:    number;
+  totalCollected: number;
+  totalPending:   number;
+  overdueCount:   number;
 }
 
 // ── Request payload types ─────────────────────────────────────────────────────
@@ -253,13 +259,15 @@ export function installmentOutstanding(inst: ScheduleInstallment): number {
 }
 
 export function scheduleTotalPaid(schedule: StudentFeeSchedule): number {
-  return schedule.installments.reduce((sum, i) => sum + Number(i.paidAmount), 0);
+  if (schedule.paidAmount !== undefined) return schedule.paidAmount;
+  return (schedule.installments ?? []).reduce((sum, i) => sum + Number(i.paidAmount), 0);
 }
 
 export function scheduleTotalOutstanding(schedule: StudentFeeSchedule): number {
-  return schedule.installments.reduce((sum, i) => sum + installmentOutstanding(i), 0);
+  if (schedule.pendingAmount !== undefined) return schedule.pendingAmount;
+  return (schedule.installments ?? []).reduce((sum, i) => sum + installmentOutstanding(i), 0);
 }
 
 export function scheduleHasOverdue(schedule: StudentFeeSchedule): boolean {
-  return schedule.installments.some((i) => i.status === "overdue");
+  return (schedule.installments ?? []).some((i) => i.status === "overdue");
 }

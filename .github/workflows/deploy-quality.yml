@@ -1,0 +1,117 @@
+name: Deploy Quality
+
+on:
+  push:
+    branches: [quality]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: institute_os_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/institute_os_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Load JWT/S3 config from QA_ENV_FILE secret
+        run: |
+          echo "${{ secrets.QA_ENV_FILE }}" >> "$GITHUB_ENV"
+          echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/institute_os_test" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npx prisma generate --schema apps/api/prisma/schema.prisma
+      - run: npm run build -w packages/shared
+      - run: npm run build -w apps/api
+      - run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+      - run: npm test -w apps/api
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push api — amd64, matching the Oracle instance
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/institute-os-api:quality
+
+      # One image, every tenant — the tenant is resolved at runtime from the
+      # URL (see apps/web/src/context/TenantContext.tsx), so this never needs
+      # a per-tenant build. VITE_API_URL/BASE_PATH are the only build args.
+      #
+      # VITE_API_URL is the literal domain, not secrets.VPS_HOST (a raw IP) —
+      # infra/Caddyfile now keys its site block on the hostname
+      # "thesuccess.in" specifically (required for automatic HTTPS), so it no
+      # longer answers requests whose Host header is the bare IP.
+      - name: Build and push web — amd64, matching the Oracle instance
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/institute-os-web:quality
+          build-args: |
+            VITE_API_URL=https://thesuccess.in/qa
+            BASE_PATH=/qa/
+
+      - name: Sync infra config to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_DEPLOY_KEY }}
+          source: "infra/docker-compose.prod.yml,infra/docker-compose.quality.yml,infra/Caddyfile"
+          target: "~/institute-os"
+          strip_components: 0
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_DEPLOY_KEY }}
+          script: |
+            cat > ~/institute-os/infra/.env.quality << 'ENVEOF'
+            ${{ secrets.QA_ENV_FILE }}
+            ENVEOF
+            cd ~/institute-os/infra
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api-qa web-qa
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d postgres-qa api-qa web-qa
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx prisma migrate deploy --schema prisma/schema.prisma
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx tsx prisma/backfillPhotoKeys.ts
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx tsx prisma/seedDocumentTypes.ts
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx tsx prisma/seedExamCategories.ts
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile

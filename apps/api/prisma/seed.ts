@@ -3,29 +3,44 @@ import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
-async function seedMainCenter() {
-  let center = await prisma.center.findFirst({ where: { name: "Main Center" } });
+// The migration backfills every pre-existing row into this fixed tenant id —
+// keep this in sync with prisma/migrations/*_add_tenant_multitenancy/migration.sql.
+const DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001";
+
+async function seedMainTenant() {
+  let tenant = await prisma.tenant.findUnique({ where: { id: DEFAULT_TENANT_ID } });
+  if (!tenant) {
+    tenant = await prisma.tenant.create({
+      data: { id: DEFAULT_TENANT_ID, name: "Default Institute", slug: "default" },
+    });
+    console.log(`Created tenant: Default Institute (${tenant.id})`);
+  }
+  return tenant;
+}
+
+async function seedMainCenter(tenantId: string) {
+  let center = await prisma.center.findFirst({ where: { tenantId, name: "Main Center" } });
   if (!center) {
-    center = await prisma.center.create({ data: { name: "Main Center" } });
+    center = await prisma.center.create({ data: { tenantId, name: "Main Center" } });
     console.log(`Created center: Main Center (${center.id})`);
   }
 
   const [s, b, f, l] = await Promise.all([
-    prisma.student.updateMany({ where: { centerId: null }, data: { centerId: center.id } }),
-    prisma.batch.updateMany({   where: { centerId: null }, data: { centerId: center.id } }),
-    prisma.faculty.updateMany({ where: { centerId: null }, data: { centerId: center.id } }),
-    prisma.lead.updateMany({    where: { centerId: null }, data: { centerId: center.id } }),
+    prisma.student.updateMany({ where: { centerId: null, tenantId }, data: { centerId: center.id } }),
+    prisma.batch.updateMany({   where: { centerId: null, tenantId }, data: { centerId: center.id } }),
+    prisma.faculty.updateMany({ where: { centerId: null, tenantId }, data: { centerId: center.id } }),
+    prisma.lead.updateMany({    where: { centerId: null, tenantId }, data: { centerId: center.id } }),
   ]);
   if (s.count + b.count + f.count + l.count > 0) {
     console.log(`Backfilled: ${s.count} students, ${b.count} batches, ${f.count} faculty, ${l.count} leads → Main Center`);
   }
 
-  const allStaff = await prisma.staff.findMany();
+  const allStaff = await prisma.staff.findMany({ where: { tenantId } });
   for (const staff of allStaff) {
     await prisma.centerStaff.upsert({
       where:  { centerId_staffId: { centerId: center.id, staffId: staff.id } },
       update: {},
-      create: { centerId: center.id, staffId: staff.id, role: staff.role },
+      create: { centerId: center.id, staffId: staff.id, roles: staff.roles },
     });
   }
   if (allStaff.length > 0) {
@@ -35,7 +50,11 @@ async function seedMainCenter() {
   return center;
 }
 
-async function seedSampleData(centerId: string) {
+async function seedSampleData(tenantId: string, centerId: string) {
+  const examCategories = await prisma.examCategory.findMany({ where: { tenantId } });
+  const examCategoryIdByKey = (key: string | null) =>
+    key ? examCategories.find((ec) => ec.key === key)?.id ?? null : null;
+
   // ── Courses ──────────────────────────────────────────────────────────────────
   const courseData = [
     { name: "SSC CGL Foundation",          examCategory: "ssc"     as const, durationMonths: 6,  defaultFee: 18000 },
@@ -46,12 +65,19 @@ async function seedSampleData(centerId: string) {
     { name: "Railway Group D Preparation",  examCategory: "railway" as const, durationMonths: 4,  defaultFee: 10000 },
   ];
 
-  const courses: { id: string; name: string; examCategory: string }[] = [];
+  const courses: { id: string; name: string }[] = [];
   for (const c of courseData) {
-    const existing = await prisma.course.findFirst({ where: { name: c.name } });
+    const existing = await prisma.course.findFirst({ where: { tenantId, name: c.name } });
     if (!existing) {
+      const categoryId = examCategoryIdByKey(c.examCategory);
       const course = await prisma.course.create({
-        data: { ...c, defaultFee: c.defaultFee },
+        data: {
+          tenantId,
+          name:           c.name,
+          durationMonths: c.durationMonths,
+          defaultFee:     c.defaultFee,
+          examCategories: categoryId ? { create: [{ examCategoryId: categoryId }] } : undefined,
+        },
       });
       courses.push(course);
     } else {
@@ -71,9 +97,9 @@ async function seedSampleData(centerId: string) {
 
   for (const f of facultyData) {
     await prisma.faculty.upsert({
-      where:  { employeeCode: f.employeeCode },
+      where:  { tenantId_employeeCode: { tenantId, employeeCode: f.employeeCode } },
       update: {},
-      create: { ...f, centerId },
+      create: { ...f, tenantId, centerId },
     });
   }
   console.log(`Ensured ${facultyData.length} faculty members`);
@@ -100,10 +126,11 @@ async function seedSampleData(centerId: string) {
 
   const batches: { id: string }[] = [];
   for (const b of batchData) {
-    const existing = await prisma.batch.findFirst({ where: { name: b.name } });
+    const existing = await prisma.batch.findFirst({ where: { tenantId, name: b.name } });
     if (!existing) {
       const batch = await prisma.batch.create({
         data: {
+          tenantId,
           name:      b.name,
           courseId:  courses[b.courseIdx].id,
           capacity:  b.capacity,
@@ -138,10 +165,11 @@ async function seedSampleData(centerId: string) {
 
   const students: { id: string }[] = [];
   for (const s of studentData) {
-    const existing = await prisma.student.findUnique({ where: { studentCode: s.studentCode } });
+    const existing = await prisma.student.findUnique({ where: { tenantId_studentCode: { tenantId, studentCode: s.studentCode } } });
     if (!existing) {
       const student = await prisma.student.create({
         data: {
+          tenantId,
           studentCode:      s.studentCode,
           fullName:         s.fullName,
           phone:            s.phone,
@@ -202,16 +230,48 @@ async function seedSampleData(centerId: string) {
 
   let leadCount = 0;
   for (const l of leadData) {
-    const existing = await prisma.lead.findFirst({ where: { phone: l.phone } });
+    const existing = await prisma.lead.findFirst({ where: { tenantId, phone: l.phone } });
     if (!existing) {
-      await prisma.lead.create({ data: { ...l, centerId } });
+      const targetExamId = examCategoryIdByKey(l.targetExam);
+      if (!targetExamId) continue;
+      await prisma.lead.create({
+        data: {
+          tenantId,
+          centerId,
+          name:   l.name,
+          phone:  l.phone,
+          source: l.source,
+          status: l.status,
+          targetExamId,
+        },
+      });
       leadCount++;
     }
   }
   console.log(`Created ${leadCount} leads`);
 }
 
+async function seedExamCategories(tenantId: string) {
+  const EXAM_CATEGORIES = [
+    { key: "ssc",        label: "SSC",        color: "#8B1E3F", sortOrder: 1 },
+    { key: "banking",    label: "Banking",    color: "#2563A8", sortOrder: 2 },
+    { key: "railway",    label: "Railway",    color: "#2CA6A4", sortOrder: 3 },
+    { key: "foundation", label: "Foundation", color: "#5B2D8E", sortOrder: 4 },
+  ];
+  for (const ec of EXAM_CATEGORIES) {
+    await prisma.examCategory.upsert({
+      where:  { tenantId_key: { tenantId, key: ec.key } },
+      update: { label: ec.label, color: ec.color, sortOrder: ec.sortOrder },
+      create: { ...ec, tenantId },
+    });
+  }
+  console.log(`Ensured ${EXAM_CATEGORIES.length} exam categories`);
+}
+
 async function main() {
+  const tenant = await seedMainTenant();
+  await seedExamCategories(tenant.id);
+
   const subjects: { name: string; examCategory: "ssc" | "banking" | "railway" | null }[] = [
     { name: "Quantitative Aptitude",                    examCategory: null },
     { name: "Reasoning / General Intelligence",         examCategory: null },
@@ -230,15 +290,27 @@ async function main() {
     { name: "Technical Aptitude",                       examCategory: "railway" },
   ];
 
+  const examCategories = await prisma.examCategory.findMany({ where: { tenantId: tenant.id } });
+  const examCategoryIdByKey = (key: string | null) =>
+    key ? examCategories.find((ec) => ec.key === key)?.id ?? null : null;
+
   for (const s of subjects) {
-    await prisma.subject.upsert({
-      where:  { name: s.name },
-      update: { examCategory: s.examCategory },
-      create: { name: s.name, examCategory: s.examCategory },
+    const subject = await prisma.subject.upsert({
+      where:  { tenantId_name: { tenantId: tenant.id, name: s.name } },
+      update: {},
+      create: { tenantId: tenant.id, name: s.name },
     });
+    const categoryId = examCategoryIdByKey(s.examCategory);
+    if (categoryId) {
+      await prisma.subjectExamCategory.upsert({
+        where:  { subjectId_examCategoryId: { subjectId: subject.id, examCategoryId: categoryId } },
+        update: {},
+        create: { subjectId: subject.id, examCategoryId: categoryId },
+      });
+    }
   }
   await prisma.subject.deleteMany({
-    where: { name: { in: ["Quant", "Reasoning", "English", "GA/GS"] } },
+    where: { tenantId: tenant.id, name: { in: ["Quant", "Reasoning", "English", "GA/GS"] } },
   });
   console.log(`Seeded ${subjects.length} subjects`);
 
@@ -248,18 +320,19 @@ async function main() {
   if (!existingAdmin) {
     await prisma.staff.create({
       data: {
+        tenantId:     tenant.id,
         fullName:     "Admin",
         phone:        "9999999999",
         email:        adminEmail,
-        role:         "admin",
+        roles:        ["admin"],
         passwordHash: await bcrypt.hash(adminPassword, 10),
       },
     });
     console.log(`Seeded admin: ${adminEmail} / ${adminPassword}`);
   }
 
-  const center = await seedMainCenter();
-  await seedSampleData(center.id);
+  const center = await seedMainCenter(tenant.id);
+  await seedSampleData(tenant.id, center.id);
 }
 
 main()

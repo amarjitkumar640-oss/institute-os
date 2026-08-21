@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, StatusBar, ScrollView, ActivityIndicator,
+  TextInput, ScrollView, ActivityIndicator, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -13,31 +13,31 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ListErrorState } from "../../components/ui/ListErrorState";
 import type { RootStackParamList } from "../../navigation/types";
 import { ms, fs } from "../../utils/responsive";
-import { listCourses, deleteCourse, type CourseItem, type ExamCategory } from "../../api/courses";
+import { listCourses, deleteCourse, type CourseItem } from "../../api/courses";
+import { listExamCategories, type ExamCategoryItem } from "../../api/examCategories";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { AVATAR_SIZE, AVATAR_RADIUS, getAvatarFill } from "../../components/ui/avatarStyle";
+import { T } from "../../components/ui/typography";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Props = NativeStackScreenProps<RootStackParamList, "CourseList">;
 
-const CATEGORY_META: Record<ExamCategory, { label: string; code: string; color: string }> = {
-  ssc:        { label: "SSC",        code: "SSC",  color: C.primary },
-  banking:    { label: "Banking",    code: "BANK", color: C.blue },
-  railway:    { label: "Railway",    code: "RAIL", color: C.accent },
-  foundation: { label: "Foundation", code: "FOUND", color: "#7B3FA0" },
-};
+const GENERAL_META = { label: "General", code: "ALL", color: C.muted };
 
-type Filter = "All" | "SSC" | "Banking" | "Railway" | "Foundation";
-const FILTERS: Filter[] = ["All", "SSC", "Banking", "Railway", "Foundation"];
+function courseMeta(course: CourseItem): { label: string; code: string; color: string } {
+  if (course.examCategories.length === 0) return GENERAL_META;
+  const [first, ...rest] = course.examCategories;
+  return {
+    label: rest.length ? `${first.label} +${rest.length}` : first.label,
+    code:  first.key.slice(0, 4).toUpperCase(),
+    color: first.color,
+  };
+}
 
-const FILTER_TO_CATEGORY: Record<Filter, ExamCategory | undefined> = {
-  All:        undefined,
-  SSC:        "ssc",
-  Banking:    "banking",
-  Railway:    "railway",
-  Foundation: "foundation",
-};
+type Filter = "All" | string; // "All" or an ExamCategoryItem id
 
 // ─── Course Card ─────────────────────────────────────────────────────────────
 
@@ -55,7 +55,9 @@ function CourseCard({
   onFeeStructure: () => void;
 }) {
   const { showAlert } = useAlert();
-  const meta = CATEGORY_META[course.examCategory];
+  const cs = useThemedStyles(makeCsStyles);
+  const meta = courseMeta(course);
+  const fill = getAvatarFill(meta.color);
   const isActive = course.activeBatches > 0;
   const locked = course.batchCount > 0;
 
@@ -79,18 +81,39 @@ function CourseCard({
     <View style={cs.card}>
       {/* Top row */}
       <View style={cs.cardTop}>
-        <View style={[cs.iconBox, { backgroundColor: meta.color }]}>
-          <Text style={cs.iconCode}>{meta.code}</Text>
+        <View style={[cs.iconBox, { backgroundColor: fill.backgroundColor, borderWidth: fill.borderWidth, borderColor: fill.borderColor }]}>
+          <Text style={[cs.iconCode, { color: fill.color }]}>{meta.code}</Text>
         </View>
         <View style={cs.cardInfo}>
           <Text style={cs.courseName} numberOfLines={2}>{course.name}</Text>
-          <Text style={cs.categoryT}>{meta.label} · {course.durationMonths} months</Text>
+          <View style={cs.categoryRow}>
+            <Text style={cs.categoryT}>{meta.label} · {course.durationMonths} months</Text>
+            <View style={[cs.statusBadge, { backgroundColor: isActive ? C.greenBg : C.inputBg }]}>
+              <View style={[cs.statusDot, { backgroundColor: isActive ? C.green : C.placeholder }]} />
+              <Text style={[cs.statusT, { color: isActive ? C.green : C.muted }]}>
+                {isActive ? "Active" : "No batch"}
+              </Text>
+            </View>
+          </View>
         </View>
-        <View style={[cs.statusBadge, { backgroundColor: isActive ? "#E7F7EF" : "#F4F4F4" }]}>
-          <View style={[cs.statusDot, { backgroundColor: isActive ? "#1B9C63" : "#B0A9AC" }]} />
-          <Text style={[cs.statusT, { color: isActive ? "#1B9C63" : "#8A7F82" }]}>
-            {isActive ? "Active" : "No batch"}
-          </Text>
+        <View style={cs.topActions}>
+          <TouchableOpacity
+            style={[cs.iconActionBtn, cs.editBtn, locked && cs.actionBtnLocked]}
+            onPress={handleEdit}
+            activeOpacity={locked ? 0.6 : 0.75}
+          >
+            <Ionicons name="pencil-outline" size={ms(15)} color={locked ? C.placeholder : C.blue} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[cs.iconActionBtn, cs.deleteBtn, locked && cs.actionBtnLocked]}
+            onPress={handleDelete}
+            activeOpacity={locked ? 0.6 : 0.75}
+            disabled={deleting}
+          >
+            {deleting
+              ? <ActivityIndicator size="small" color={C.red} />
+              : <Ionicons name="trash-outline" size={ms(15)} color={locked ? C.placeholder : C.red} />}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -117,7 +140,7 @@ function CourseCard({
       <View style={cs.divider} />
       {locked && (
         <View style={cs.lockHint}>
-          <Ionicons name="lock-closed-outline" size={ms(11)} color="#B0A9AC" />
+          <Ionicons name="lock-closed-outline" size={ms(11)} color={C.placeholder} />
           <Text style={cs.lockHintT}>{course.batchCount} batch{course.batchCount > 1 ? "es" : ""} linked — edit/delete disabled</Text>
         </View>
       )}
@@ -129,47 +152,8 @@ function CourseCard({
             onPress={onFeeStructure}
             activeOpacity={0.75}
           >
-            <Ionicons name="cash-outline" size={ms(13)} color="#1B9C63" />
-            <Text style={[cs.actionBtnT, { color: "#1B9C63" }]}>Fee Structure</Text>
-          </TouchableOpacity>
-
-          <View style={cs.actionDivider} />
-
-          {/* Edit button */}
-          <TouchableOpacity
-            style={[cs.actionBtn, cs.editBtn, locked && cs.actionBtnLocked]}
-            onPress={handleEdit}
-            activeOpacity={locked ? 0.6 : 0.75}
-          >
-            <Ionicons
-              name="pencil-outline"
-              size={ms(13)}
-              color={locked ? "#B0A9AC" : "#2563A8"}
-            />
-            <Text style={[cs.actionBtnT, { color: locked ? "#B0A9AC" : "#2563A8" }]}>Edit</Text>
-          </TouchableOpacity>
-
-          <View style={cs.actionDivider} />
-
-          {/* Delete button */}
-          <TouchableOpacity
-            style={[cs.actionBtn, cs.deleteBtn, locked && cs.actionBtnLocked]}
-            onPress={handleDelete}
-            activeOpacity={locked ? 0.6 : 0.75}
-            disabled={deleting}
-          >
-            {deleting ? (
-              <ActivityIndicator size="small" color="#C0392B" />
-            ) : (
-              <>
-                <Ionicons
-                  name="trash-outline"
-                  size={ms(13)}
-                  color={locked ? "#B0A9AC" : "#C0392B"}
-                />
-                <Text style={[cs.actionBtnT, { color: locked ? "#B0A9AC" : "#C0392B" }]}>Delete</Text>
-              </>
-            )}
+            <Ionicons name="cash-outline" size={ms(13)} color={C.green} />
+            <Text style={[cs.actionBtnT, { color: C.green }]}>Fee Structure</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -180,10 +164,11 @@ function CourseCard({
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
 function CourseEmpty({ search }: { search: string }) {
+  const colors = useThemeColors();
   return (
     <EmptyState
       scene="courses"
-      color="#2CA6A4"
+      color={colors.accent}
       title={search ? "No courses match your search" : "No courses yet"}
       subtitle={search ? "Try a different keyword" : "Create your first course to get started"}
     />
@@ -193,6 +178,8 @@ function CourseEmpty({ search }: { search: string }) {
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export function CourseListScreen({ navigation }: Props) {
+  const colors = useThemeColors();
+  const cs = useThemedStyles(makeCsStyles);
   const nav = useNavigation<Nav>();
   const { showAlert, showConfirm } = useAlert();
   const [courses, setCourses] = useState<CourseItem[]>([]);
@@ -203,6 +190,11 @@ export function CourseListScreen({ navigation }: Props) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<ExamCategoryItem[]>([]);
+
+  useEffect(() => {
+    listExamCategories().then(setCategories).catch(() => {});
+  }, []);
 
   const fetchCourses = useCallback(async (q: string, f: Filter, silent = false) => {
     if (!silent) setLoading(true);
@@ -210,7 +202,7 @@ export function CourseListScreen({ navigation }: Props) {
     try {
       const result = await listCourses({
         search: q || undefined,
-        examCategory: FILTER_TO_CATEGORY[f],
+        examCategoryId: f === "All" ? undefined : f,
         limit: 100,
       });
       setCourses(result.data);
@@ -305,7 +297,7 @@ export function CourseListScreen({ navigation }: Props) {
           <TextInput
             style={cs.searchInput}
             placeholder="Search courses…"
-            placeholderTextColor="#C7BAB4"
+            placeholderTextColor={C.placeholder}
             value={search}
             onChangeText={setSearch}
           />
@@ -318,22 +310,21 @@ export function CourseListScreen({ navigation }: Props) {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={cs.filterScroll} contentContainerStyle={cs.filterRow}>
-        {FILTERS.map((f) => (
-          <TouchableOpacity key={f} style={[cs.chip, filter === f && cs.chipOn]} onPress={() => setFilter(f)}>
-            <Text style={[cs.chipT, filter === f && cs.chipTOn]}>{f}</Text>
+        <TouchableOpacity style={[cs.chip, filter === "All" && cs.chipOn]} onPress={() => setFilter("All")}>
+          <Text style={[cs.chipT, filter === "All" && cs.chipTOn]}>All</Text>
+        </TouchableOpacity>
+        {categories.map((cat) => (
+          <TouchableOpacity key={cat.id} style={[cs.chip, filter === cat.id && cs.chipOn]} onPress={() => setFilter(cat.id)}>
+            <Text style={[cs.chipT, filter === cat.id && cs.chipTOn]}>{cat.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      {!loading && !error && (
-        <Text style={cs.resultT}>Showing {courses.length} of {total} courses</Text>
-      )}
     </View>
   );
 
   return (
     <SafeAreaView style={cs.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScreenHeader
         title="Courses"
         count={total}
@@ -360,15 +351,14 @@ export function CourseListScreen({ navigation }: Props) {
           ListHeaderComponent={ListHeader}
           contentContainerStyle={cs.listContent}
           showsVerticalScrollIndicator={false}
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
           ListEmptyComponent={!loading && !error ? <CourseEmpty search={search} /> : null}
         />
 
         {/* Centered loader overlay */}
         {loading && (
           <View style={cs.loaderOverlay}>
-            <ActivityIndicator size="large" color={C.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         )}
 
@@ -392,67 +382,68 @@ export function CourseListScreen({ navigation }: Props) {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const cs = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#8B1E3F" },
-  content: { flex: 1, backgroundColor: "#FFFBF0" },
-  banner: { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
+const makeCsStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.screenBg },
+  content: { flex: 1, backgroundColor: colors.screenBg },
+  banner: { flexDirection: "row", backgroundColor: C.card, marginHorizontal: ms(16), marginTop: ms(8), borderRadius: ms(14), paddingVertical: ms(10), paddingHorizontal: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(6), elevation: 2 },
   bannerItem: { flex: 1, alignItems: "center" },
-  bannerNum: { fontSize: fs(18), fontWeight: "800", color: "#8B1E3F" },
-  bannerLbl: { fontSize: fs(10), color: "#8A7F82", fontWeight: "600", marginTop: ms(1) },
-  bannerDiv: { width: 1, backgroundColor: "#F0EDE8", marginHorizontal: ms(6) },
-  searchWrap: { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(6) },
-  searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(11), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
-  searchInput: { flex: 1, fontSize: fs(13.5), color: "#2B1B1F", padding: 0, includeFontPadding: false },
-  filterScroll: { height: ms(44), flexShrink: 0 },
-  filterRow: { paddingHorizontal: ms(16), paddingRight: ms(16), alignItems: "center", flexDirection: "row", height: ms(44) },
-  chip: { paddingHorizontal: ms(12), paddingVertical: ms(6), borderRadius: ms(20), backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EDE8E3", marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  chipOn: { backgroundColor: "#8B1E3F", borderColor: "#8B1E3F" },
-  chipT: { fontSize: fs(12), fontWeight: "600", color: "#8A7F82", includeFontPadding: false, lineHeight: fs(16) },
+  bannerNum: { ...T.cardTitle, color: colors.primary },
+  bannerLbl: { ...T.caption, color: C.muted, marginTop: ms(1) },
+  bannerDiv: { width: 1, backgroundColor: C.border, marginHorizontal: ms(6) },
+  searchWrap: { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(2) },
+  searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(10), shadowColor: C.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 2, gap: ms(8) },
+  searchInput: { flex: 1, ...T.body, color: C.text, padding: 0, includeFontPadding: false },
+  filterScroll: { height: ms(38), flexGrow: 0, flexShrink: 0, marginBottom: ms(12) },
+  filterRow: { paddingHorizontal: ms(16), alignItems: "center", flexDirection: "row", height: ms(38) },
+  chip: { paddingHorizontal: ms(12), paddingVertical: ms(5), borderRadius: ms(20), backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginRight: ms(8), flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipT: { ...T.chipText, color: C.muted, includeFontPadding: false },
   chipTOn: { color: "#FFFFFF" },
-  resultT: { paddingHorizontal: ms(16), paddingBottom: ms(4), fontSize: fs(11.5), color: "#8A7F82" },
   listContent: { paddingBottom: ms(96) },
-  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(12), backgroundColor: "rgba(255,251,240,0.92)" },
+  loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", gap: ms(12), backgroundColor: colors.screenBg },
 
   fab: {
     position: "absolute", bottom: ms(24), right: ms(20),
     width: ms(56), height: ms(56), borderRadius: ms(28),
-    backgroundColor: "#8B1E3F",
+    backgroundColor: colors.primary,
     justifyContent: "center", alignItems: "center",
-    shadowColor: "#8B1E3F", shadowOffset: { width: 0, height: ms(6) },
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(6) },
     shadowOpacity: 0.45, shadowRadius: ms(12), elevation: 10,
   },
 
   // Card
-  card: { backgroundColor: "#FFFFFF", borderRadius: ms(16), padding: ms(14), marginHorizontal: ms(16), marginBottom: ms(12), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
+  card: { backgroundColor: C.card, borderRadius: ms(16), padding: ms(14), marginHorizontal: ms(16), marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: ms(8), elevation: 3 },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: ms(10), marginBottom: ms(10) },
-  iconBox: { width: ms(46), height: ms(46), borderRadius: ms(12), justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  iconCode: { fontSize: fs(10), fontWeight: "800", color: "#fff", letterSpacing: 0.5, includeFontPadding: false },
+  iconBox: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_RADIUS, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  iconCode: { ...T.badgeText, letterSpacing: 0.5, includeFontPadding: false },
   cardInfo: { flex: 1, minWidth: 0 },
-  courseName: { fontSize: fs(14), fontWeight: "700", color: "#2B1B1F", marginBottom: ms(3) },
-  categoryT: { fontSize: fs(11), color: "#8A7F82" },
+  courseName: { ...T.listItemTitle, color: C.text, marginBottom: ms(3) },
+  categoryRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: ms(6) },
+  categoryT: { ...T.caption, color: C.muted, flexShrink: 1 },
   statusBadge: { flexDirection: "row", alignItems: "center", borderRadius: ms(20), paddingHorizontal: ms(8), paddingVertical: ms(4), gap: ms(4), flexShrink: 0 },
   statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3) },
-  statusT: { fontSize: fs(10.5), fontWeight: "700" },
-  divider: { height: 1, backgroundColor: "#F0EDE8", marginBottom: ms(10) },
+  statusT: { ...T.badgeText },
+  topActions: { flexDirection: "row", alignItems: "center", gap: ms(6), flexShrink: 0 },
+  iconActionBtn: { width: ms(30), height: ms(30), borderRadius: ms(9), justifyContent: "center", alignItems: "center" },
+  divider: { height: 1, backgroundColor: C.border, marginBottom: ms(10) },
   statsRow: { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
   statItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(4) },
-  statLabel: { fontSize: fs(11), color: "#2B1B1F", fontWeight: "600" },
-  statDivider: { width: 1, height: ms(16), backgroundColor: "#F0EDE8" },
+  statLabel: { ...T.caption, color: C.text },
+  statDivider: { width: 1, height: ms(16), backgroundColor: C.border },
 
   // Action row
   lockHint:   { flexDirection: "row", alignItems: "center", gap: ms(5), paddingHorizontal: ms(2), paddingBottom: ms(8) },
-  lockHintT:  { fontSize: fs(10.5), color: "#B0A9AC", fontWeight: "600" },
+  lockHintT:  { ...T.caption, color: C.placeholder },
   actionRow:  { flexDirection: "row", alignItems: "center" },
   actionBtns: { flexDirection: "row", alignItems: "center", flex: 1 },
   actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingHorizontal: ms(8), paddingVertical: ms(7), borderRadius: ms(8) },
-  feeBtn:   { backgroundColor: "#E7F7EF" },
+  feeBtn:   { backgroundColor: C.greenBg },
   editBtn:  { backgroundColor: "#EEF3FB" },
   deleteBtn:{ backgroundColor: "#FEF0EE" },
-  actionBtnLocked: { backgroundColor: "#F5F5F5", opacity: 0.7 },
-  actionBtnT: { fontSize: fs(12), fontWeight: "700" },
-  actionDivider: { width: ms(8) },
+  actionBtnLocked: { backgroundColor: C.inputBg, opacity: 0.7 },
+  actionBtnT: { ...T.chipText },
 
   // Empty / error
   empty: { alignItems: "center", paddingTop: ms(60), paddingHorizontal: ms(16), gap: ms(12) },
-  emptyT: { fontSize: fs(14), color: "#B0A9AC", textAlign: "center" },
+  emptyT: { ...T.body, color: C.placeholder, textAlign: "center" },
 });

@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, StatusBar, FlatList,
+  ActivityIndicator, TextInput, FlatList,
 } from "react-native";
-import { BottomSheet } from "../../components/ui/BottomSheet";
+import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
+import { T } from "../../components/ui/typography";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,10 +14,15 @@ import {
   listSessions, patchSession,
   type ClassSession, type SessionStatus,
   fmtTimeRange,
+  getSessionAttendance, setSessionAttendance as apiSetSessionAttendance,
+  type SessionAttendanceRow, type AttendanceStatus,
 } from "../../api/classSchedule";
 import { listFaculty, type FacultyItem } from "../../api/faculty";
+import { listSubjects, type SubjectItem } from "../../api/subjects";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SessionDetail">;
@@ -28,9 +34,28 @@ function fmtFullDate(iso: string) {
   });
 }
 
+// Mirrors the API's own sessionHasEnded() check in schedule.service.ts — a
+// session can't be marked completed until it's actually ended (same-day
+// session before its end time, or any future day). This is a UX nicety to
+// hide the button up front; the API is the real enforcement and uses the
+// server's clock, not the device's, so the two can disagree right at the
+// boundary — acceptable, matching the server-side check's own accepted
+// midnight-wraparound imprecision.
+function sessionHasEnded(scheduledDateIso: string, endTime: string): boolean {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const scheduledDateStr = scheduledDateIso.slice(0, 10);
+  if (scheduledDateStr < todayStr) return true;
+  if (scheduledDateStr > todayStr) return false;
+  const nowHHMM = now.toTimeString().slice(0, 5);
+  return nowHHMM >= endTime;
+}
+
 // ── Faculty avatar helpers ────────────────────────────────────────────────────
 
-const AVATAR_COLORS = [C.primary, C.blue, C.green, C.accent, C.purple, C.orange];
+function avatarColors(colors: ThemeColors) {
+  return [colors.primary, C.blue, C.green, colors.accent, C.purple, C.orange];
+}
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -39,16 +64,17 @@ function getInitials(name: string) {
     : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function avatarColor(name: string) {
+function avatarColor(name: string, colors: ThemeColors) {
   let n = 0;
   for (let i = 0; i < name.length; i++) n += name.charCodeAt(i);
-  return AVATAR_COLORS[n % AVATAR_COLORS.length];
+  const palette = avatarColors(colors);
+  return palette[n % palette.length];
 }
 
 const STATUS_META = {
   scheduled: { label: "Scheduled", color: C.blue,  bg: "#EEF4FF", icon: "calendar-outline"         },
-  completed: { label: "Completed", color: C.green,  bg: "#EAF7F1", icon: "checkmark-circle-outline"  },
-  cancelled: { label: "Cancelled", color: C.red,    bg: "#FEF0EE", icon: "close-circle-outline"      },
+  completed: { label: "Completed", color: C.green,  bg: C.greenBg, icon: "checkmark-circle-outline"  },
+  cancelled: { label: "Cancelled", color: C.red,    bg: C.redBg, icon: "close-circle-outline"      },
 } as const;
 
 const TYPE_META = {
@@ -58,6 +84,7 @@ const TYPE_META = {
 } as const;
 
 function InfoRow({ icon, label, value, color = C.muted }: { icon: string; label: string; value: string; color?: string }) {
+  const sd = useThemedStyles(makeSdStyles);
   return (
     <View style={sd.infoRow}>
       <View style={[sd.infoIcon, { backgroundColor: color + "18" }]}>
@@ -72,6 +99,9 @@ function InfoRow({ icon, label, value, color = C.muted }: { icon: string; label:
 }
 
 export function SessionDetailScreen({ route, navigation }: Props) {
+  const colors = useThemeColors();
+  const sd = useThemedStyles(makeSdStyles);
+  const { staff } = useAuth();
   const { sessionId, batchId, batchName } = route.params;
 
   const [session, setSession]             = useState<ClassSession | null>(null);
@@ -87,6 +117,19 @@ export function SessionDetailScreen({ route, navigation }: Props) {
   const [facultySearch, setFacultySearch]         = useState("");
   const [facultyPickerLoading, setFacultyPickerLoading] = useState(false);
 
+  // Subject picker
+  const [showSubjectPicker, setShowSubjectPicker] = useState(false);
+  const [subjectList, setSubjectList]             = useState<SubjectItem[]>([]);
+  const [subjectSearch, setSubjectSearch]         = useState("");
+  const [subjectPickerLoading, setSubjectPickerLoading] = useState(false);
+
+  // Attendance
+  const [roster, setRoster]                       = useState<SessionAttendanceRow[] | null>(null);
+  const [showAttendanceSheet, setShowAttendanceSheet] = useState(false);
+  const [pendingMarks, setPendingMarks]           = useState<Record<string, AttendanceStatus>>({});
+  const [savingAttendance, setSavingAttendance]   = useState(false);
+  const [attendanceError, setAttendanceError]     = useState<string | null>(null);
+
   useEffect(() => {
     if (!showFacultyPicker) return;
     setFacultyPickerLoading(true);
@@ -96,6 +139,18 @@ export function SessionDetailScreen({ route, navigation }: Props) {
       .finally(() => setFacultyPickerLoading(false));
   }, [showFacultyPicker]);
 
+  useEffect(() => {
+    if (!showSubjectPicker) return;
+    setSubjectPickerLoading(true);
+    // Unfiltered, matching ManageSlotModal.tsx's precedent for slot-level
+    // subject picking — this codebase doesn't restrict subject choice to
+    // the batch's own course.
+    listSubjects()
+      .then(setSubjectList)
+      .catch(() => {})
+      .finally(() => setSubjectPickerLoading(false));
+  }, [showSubjectPicker]);
+
   const load = useCallback(async () => {
     try {
       const today = new Date();
@@ -103,8 +158,15 @@ export function SessionDetailScreen({ route, navigation }: Props) {
       const sixAhead = new Date(today); sixAhead.setMonth(today.getMonth() + 6);
       const toStr = (d: Date) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const all   = await listSessions(batchId, { from: toStr(sixAgo), to: toStr(sixAhead) });
+      const [all, rosterData] = await Promise.all([
+        listSessions(batchId, { from: toStr(sixAgo), to: toStr(sixAhead) }),
+        // Don't fail the whole screen over this — e.g. a teacher viewing a
+        // session that isn't theirs gets a 403 here, but should still see
+        // everything else on the screen.
+        getSessionAttendance(sessionId).catch(() => null),
+      ]);
       setSession(all.find((s) => s.id === sessionId) ?? null);
+      setRoster(rosterData);
     } catch { setError("Failed to load session"); }
     finally { setLoading(false); }
   }, [batchId, sessionId]);
@@ -128,9 +190,8 @@ export function SessionDetailScreen({ route, navigation }: Props) {
   if (loading) {
     return (
       <SafeAreaView style={sd.safe} edges={["bottom"]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <ScreenHeader title="Session Detail" onBack={() => navigation.goBack()} />
-        <View style={sd.center}><ActivityIndicator size="large" color={C.primary} /></View>
+        <View style={sd.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       </SafeAreaView>
     );
   }
@@ -138,7 +199,6 @@ export function SessionDetailScreen({ route, navigation }: Props) {
   if (!session) {
     return (
       <SafeAreaView style={sd.safe} edges={["bottom"]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <ScreenHeader title="Session Detail" onBack={() => navigation.goBack()} />
         <View style={sd.center}>
           <View style={sd.emptyIllus}>
@@ -152,15 +212,33 @@ export function SessionDetailScreen({ route, navigation }: Props) {
 
   const sm = STATUS_META[session.status];
   const tm = TYPE_META[session.type];
-  const canComplete = session.status === "scheduled";
-  const canCancel   = session.status === "scheduled";
+  const isScheduled = session.status === "scheduled";
+  // Cancelling and reassigning subject/faculty are a step above the ordinary
+  // edit a teacher can otherwise make here (marking their own ended session
+  // complete) — only admin/frontdesk may cancel or reassign. Matches the
+  // API's own checks.
+  const isAdminOrFrontdesk = staff?.activeRole === "admin" || staff?.activeRole === "frontdesk";
+  const canCancel   = isScheduled && isAdminOrFrontdesk;
+  const canReassign = isScheduled && isAdminOrFrontdesk;
+  // Marking attendance is admin/frontdesk-only — matches the API's own
+  // check. Not date/status-gated like the two above (attendance can be
+  // recorded for a completed session too).
+  const canMarkAttendance = isAdminOrFrontdesk;
+  // Cancelling a not-yet-ended session is still fine (canCancel above) —
+  // only "completed" requires the session to have actually ended.
+  const canMarkComplete = isScheduled && sessionHasEnded(session.scheduledDate, session.endTime);
   // Fall back to slot's subject/faculty for sessions generated before assignment was set
   const subject = session.subject ?? session.slot?.subject ?? null;
   const faculty = session.faculty ?? session.slot?.faculty ?? null;
+  // Whether a Subject/Faculty row is actually rendered above the next one —
+  // used purely to decide whether that next row needs a leading divider. A
+  // teacher with no subject/faculty set sees no row at all here (nothing to
+  // show, nothing they can do about it) rather than an inert "Assign" prompt.
+  const subjectRowShown = !!subject || canReassign;
+  const facultyRowShown = !!faculty || canReassign;
 
   return (
     <SafeAreaView style={sd.safe} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScreenHeader
         title="Session Detail"
@@ -168,13 +246,13 @@ export function SessionDetailScreen({ route, navigation }: Props) {
       />
 
       <ScrollView
-        style={{ flex: 1, backgroundColor: C.bg }}
+        style={{ flex: 1, backgroundColor: colors.screenBg }}
         contentContainerStyle={sd.body}
         showsVerticalScrollIndicator={false}
       >
         {/* Date + status card */}
         <View style={sd.dateCard}>
-          <View style={[sd.statusStripe, { backgroundColor: sm.color }]} />
+          <View style={[sd.statusStripe, { backgroundColor: colors.primary }]} />
           <View style={sd.dateBody}>
             <Text style={sd.batchName} numberOfLines={1}>{batchName}</Text>
             <Text style={sd.fullDate}>{fmtFullDate(session.scheduledDate)}</Text>
@@ -192,21 +270,55 @@ export function SessionDetailScreen({ route, navigation }: Props) {
           </View>
         </View>
 
-        {/* Details card */}
-        {(subject || faculty || session.room || session.slot || canComplete) && (
+        {/* Details card — uses subjectRowShown/facultyRowShown (not the raw
+            subject/faculty/isScheduled) so this card doesn't render empty
+            for a teacher, who sees no row at all when unset (no reassign
+            permission, nothing useful to show). */}
+        {(subjectRowShown || facultyRowShown || session.room || session.slot) && (
           <View style={sd.card}>
-            {subject && (
-              <InfoRow icon="book-outline" label="Subject" value={subject.name} color={C.blue} />
-            )}
+            {/* Subject row — tappable to change for admin/frontdesk only */}
+            {subject ? (
+              <TouchableOpacity
+                style={sd.infoRow}
+                onPress={() => canReassign && setShowSubjectPicker(true)}
+                activeOpacity={canReassign ? 0.7 : 1}
+              >
+                <View style={[sd.infoIcon, { backgroundColor: C.blue + "18" }]}>
+                  <Ionicons name="book-outline" size={ms(14)} color={C.blue} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={sd.infoLabel}>Subject</Text>
+                  <Text style={sd.infoValue}>{subject.name}</Text>
+                </View>
+                {canReassign && (
+                  <View style={sd.changeChip}>
+                    <Text style={sd.changeChipT}>Change</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ) : canReassign ? (
+              <TouchableOpacity style={sd.infoRow} onPress={() => setShowSubjectPicker(true)} activeOpacity={0.7}>
+                <View style={[sd.infoIcon, { backgroundColor: C.muted + "18" }]}>
+                  <Ionicons name="book-outline" size={ms(14)} color={C.muted} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={sd.infoLabel}>Subject</Text>
+                  <Text style={[sd.infoValue, { color: C.muted }]}>Not assigned</Text>
+                </View>
+                <View style={sd.changeChip}>
+                  <Text style={sd.changeChipT}>Assign</Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
 
-            {/* Faculty row — tappable to change when session is scheduled */}
+            {/* Faculty row — tappable to change for admin/frontdesk only */}
             {faculty ? (
               <>
-                {subject && <View style={sd.divider} />}
+                {subjectRowShown && <View style={sd.divider} />}
                 <TouchableOpacity
                   style={sd.infoRow}
-                  onPress={() => canComplete && setShowFacultyPicker(true)}
-                  activeOpacity={canComplete ? 0.7 : 1}
+                  onPress={() => canReassign && setShowFacultyPicker(true)}
+                  activeOpacity={canReassign ? 0.7 : 1}
                 >
                   <View style={[sd.infoIcon, { backgroundColor: C.green + "18" }]}>
                     <Ionicons name="person-outline" size={ms(14)} color={C.green} />
@@ -215,16 +327,16 @@ export function SessionDetailScreen({ route, navigation }: Props) {
                     <Text style={sd.infoLabel}>Faculty</Text>
                     <Text style={sd.infoValue}>{faculty.fullName}</Text>
                   </View>
-                  {canComplete && (
+                  {canReassign && (
                     <View style={sd.changeChip}>
                       <Text style={sd.changeChipT}>Change</Text>
                     </View>
                   )}
                 </TouchableOpacity>
               </>
-            ) : canComplete ? (
+            ) : canReassign ? (
               <>
-                {subject && <View style={sd.divider} />}
+                {subjectRowShown && <View style={sd.divider} />}
                 <TouchableOpacity style={sd.infoRow} onPress={() => setShowFacultyPicker(true)} activeOpacity={0.7}>
                   <View style={[sd.infoIcon, { backgroundColor: C.muted + "18" }]}>
                     <Ionicons name="person-add-outline" size={ms(14)} color={C.muted} />
@@ -242,16 +354,56 @@ export function SessionDetailScreen({ route, navigation }: Props) {
 
             {session.room && (
               <>
-                {(subject || faculty) && <View style={sd.divider} />}
+                {(subjectRowShown || facultyRowShown) && <View style={sd.divider} />}
                 <InfoRow icon="location-outline" label="Room" value={session.room} color={C.orange} />
               </>
             )}
             {session.slot && (
               <>
-                {(subject || faculty || session.room) && <View style={sd.divider} />}
-                <InfoRow icon="repeat-outline" label="From template" value={`${session.slot.dayOfWeek} recurring slot`} color={C.primary} />
+                {(subjectRowShown || facultyRowShown || session.room) && <View style={sd.divider} />}
+                <InfoRow icon="repeat-outline" label="From template" value={`${session.slot.dayOfWeek} recurring slot`} color={colors.primary} />
               </>
             )}
+          </View>
+        )}
+
+        {/* Attendance — admin/frontdesk-only, matching the API's own check
+            (marking is restricted there; the card is hidden entirely here
+            rather than shown read-only, same treatment as the Subject/Faculty
+            rows above). roster is null while loading, or [] when the batch
+            has no active enrollments, in which case there's nothing to show. */}
+        {canMarkAttendance && roster && roster.length > 0 && (
+          <View style={sd.card}>
+            <View style={sd.attendanceHead}>
+              <Text style={sd.attendanceTitle}>Attendance</Text>
+              {roster.some((r) => r.status !== null) && (
+                <Text style={sd.attendanceSummary}>
+                  {roster.filter((r) => r.status === "present").length}/{roster.length} present
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={sd.attendanceBtn}
+              activeOpacity={0.75}
+              onPress={() => {
+                setPendingMarks(
+                  Object.fromEntries(
+                    roster.filter((r) => r.status !== null).map((r) => [r.studentId, r.status as AttendanceStatus]),
+                  ),
+                );
+                setAttendanceError(null);
+                setShowAttendanceSheet(true);
+              }}
+            >
+              <Ionicons
+                name={roster.every((r) => r.status === null) ? "people-outline" : "create-outline"}
+                size={ms(15)}
+                color={colors.primary}
+              />
+              <Text style={sd.attendanceBtnT}>
+                {roster.every((r) => r.status === null) ? "Take Attendance" : "Edit Attendance"}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -276,6 +428,14 @@ export function SessionDetailScreen({ route, navigation }: Props) {
           <View style={[sd.errorBox, { backgroundColor: C.green + "10" }]}>
             <ActivityIndicator size="small" color={C.green} />
             <Text style={[sd.errorT, { color: C.green }]}>Updating faculty…</Text>
+          </View>
+        )}
+
+        {/* Subject change saving indicator */}
+        {actionLoading === "subject" && (
+          <View style={[sd.errorBox, { backgroundColor: C.blue + "10" }]}>
+            <ActivityIndicator size="small" color={C.blue} />
+            <Text style={[sd.errorT, { color: C.blue }]}>Updating subject…</Text>
           </View>
         )}
 
@@ -319,9 +479,9 @@ export function SessionDetailScreen({ route, navigation }: Props) {
         )}
 
         {/* Action buttons */}
-        {(canComplete || canCancel) && !showCancelInput && (
+        {(canMarkComplete || canCancel) && !showCancelInput && (
           <View style={sd.actionsRow}>
-            {canComplete && (
+            {canMarkComplete && (
               <TouchableOpacity
                 style={[sd.actionBtn, sd.completeBtn, actionLoading === "completed" && { opacity: 0.6 }]}
                 onPress={() => doAction("completed")}
@@ -350,11 +510,10 @@ export function SessionDetailScreen({ route, navigation }: Props) {
         )}
       </ScrollView>
 
-      {/* Faculty Picker */}
+      {/* Faculty Picker — standard height (BottomSheet's own default) */}
       <BottomSheet
         visible={showFacultyPicker}
         onClose={() => setShowFacultyPicker(false)}
-        maxHeight="78%"
       >
           <View style={sd.pickerSheet}>
             {/* Header */}
@@ -404,7 +563,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
             {/* List */}
             {facultyPickerLoading ? (
               <View style={sd.pickerCenter}>
-                <ActivityIndicator color={C.primary} />
+                <ActivityIndicator color={colors.primary} />
               </View>
             ) : (
               <FlatList
@@ -415,7 +574,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
                 keyExtractor={(f) => f.id}
                 contentContainerStyle={{ padding: ms(12), gap: ms(8) }}
                 renderItem={({ item: f }) => {
-                  const color    = avatarColor(f.fullName);
+                  const color    = avatarColor(f.fullName, colors);
                   const initials = getInitials(f.fullName);
                   const selected = session?.facultyId === f.id;
                   return (
@@ -452,31 +611,197 @@ export function SessionDetailScreen({ route, navigation }: Props) {
             )}
           </View>
       </BottomSheet>
+
+      {/* Subject Picker — mirrors the Faculty picker above; no "remove"
+          option since a session always needs some subject, unlike faculty
+          which can be legitimately unassigned. */}
+      <BottomSheet
+        visible={showSubjectPicker}
+        onClose={() => setShowSubjectPicker(false)}
+      >
+          <View style={sd.pickerSheet}>
+            <View style={sd.pickerHeader}>
+              <Text style={sd.pickerTitle}>Assign Subject</Text>
+              <TouchableOpacity onPress={() => setShowSubjectPicker(false)} style={sd.pickerClose}>
+                <Ionicons name="close" size={ms(20)} color={C.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={sd.pickerSearch}>
+              <Ionicons name="search-outline" size={ms(15)} color={C.muted} />
+              <TextInput
+                style={sd.pickerSearchInput}
+                value={subjectSearch}
+                onChangeText={setSubjectSearch}
+                placeholder="Search subjects…"
+                placeholderTextColor={C.placeholder}
+              />
+              {subjectSearch !== "" && (
+                <TouchableOpacity onPress={() => setSubjectSearch("")}>
+                  <Ionicons name="close-circle" size={ms(16)} color={C.muted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {subjectPickerLoading ? (
+              <View style={sd.pickerCenter}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : (
+              <FlatList
+                data={subjectList.filter((s) =>
+                  s.name.toLowerCase().includes(subjectSearch.toLowerCase())
+                )}
+                keyExtractor={(s) => s.id}
+                contentContainerStyle={{ padding: ms(12), gap: ms(8) }}
+                renderItem={({ item: s }) => {
+                  const color    = avatarColor(s.name, colors);
+                  const initials = getInitials(s.name);
+                  const selected = session?.subjectId === s.id;
+                  const categoryLabel = s.examCategories.length > 0
+                    ? s.examCategories.map((c) => c.label).join(", ")
+                    : "General";
+                  return (
+                    <TouchableOpacity
+                      style={[sd.facultyRow, selected && { backgroundColor: C.blue + "0D", borderColor: C.blue }]}
+                      onPress={async () => {
+                        setShowSubjectPicker(false);
+                        setActionLoading("subject");
+                        try {
+                          const updated = await patchSession(sessionId, { subjectId: s.id });
+                          setSession(updated);
+                        } catch { setError("Could not update subject"); }
+                        finally { setActionLoading(null); }
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <View style={[sd.facultyAvatar, { backgroundColor: color + "22" }]}>
+                        <Text style={[sd.facultyInitials, { color }]}>{initials}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={sd.facultyName}>{s.name}</Text>
+                        <Text style={sd.facultyCode}>{categoryLabel}</Text>
+                      </View>
+                      {selected && <Ionicons name="checkmark-circle" size={ms(18)} color={C.blue} />}
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={sd.pickerCenter}>
+                    <Text style={sd.pickerEmpty}>No subjects found</Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+      </BottomSheet>
+
+      {/* Attendance sheet — tall, since a roster can run long */}
+      <BottomSheet
+        visible={showAttendanceSheet}
+        onClose={() => setShowAttendanceSheet(false)}
+        maxHeight={SHEET_HEIGHT.tall}
+      >
+        <View style={sd.pickerSheet}>
+          <View style={sd.pickerHeader}>
+            <Text style={sd.pickerTitle}>Take Attendance</Text>
+            <TouchableOpacity onPress={() => setShowAttendanceSheet(false)} style={sd.pickerClose}>
+              <Ionicons name="close" size={ms(20)} color={C.text} />
+            </TouchableOpacity>
+          </View>
+
+          {attendanceError && (
+            <View style={[sd.errorBox, { marginHorizontal: ms(12), marginTop: ms(8) }]}>
+              <Ionicons name="alert-circle-outline" size={ms(14)} color={C.red} />
+              <Text style={sd.errorT}>{attendanceError}</Text>
+            </View>
+          )}
+
+          <FlatList
+            data={roster ?? []}
+            keyExtractor={(r) => r.studentId}
+            contentContainerStyle={{ padding: ms(12), gap: ms(8) }}
+            renderItem={({ item }) => {
+              const mark     = pendingMarks[item.studentId];
+              const color    = avatarColor(item.fullName, colors);
+              const initials = getInitials(item.fullName);
+              return (
+                <View style={sd.attendanceRow}>
+                  <View style={[sd.facultyAvatar, { backgroundColor: color + "22" }]}>
+                    <Text style={[sd.facultyInitials, { color }]}>{initials}</Text>
+                  </View>
+                  <Text style={sd.attendanceRowName} numberOfLines={1}>{item.fullName}</Text>
+                  <View style={sd.attendanceToggle}>
+                    <TouchableOpacity
+                      style={[sd.attendanceToggleBtn, mark === "present" && { backgroundColor: C.green, borderColor: C.green }]}
+                      onPress={() => setPendingMarks((p) => ({ ...p, [item.studentId]: "present" }))}
+                    >
+                      <Text style={[sd.attendanceToggleT, mark === "present" && { color: "#fff" }]}>Present</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[sd.attendanceToggleBtn, mark === "absent" && { backgroundColor: C.red, borderColor: C.red }]}
+                      onPress={() => setPendingMarks((p) => ({ ...p, [item.studentId]: "absent" }))}
+                    >
+                      <Text style={[sd.attendanceToggleT, mark === "absent" && { color: "#fff" }]}>Absent</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }}
+          />
+
+          <View style={sd.attendanceSaveWrap}>
+            <TouchableOpacity
+              style={[sd.attendanceSaveBtn, savingAttendance && { opacity: 0.6 }]}
+              disabled={savingAttendance}
+              onPress={async () => {
+                setSavingAttendance(true);
+                setAttendanceError(null);
+                try {
+                  const marks = Object.entries(pendingMarks).map(([studentId, status]) => ({ studentId, status }));
+                  const updated = await apiSetSessionAttendance(sessionId, marks);
+                  setRoster(updated);
+                  setShowAttendanceSheet(false);
+                } catch {
+                  setAttendanceError("Could not save attendance");
+                } finally {
+                  setSavingAttendance(false);
+                }
+              }}
+            >
+              {savingAttendance
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={sd.attendanceSaveBtnT}>Save Attendance</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const sd = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: C.primary },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: C.bg },
-  body:   { padding: ms(16), paddingBottom: ms(48), gap: ms(12) },
+const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: colors.screenBg },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.screenBg },
+  body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(48), gap: ms(12) },
 
   emptyIllus: {
     width: ms(90), height: ms(90), borderRadius: ms(24),
-    backgroundColor: C.primary + "10",
+    backgroundColor: colors.primary + "10",
     alignItems: "center", justifyContent: "center",
     marginBottom: ms(12),
   },
-  emptyTitle: { fontSize: fs(15), fontWeight: "700", color: C.text },
+  emptyTitle: { ...T.cardTitle, color: C.text },
 
   // Date card
   dateCard: {
     flexDirection:   "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.card,
     borderRadius:    ms(16),
-    shadowColor:     "#2B1B1F",
+    shadowColor:     C.text,
     shadowOffset:    { width: 0, height: ms(2) },
     shadowOpacity:   0.07,
     shadowRadius:    ms(8),
@@ -485,20 +810,25 @@ const sd = StyleSheet.create({
   },
   statusStripe: { width: ms(4) },
   dateBody:     { flex: 1, padding: ms(16) },
-  batchName:    { fontSize: fs(11), fontWeight: "600", color: C.muted, marginBottom: ms(4), textTransform: "uppercase", letterSpacing: 0.4 },
-  fullDate:     { fontSize: fs(15), fontWeight: "800", color: C.text, marginBottom: ms(2) },
-  timeRange:    { fontSize: fs(13), color: C.muted, marginBottom: ms(10) },
+  batchName:    { ...T.sectionHeading, color: C.muted, marginBottom: ms(4) },
+  // Full spelled-out date ("Monday, 10 August 2026") — a timestamp-like
+  // value, not a headline. Dropped twice now (cardTitle 15 → listItemTitle
+  // 14 → chipText 11) to read at the compact, dense scale a coaching-app
+  // info screen calls for, rather than a hero figure. chipText (not
+  // bodySmall) keeps a touch of semibold weight without a bespoke override.
+  fullDate:     { ...T.chipText, color: C.text, marginBottom: ms(3) },
+  timeRange:    { ...T.caption, color: C.muted, marginBottom: ms(10) },
   badgeRow:     { flexDirection: "row", gap: ms(8), flexWrap: "wrap" },
   statusBadge:  { flexDirection: "row", alignItems: "center", gap: ms(4), borderRadius: ms(6), paddingHorizontal: ms(8), paddingVertical: ms(3) },
-  statusBadgeT: { fontSize: fs(11), fontWeight: "700" },
+  statusBadgeT: { ...T.badgeText },
   typeBadge:    { flexDirection: "row", alignItems: "center", gap: ms(4), borderRadius: ms(6), paddingHorizontal: ms(8), paddingVertical: ms(3), backgroundColor: "#F3F4F6" },
-  typeBadgeT:   { fontSize: fs(11), color: C.muted },
+  typeBadgeT:   { ...T.caption, color: C.muted },
 
   // Info card
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.card,
     borderRadius:    ms(16),
-    shadowColor:     "#2B1B1F",
+    shadowColor:     C.text,
     shadowOffset:    { width: 0, height: ms(2) },
     shadowOpacity:   0.07,
     shadowRadius:    ms(8),
@@ -508,54 +838,58 @@ const sd = StyleSheet.create({
   divider:  { height: 1, backgroundColor: C.border, marginHorizontal: ms(12) },
   infoRow:  { flexDirection: "row", alignItems: "center", padding: ms(14), gap: ms(10) },
   infoIcon: { width: ms(34), height: ms(34), borderRadius: ms(9), alignItems: "center", justifyContent: "center" },
-  infoLabel:{ fontSize: fs(10), color: C.muted, textTransform: "uppercase", letterSpacing: 0.4 },
-  infoValue:{ fontSize: fs(13), fontWeight: "700", color: C.text, marginTop: 1 },
+  infoLabel:{ ...T.sectionHeading, color: C.muted },
+  // Was listItemTitle (14px) — one size down for the same denser, coaching-
+  // app read as the rest of this pass; matches the tile-value fix already
+  // applied to BatchDetailScreen/ManageSlotModal for consistency.
+  infoValue:{ ...T.chipText, color: C.text, marginTop: 1 },
 
   // Cancel / notes
   cancelCard: {
     flexDirection: "row", gap: ms(8), alignItems: "flex-start",
-    backgroundColor: "#FEF0EE", borderRadius: ms(12), padding: ms(12),
+    backgroundColor: C.redBg, borderRadius: ms(12), padding: ms(12),
   },
-  cancelT: { flex: 1, fontSize: fs(12), color: C.red },
+  cancelT: { flex: 1, ...T.bodySmall, color: C.red },
 
-  notesCard:  { backgroundColor: "#FFFFFF", borderRadius: ms(12), padding: ms(14), shadowColor: "#2B1B1F", shadowOffset: { width: 0, height: ms(1) }, shadowOpacity: 0.05, shadowRadius: ms(4), elevation: 1 },
-  notesLabel: { fontSize: fs(10), color: C.muted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: ms(4) },
-  notesT:     { fontSize: fs(13), color: C.text, lineHeight: fs(20) },
+  notesCard:  { backgroundColor: C.card, borderRadius: ms(12), padding: ms(14), shadowColor: C.text, shadowOffset: { width: 0, height: ms(1) }, shadowOpacity: 0.05, shadowRadius: ms(4), elevation: 1 },
+  notesLabel: { ...T.sectionHeading, color: C.muted, marginBottom: ms(4) },
+  notesT:     { ...T.bodySmall, color: C.text },
 
   errorBox: {
     flexDirection: "row", gap: ms(8), alignItems: "flex-start",
-    backgroundColor: "#FEF0EE", borderRadius: ms(12), padding: ms(12),
+    backgroundColor: C.redBg, borderRadius: ms(12), padding: ms(12),
   },
-  errorT: { flex: 1, fontSize: fs(12), color: C.red },
+  errorT: { flex: 1, ...T.bodySmall, color: C.red },
 
   // Cancel input
-  inputLabel:  { fontSize: fs(11), fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.4, padding: ms(14), paddingBottom: ms(6) },
+  inputLabel:  { ...T.sectionHeading, color: C.muted, padding: ms(14), paddingBottom: ms(6) },
   reasonInput: {
-    borderWidth: 1, borderColor: C.border, borderRadius: ms(8),
-    marginHorizontal: ms(14), padding: ms(10), fontSize: fs(13), color: C.text,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderRadius: ms(8),
+    marginHorizontal: ms(14), padding: ms(10), ...T.body, color: C.text,
     minHeight: ms(60), textAlignVertical: "top", backgroundColor: C.inputBg,
   },
   cancelConfirmRow: { flexDirection: "row", gap: ms(10), padding: ms(14), paddingTop: ms(10) },
   cancelAbort:      { flex: 1, height: ms(44), borderRadius: ms(10), borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
-  cancelAbortT:     { fontSize: fs(13), color: C.muted, fontWeight: "600" },
+  cancelAbortT:     { ...T.buttonText, color: C.muted },
   cancelConfirm:    { flex: 2, height: ms(44), borderRadius: ms(10), backgroundColor: C.red, alignItems: "center", justifyContent: "center" },
-  cancelConfirmT:   { fontSize: fs(13), fontWeight: "700", color: "#FFFFFF" },
+  cancelConfirmT:   { ...T.buttonText, color: "#FFFFFF" },
 
   // Actions
   actionsRow: { flexDirection: "column", gap: ms(10) },
   actionBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), height: ms(50), borderRadius: ms(12) },
   completeBtn:{ backgroundColor: C.green },
-  cancelBtn:  { backgroundColor: "#FEF0EE", borderWidth: 1, borderColor: C.red + "50" },
-  actionBtnT: { fontSize: fs(14), fontWeight: "700", color: "#FFFFFF" },
-  cancelBtnT: { fontSize: fs(14), fontWeight: "700", color: C.red },
+  cancelBtn:  { backgroundColor: C.redBg, borderWidth: 1, borderColor: C.red + "50" },
+  actionBtnT: { ...T.buttonText, color: "#FFFFFF" },
+  cancelBtnT: { ...T.buttonText, color: C.red },
 
   // Change chip on faculty row
-  changeChip:  { paddingHorizontal: ms(9), paddingVertical: ms(4), borderRadius: ms(6), backgroundColor: C.primary + "10", borderWidth: 1, borderColor: C.primary + "30" },
-  changeChipT: { fontSize: fs(10), fontWeight: "700", color: C.primary },
+  changeChip:  { paddingHorizontal: ms(9), paddingVertical: ms(4), borderRadius: ms(6), backgroundColor: colors.primary + "10", borderWidth: 1, borderColor: colors.primary + "30" },
+  changeChipT: { ...T.badgeText, color: colors.primary },
 
-  // Faculty picker sheet (background override + bottom pad)
+  // Faculty picker sheet — was colors.bg (the tenant's configurable screen background),
+  // which made this the only sheet in the app not rendering white like its siblings.
   pickerSheet: {
-    backgroundColor: C.bg,
+    backgroundColor: colors.card,
     paddingBottom: ms(24),
   },
   pickerHeader: {
@@ -563,31 +897,68 @@ const sd = StyleSheet.create({
     padding: ms(16), paddingBottom: ms(12),
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  pickerTitle: { fontSize: fs(15), fontWeight: "800", color: C.text },
+  // One size down from the usual sheet-header cardTitle (15px) — this
+  // screen's whole information density calls for the more compact scale.
+  pickerTitle: { ...T.listItemTitle, color: C.text },
   pickerClose: { width: ms(32), height: ms(32), borderRadius: ms(8), alignItems: "center", justifyContent: "center", backgroundColor: C.inputBg },
   pickerSearch: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
-    margin: ms(12), marginBottom: ms(4),
-    backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: 1, borderColor: C.border,
+    marginHorizontal: ms(12), marginTop: ms(8), marginBottom: ms(4),
+    backgroundColor: C.inputBg, borderRadius: ms(10), borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
     paddingHorizontal: ms(10), height: ms(40),
   },
-  pickerSearchInput: { flex: 1, fontSize: fs(13), color: C.text },
+  pickerSearchInput: { flex: 1, ...T.body, color: C.text },
   pickerCenter: { alignItems: "center", justifyContent: "center", paddingVertical: ms(32) },
-  pickerEmpty:  { fontSize: fs(13), color: C.muted },
+  pickerEmpty:  { ...T.body, color: C.muted },
   removeRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
     marginHorizontal: ms(12), marginTop: ms(4), marginBottom: ms(2),
     paddingVertical: ms(10), paddingHorizontal: ms(12),
-    borderRadius: ms(10), backgroundColor: "#FEF0EE",
+    borderRadius: ms(10), backgroundColor: C.redBg,
   },
-  removeRowT: { fontSize: fs(13), color: C.red, fontWeight: "600" },
+  // Matches facultyName's size below (both one step down from listItemTitle).
+  removeRowT: { ...T.body, color: C.red },
   facultyRow: {
     flexDirection: "row", alignItems: "center", gap: ms(10),
     padding: ms(12), borderRadius: ms(12),
-    borderWidth: 1, borderColor: C.border, backgroundColor: "#FFFFFF",
+    borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
   },
   facultyAvatar:   { width: ms(40), height: ms(40), borderRadius: ms(12), alignItems: "center", justifyContent: "center" },
-  facultyInitials: { fontSize: fs(14), fontWeight: "800" },
-  facultyName:     { fontSize: fs(13), fontWeight: "700", color: C.text },
-  facultyCode:     { fontSize: fs(11), color: C.muted, marginTop: 1 },
+  facultyInitials: { ...T.body },
+  // One size down from listItemTitle (14px) for the same denser read.
+  facultyName:     { ...T.body, color: C.text },
+  facultyCode:     { ...T.caption, color: C.muted, marginTop: 1 },
+
+  // Attendance
+  attendanceHead:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: ms(14) },
+  attendanceTitle:   { ...T.body, color: C.text },
+  attendanceSummary: { ...T.chipText, color: C.green },
+  attendanceBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(6),
+    marginHorizontal: ms(14), marginBottom: ms(14), height: ms(40),
+    borderRadius: ms(10), borderWidth: 1, borderColor: colors.primary + "40",
+    backgroundColor: colors.primary + "0D",
+  },
+  // Was T.buttonText (15px) — per DESIGN_SYSTEM.md, buttonText is reserved
+  // for full-width primary CTAs; this is a small tinted pill button, so it
+  // belongs in the "compact action-row button label" bucket → chipText.
+  attendanceBtnT: { ...T.chipText, color: colors.primary },
+  attendanceRow: {
+    flexDirection: "row", alignItems: "center", gap: ms(10),
+    padding: ms(10), borderRadius: ms(12),
+    borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
+  },
+  attendanceRowName: { flex: 1, ...T.body, color: C.text },
+  attendanceToggle:  { flexDirection: "row", gap: ms(6) },
+  attendanceToggleBtn: {
+    paddingHorizontal: ms(10), paddingVertical: ms(7), borderRadius: ms(8),
+    borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg,
+  },
+  attendanceToggleT: { ...T.chipText, color: C.muted },
+  attendanceSaveWrap: { padding: ms(14), borderTopWidth: 1, borderTopColor: C.border },
+  attendanceSaveBtn: {
+    height: ms(48), borderRadius: ms(12), backgroundColor: colors.primary,
+    alignItems: "center", justifyContent: "center",
+  },
+  attendanceSaveBtnT: { ...T.buttonText, color: "#fff" },
 });

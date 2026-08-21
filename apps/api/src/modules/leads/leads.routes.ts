@@ -3,18 +3,20 @@ import { Prisma } from "@prisma/client";
 import { convertLeadSchema, createLeadSchema } from "@institute-os/shared";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+import { requirePermission } from "../../middleware/permission";
 import { validateBody } from "../../middleware/validate";
 import { BatchFullError } from "../enrollments/enrollments.service";
 import { convertLead } from "./leads.service";
-import { centerFilter, centerIdForCreate } from "../../lib/centerFilter";
+import { centerFilter, centerIdForCreate, tenantIdForCreate } from "../../lib/centerFilter";
+import { notifyEnrollmentEvents } from "../notifications/notification.service";
 
 export const leadsRouter = Router();
 
-leadsRouter.get("/", requireAuth, requireRole("admin", "frontdesk"), async (req, res) => {
+leadsRouter.get("/", requireAuth, requirePermission("leads", "read"), async (req, res) => {
   const leads = await prisma.lead.findMany({
-    where:   centerFilter(req),
+    where:   await centerFilter(req),
     orderBy: { createdAt: "desc" },
+    include: { targetExam: true, center: { select: { id: true, name: true } } },
   });
   res.json(leads);
 });
@@ -22,12 +24,15 @@ leadsRouter.get("/", requireAuth, requireRole("admin", "frontdesk"), async (req,
 leadsRouter.post(
   "/",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("leads", "write"),
   validateBody(createLeadSchema),
   async (req, res) => {
     const centerId = centerIdForCreate(req, req.body.centerId);
     if (!centerId) return res.status(400).json({ error: "centerId required when using all-centers mode" });
-    const lead = await prisma.lead.create({ data: { ...req.body, centerId } });
+    const lead = await prisma.lead.create({
+      data:    { ...req.body, centerId, tenantId: tenantIdForCreate(req) },
+      include: { targetExam: true },
+    });
     res.status(201).json(lead);
   }
 );
@@ -35,11 +40,12 @@ leadsRouter.post(
 leadsRouter.post(
   "/:id/convert",
   requireAuth,
-  requireRole("admin", "frontdesk"),
+  requirePermission("leads", "edit"),
   validateBody(convertLeadSchema),
   async (req, res) => {
     try {
-      const result = await convertLead(prisma, req.params.id, req.body);
+      const result = await convertLead(prisma, req.params.id, req.body, req.auth!.tenantId);
+      await notifyEnrollmentEvents(prisma, req.auth!.tenantId, result.enrollment.batchId).catch(console.error);
       res.status(201).json(result);
     } catch (err) {
       if (err instanceof BatchFullError) {

@@ -1,8 +1,48 @@
-# No domain yet — served over plain HTTP on the bare IP.
-# Once you buy a domain and point it here, replace ":80" below with
-# your domain (e.g. "api.yourdomain.com") and Caddy will automatically
-# switch to HTTPS with a free auto-renewing certificate — no other change needed.
+# thesuccess.in — a real domain, so Caddy auto-provisions and renews a free
+# HTTPS certificate for it with no extra config (this is also what finally
+# fixes HTTPS/443, which never worked under the old bare ":80" block below —
+# Caddy only auto-issues certs for an actual domain, not a bare port).
+thesuccess.in {
+	# /qa/api/* and /qa/health go to the QA API; everything else under /qa/*
+	# is the QA web portal (one image, every tenant — see apps/web/Dockerfile).
+	# GET /health lives outside the /api/* prefix (apps/api/src/app.ts), so
+	# it needs to be matched explicitly here too. Unchanged from before.
+	@qa_api path /qa/api/* /qa/health
+	handle @qa_api {
+		uri strip_prefix /qa
+		reverse_proxy api-qa:4000
+	}
 
-:80 {
-	reverse_proxy api:4000
+	handle_path /qa/* {
+		reverse_proxy web-qa:80
+	}
+
+	# Production API — moved off the unconditional catch-all now that the
+	# bare domain below serves the marketing site instead. Nothing here used
+	# to have a route at "/" anyway (apps/api/src/app.ts has none), so this
+	# doesn't remove any working behavior.
+	@prod_api path /api/* /health
+	handle @prod_api {
+		reverse_proxy api:4000
+	}
+
+	# The marketing site (apps/site) owns exactly "/" and nothing else — it's
+	# one self-contained index.html with no other pages or asset paths of its
+	# own, so an exact match is enough; it never needs a prefix.
+	@site_root path /
+	handle @site_root {
+		reverse_proxy site:80
+	}
+
+	# Everything else at the bare domain — the staff portal (apps/web):
+	# /login, /dashboard, /apply/*, /download/*, /site-content, etc. Deployed
+	# here with no path prefix, deliberately: apps/web is the shared
+	# multi-tenant product (one build serves every institute, resolved at
+	# runtime via /org/:slug), so tying it permanently to thesuccess.in isn't
+	# the real long-term home — that needs its own tenant-neutral domain
+	# later. This is the pragmatic choice for now, same tradeoff /qa/* above
+	# already accepts for QA.
+	handle {
+		reverse_proxy web:80
+	}
 }

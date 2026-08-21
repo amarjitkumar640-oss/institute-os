@@ -99,6 +99,14 @@ export interface PatchSessionPayload {
   notes?:         string;
 }
 
+export type AttendanceStatus = "present" | "absent";
+
+export interface SessionAttendanceRow {
+  studentId: string;
+  fullName:  string;
+  status:    AttendanceStatus | null;
+}
+
 // ── API functions ─────────────────────────────────────────────────────────────
 
 // Slots
@@ -181,6 +189,26 @@ export async function listFacultySessions(
 
 export async function listTodaySessions(): Promise<ClassSession[]> {
   const { data } = await apiClient.get<ClassSession[]>("/schedule/sessions/today");
+  return data;
+}
+
+// Attendance
+
+export async function getSessionAttendance(sessionId: string): Promise<SessionAttendanceRow[]> {
+  const { data } = await apiClient.get<SessionAttendanceRow[]>(
+    `/schedule/class-sessions/${sessionId}/attendance`,
+  );
+  return data;
+}
+
+export async function setSessionAttendance(
+  sessionId: string,
+  marks: { studentId: string; status: AttendanceStatus }[],
+): Promise<SessionAttendanceRow[]> {
+  const { data } = await apiClient.put<SessionAttendanceRow[]>(
+    `/schedule/class-sessions/${sessionId}/attendance`,
+    { marks },
+  );
   return data;
 }
 

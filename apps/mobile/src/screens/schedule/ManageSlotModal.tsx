@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
-  Dimensions,
+  ScrollView, ActivityIndicator, Platform, Keyboard,
+  Dimensions, Modal,
 } from "react-native";
-import { BottomSheet } from "../../components/ui/BottomSheet";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
+import { T } from "../../components/ui/typography";
 
 const SCREEN_H = Dimensions.get("window").height;
 import { Ionicons } from "@expo/vector-icons";
@@ -16,7 +18,9 @@ import { listFaculty, type FacultyItem } from "../../api/faculty";
 import { listSubjects, type SubjectItem } from "../../api/subjects";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { useAlert } from "../../context/AlertContext";
+import { usePermission } from "../../hooks/usePermission";
 
 interface Props {
   batchId:  string;
@@ -28,19 +32,6 @@ interface Props {
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
-// ── Category + day meta ───────────────────────────────────────────────────────
-
-const CAT_COLOR: Record<string, string> = {
-  ssc:        C.primary,
-  banking:    C.blue,
-  railway:    C.accent,
-  foundation: C.purple,
-};
-const CAT_LABEL: Record<string, string> = {
-  ssc: "SSC", banking: "Banking", railway: "Railway", foundation: "Foundation",
-};
-
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function timeError(t: string): string | null {
@@ -49,12 +40,25 @@ function timeError(t: string): string | null {
   return null;
 }
 
+function timeStrToDate(t: string): Date {
+  const [h, m] = t.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h || 0, m || 0, 0, 0);
+  return d;
+}
+
+function dateToTimeStr(d: Date): string {
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 function getInitials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-function facultyAvatarColor(name: string) {
-  const palette = [C.primary, C.blue, C.green, C.accent, C.purple, C.orange];
+function facultyAvatarColor(name: string, colors: ThemeColors) {
+  const palette = [colors.primary, C.blue, C.green, colors.accent, C.purple, C.orange];
   return palette[name.charCodeAt(0) % palette.length];
 }
 
@@ -68,18 +72,22 @@ function SubjectGrid({
   onSelect:   (s: SubjectItem | null) => void;
   onBack:     () => void;
 }) {
+  const sg = useThemedStyles(makeSgStyles);
   const [search, setSearch] = useState("");
 
   const filtered = search.trim()
     ? subjects.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
     : subjects;
 
-  const groups: Record<string, SubjectItem[]> = {};
+  const groups: Record<string, { label: string; color: string; items: SubjectItem[] }> = {};
   const general: SubjectItem[] = [];
   for (const s of filtered) {
-    if (s.examCategory && CAT_COLOR[s.examCategory]) {
-      if (!groups[s.examCategory]) groups[s.examCategory] = [];
-      groups[s.examCategory].push(s);
+    if (s.examCategories.length > 0) {
+      // A subject relevant to several categories appears under each of them.
+      for (const ec of s.examCategories) {
+        if (!groups[ec.id]) groups[ec.id] = { label: ec.label, color: ec.color, items: [] };
+        groups[ec.id].items.push(s);
+      }
     } else {
       general.push(s);
     }
@@ -137,11 +145,12 @@ function SubjectGrid({
           </View>
         ) : (
           <>
-            {Object.entries(groups).map(([cat, items]) => {
-              const color = CAT_COLOR[cat] ?? C.primary;
-              const label = CAT_LABEL[cat]  ?? cat;
+            {Object.entries(groups).map(([catId, group]) => {
+              const color = group.color;
+              const label = group.label;
+              const items = group.items;
               return (
-                <View key={cat} style={sg.group}>
+                <View key={catId} style={sg.group}>
                   <View style={sg.groupHeader}>
                     <View style={[sg.groupDot, { backgroundColor: color }]} />
                     <Text style={[sg.groupLabel, { color }]}>{label}</Text>
@@ -215,6 +224,8 @@ function FacultyGrid({
   onSelect:   (f: FacultyItem | null) => void;
   onBack:     () => void;
 }) {
+  const colors = useThemeColors();
+  const fg = useThemedStyles(makeFgStyles);
   const [search, setSearch] = useState("");
 
   const filtered = search.trim()
@@ -277,7 +288,7 @@ function FacultyGrid({
         ) : (
           filtered.map((f) => {
             const sel   = f.id === selectedId;
-            const color = facultyAvatarColor(f.fullName);
+            const color = facultyAvatarColor(f.fullName, colors);
             const subs  = (f.subjects ?? []).map((s) => s.name).join(" · ");
             return (
               <TouchableOpacity
@@ -310,8 +321,16 @@ function FacultyGrid({
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Props) {
+  const colors = useThemeColors();
+  const m = useThemedStyles(makeMStyles);
   const isEdit = !!slot;
   const { showConfirm, showAlert } = useAlert();
+  // DELETE /class-slots/:slotId requires schedule.delete specifically — a
+  // separate flag from the schedule.edit this modal's Save action needs
+  // (teacher has "re" i.e. read+edit but not delete, so this button must be
+  // its own gate, not folded into the edit permission already implied by
+  // isEdit being true).
+  const { canDelete } = usePermission("schedule");
 
   const [dayOfWeek,   setDayOfWeek]   = useState<DayOfWeek>("monday");
   const [startTime,   setStartTime]   = useState("09:00");
@@ -330,6 +349,110 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
   const [saving,       setSaving]       = useState(false);
   const [deleting,     setDeleting]     = useState(false);
   const [error,        setError]        = useState<string | null>(null);
+
+  // The sheet's own size NEVER changes for the keyboard — it stays at the
+  // full SCREEN_H * 0.88 always. Only the content scrolls internally, just
+  // far enough that the focused field ends up above the portion of the
+  // sheet the keyboard is covering (the keyboard overlaps the bottom
+  // kbHeight pixels of the sheet itself, since the sheet is anchored to the
+  // screen's bottom edge).
+  const scrollRef = useRef<ScrollView>(null);
+  const kbHeightRef = useRef(0);
+  const focusedKeyRef = useRef<string | null>(null);
+  // Where the content was scrolled to right before the keyboard opened,
+  // so closing the keyboard can put it back — otherwise the form stays
+  // scrolled down to wherever the last field-clearing scroll left it.
+  const currentScrollYRef = useRef(0);
+  const preKeyboardScrollYRef = useRef(0);
+  // The ScrollView doesn't start at the top of the sheet — the handle and
+  // title row sit above it and don't scroll. Captured via the ScrollView's
+  // own onLayout `y` (its offset within the sheet's flex column). Confirmed
+  // via on-device logging that omitting this was the actual bug: the scroll
+  // target was computed as if the ScrollView's content started at the very
+  // top of the sheet, undershooting by exactly this header height every time.
+  const headerHeightRef = useRef(0);
+
+  // Each field section's top offset within the ScrollView's content,
+  // captured via onLayout (see recordFieldY below) — deliberately avoids
+  // measureLayout()/findNodeHandle(), which warn ("must be called with a ref
+  // to a native component") against the wrapper refs ScrollView/TextInput
+  // expose here.
+  const fieldY = useRef<Record<string, number>>({});
+  function recordFieldY(key: string) {
+    return (e: { nativeEvent: { layout: { y: number } } }) => {
+      fieldY.current[key] = e.nativeEvent.layout.y;
+    };
+  }
+
+  function scrollToClearKeyboard(key: string, kbH: number) {
+    const y = fieldY.current[key];
+    if (y === undefined) return;
+    const sheetHeight = SCREEN_H * 0.88;
+    const visible = sheetHeight - kbH - headerHeightRef.current;
+    const target = Math.max(0, y - visible + ms(140));
+    scrollRef.current?.scrollTo({ y: target, animated: true });
+  }
+
+  // Called from onFocus. If the keyboard is already open (switching between
+  // fields), scroll immediately using the height we already know.
+  // Otherwise, wait for the keyboard-show listener below to fire and drive
+  // the scroll from there — that's the only place the real height is
+  // guaranteed known, avoiding any race with a guessed delay.
+  function scrollFieldIntoView(key: string) {
+    // Only snapshot on the transition from "keyboard closed" to "about to
+    // open" — not on every field switch while it's already open, which
+    // would overwrite the snapshot with an already-scrolled-for-keyboard
+    // position instead of the true original one.
+    if (kbHeightRef.current === 0) preKeyboardScrollYRef.current = currentScrollYRef.current;
+    focusedKeyRef.current = key;
+    if (kbHeightRef.current > 0) scrollToClearKeyboard(key, kbHeightRef.current);
+  }
+
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const s1 = Keyboard.addListener(showEvt, (e) => {
+      kbHeightRef.current = e.endCoordinates.height;
+      if (focusedKeyRef.current) scrollToClearKeyboard(focusedKeyRef.current, e.endCoordinates.height);
+    });
+    const s2 = Keyboard.addListener(hideEvt, () => {
+      kbHeightRef.current = 0;
+      focusedKeyRef.current = null;
+      scrollRef.current?.scrollTo({ y: preKeyboardScrollYRef.current, animated: true });
+    });
+    return () => { s1.remove(); s2.remove(); };
+  }, []);
+
+  // Class Timing — a native time-picker wheel instead of typed HH:MM.
+  const [activeTimePicker, setActiveTimePicker] = useState<"start" | "end" | null>(null);
+
+  // Android's picker is an imperative one-shot dialog: mounting it opens the
+  // dialog, and onChange fires once with the result (event.type "set") or a
+  // cancel (event.type "dismissed") — there's no separate "confirm" step.
+  // iOS's spinner is inline and fires onChange continuously as the wheel
+  // scrolls, confirmed via the Done button in confirmIosTimePicker below.
+  function handleTimeChange(event: DateTimePickerEvent, selected?: Date) {
+    if (Platform.OS === "android") {
+      if (event.type !== "set" || !selected) { setActiveTimePicker(null); return; }
+      const str = dateToTimeStr(selected);
+      if (activeTimePicker === "start") {
+        setStartTime(str);
+        setActiveTimePicker("end"); // auto-advance to End Time
+      } else {
+        setEndTime(str);
+        setActiveTimePicker(null);
+      }
+    } else if (selected) {
+      const str = dateToTimeStr(selected);
+      if (activeTimePicker === "start") setStartTime(str);
+      else setEndTime(str);
+    }
+  }
+
+  function confirmIosTimePicker() {
+    if (activeTimePicker === "start") setActiveTimePicker("end"); // auto-advance to End Time
+    else setActiveTimePicker(null);
+  }
 
   // Load faculty + subjects when modal opens
   useEffect(() => {
@@ -441,11 +564,13 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeight="90%">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ height: SCREEN_H * 0.88 }}
-      >
+    <>
+    <BottomSheet visible={visible} onClose={onClose} maxHeight={SHEET_HEIGHT.tall}>
+      {/* Explicit, constant height — never changes for the keyboard.
+          BottomSheet's own inner container has no height of its own (only
+          a maxHeight cap), so a flex:1 child here has nothing to resolve
+          against and would collapse to nothing without this. */}
+      <View style={{ height: SCREEN_H * 0.88 }}>
         <View style={{ flex: 1 }}>
           <View style={m.handle} />
 
@@ -479,20 +604,35 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
             {!activePicker && (
               <>
                 <View style={m.titleRow}>
-                  <Text style={m.title}>{isEdit ? "Edit Slot" : "Add Class Slot"}</Text>
+                  <View style={m.titleIcon}>
+                    <Ionicons name={isEdit ? "create-outline" : "add-circle-outline"} size={ms(21)} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={m.title}>{isEdit ? "Edit Slot" : "Add Class Slot"}</Text>
+                    <Text style={m.titleDesc}>
+                      {isEdit
+                        ? "Update the timing, subject, faculty or room for this weekly slot."
+                        : "Define a new recurring class slot for this batch."}
+                    </Text>
+                  </View>
                   <TouchableOpacity onPress={onClose} style={m.closeBtn}>
                     <Ionicons name="close" size={ms(18)} color={C.muted} />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView
+                  ref={scrollRef}
+                  onLayout={(e) => { headerHeightRef.current = e.nativeEvent.layout.y; }}
+                  onScroll={(e) => { currentScrollYRef.current = e.nativeEvent.contentOffset.y; }}
+                  scrollEventThrottle={16}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: ms(400) }}
                 >
                   {loadingData && (
                     <View style={m.loadingRow}>
-                      <ActivityIndicator size="small" color={C.primary} />
+                      <ActivityIndicator size="small" color={colors.primary} />
                       <Text style={m.loadingT}>Loading subjects &amp; faculty…</Text>
                     </View>
                   )}
@@ -516,40 +656,6 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
                       </View>
                     </View>
                   )}
-
-                  {/* ── Times ── */}
-                  <View style={m.timeRow}>
-                    <View style={[m.section, { flex: 1 }]}>
-                      <Text style={m.label}>Start Time</Text>
-                      <TextInput
-                        style={m.input}
-                        value={startTime}
-                        onChangeText={setStartTime}
-                        placeholder="09:00"
-                        placeholderTextColor={C.placeholder}
-                        keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "default"}
-                        maxLength={5}
-                        autoCorrect={false}
-                        autoCapitalize="none"
-                      />
-                      <Text style={m.hint}>24-hour  HH:MM</Text>
-                    </View>
-                    <View style={[m.section, { flex: 1 }]}>
-                      <Text style={m.label}>End Time</Text>
-                      <TextInput
-                        style={m.input}
-                        value={endTime}
-                        onChangeText={setEndTime}
-                        placeholder="10:30"
-                        placeholderTextColor={C.placeholder}
-                        keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "default"}
-                        maxLength={5}
-                        autoCorrect={false}
-                        autoCapitalize="none"
-                      />
-                      <Text style={m.hint}>24-hour  HH:MM</Text>
-                    </View>
-                  </View>
 
                   {/* ── Subject selector ── */}
                   <View style={m.section}>
@@ -588,7 +694,7 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
                       activeOpacity={0.75}
                     >
                       {facultyId ? (
-                        <View style={[m.pickerAvatar, { backgroundColor: facultyAvatarColor(facultyName) }]}>
+                        <View style={[m.pickerAvatar, { backgroundColor: facultyAvatarColor(facultyName, colors) }]}>
                           <Text style={m.pickerAvatarT}>{getInitials(facultyName)}</Text>
                         </View>
                       ) : (
@@ -614,12 +720,13 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
                   </View>
 
                   {/* ── Room ── */}
-                  <View style={m.section}>
+                  <View style={m.section} onLayout={recordFieldY("room")}>
                     <Text style={m.label}>Room / Location (optional)</Text>
                     <TextInput
                       style={m.input}
                       value={room}
                       onChangeText={setRoom}
+                      onFocus={() => scrollFieldIntoView("room")}
                       placeholder="e.g. Room 101, Hall A"
                       placeholderTextColor={C.placeholder}
                       maxLength={100}
@@ -629,12 +736,13 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
 
                   {/* ── Valid from (create only) ── */}
                   {!isEdit && (
-                    <View style={m.section}>
+                    <View style={m.section} onLayout={recordFieldY("validFrom")}>
                       <Text style={m.label}>Valid From</Text>
                       <TextInput
                         style={m.input}
                         value={validFrom}
                         onChangeText={setValidFrom}
+                        onFocus={() => scrollFieldIntoView("validFrom")}
                         placeholder="YYYY-MM-DD"
                         placeholderTextColor={C.placeholder}
                         maxLength={10}
@@ -644,6 +752,29 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
                       <Text style={m.hint}>Sessions only generate from this date onwards</Text>
                     </View>
                   )}
+
+                  {/* ── Times ── */}
+                  <View style={m.section} onLayout={recordFieldY("time")}>
+                    <Text style={m.label}>Class Timing</Text>
+                    <View style={m.timeRangeRow}>
+                      <Ionicons name="time-outline" size={ms(16)} color={C.muted} />
+                      <TouchableOpacity
+                        style={m.timeRangeTap}
+                        onPress={() => setActiveTimePicker("start")}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={m.timeRangeValue}>{startTime}</Text>
+                      </TouchableOpacity>
+                      <Text style={m.timeRangeSep}>–</Text>
+                      <TouchableOpacity
+                        style={m.timeRangeTap}
+                        onPress={() => setActiveTimePicker("end")}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={m.timeRangeValue}>{endTime}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
                   {error && (
                     <View style={m.errorBox}>
@@ -657,7 +788,7 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
 
                 {/* Footer */}
                 <View style={m.footer}>
-                  {isEdit && (
+                  {isEdit && canDelete && (
                     <TouchableOpacity
                       style={m.deleteBtn}
                       onPress={handleDelete}
@@ -686,82 +817,160 @@ export function ManageSlotModal({ batchId, slot, visible, onClose, onSaved }: Pr
               </>
             )}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </BottomSheet>
+
+    {/* Native time-picker wheel — Android's is an imperative one-shot dialog
+        (mounting it opens the dialog; it unmounts itself via handleTimeChange
+        once "set" or "dismissed" fires). iOS has no built-in modal chrome for
+        the spinner, so it's wrapped in a small sheet with Cancel/Done. */}
+    {activeTimePicker && Platform.OS === "android" && (
+      <DateTimePicker
+        value={timeStrToDate(activeTimePicker === "start" ? startTime : endTime)}
+        mode="time"
+        is24Hour
+        display="default"
+        onChange={handleTimeChange}
+      />
+    )}
+    {activeTimePicker && Platform.OS === "ios" && (
+      <Modal transparent animationType="slide" visible onRequestClose={() => setActiveTimePicker(null)}>
+        <View style={m.iosPickerOverlay}>
+          <TouchableOpacity style={m.iosPickerBackdrop} activeOpacity={1} onPress={() => setActiveTimePicker(null)} />
+          <View style={m.iosPickerSheet}>
+            <View style={m.iosPickerHeader}>
+              <TouchableOpacity onPress={() => setActiveTimePicker(null)}>
+                <Text style={m.iosPickerCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={m.iosPickerTitle}>{activeTimePicker === "start" ? "Start Time" : "End Time"}</Text>
+              <TouchableOpacity onPress={confirmIosTimePicker}>
+                <Text style={m.iosPickerDone}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={timeStrToDate(activeTimePicker === "start" ? startTime : endTime)}
+              mode="time"
+              is24Hour
+              display="spinner"
+              onChange={handleTimeChange}
+            />
+          </View>
+        </View>
+      </Modal>
+    )}
+  </>
   );
 }
 
 // ── Modal styles ──────────────────────────────────────────────────────────────
 
-const m = StyleSheet.create({
+const makeMStyles = (colors: ThemeColors) => StyleSheet.create({
   handle: {
     width: ms(36), height: ms(4), borderRadius: ms(2),
     backgroundColor: C.border, alignSelf: "center",
     marginTop: ms(12), marginBottom: ms(4),
   },
+  // Matches ManageCentersModal's header — icon badge + title + description,
+  // not a bare title row — so every popup header in the app reads the same way.
   titleRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    flexDirection: "row", alignItems: "flex-start", gap: ms(12),
     paddingHorizontal: ms(20), paddingVertical: ms(14),
-    borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  title:    { fontSize: fs(16), fontWeight: "800", color: C.text },
+  titleIcon: {
+    width: ms(44), height: ms(44), borderRadius: ms(12),
+    backgroundColor: colors.primary + "17",
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  title:    { ...T.cardTitle, color: C.text, marginBottom: 3 },
+  titleDesc:{ ...T.bodySmall, color: C.muted },
   closeBtn: {
     width: ms(32), height: ms(32), borderRadius: ms(10),
-    backgroundColor: C.border, alignItems: "center", justifyContent: "center",
+    backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
 
   loadingRow: { flexDirection: "row", alignItems: "center", gap: ms(8), padding: ms(16) },
-  loadingT:   { fontSize: fs(12), color: C.muted },
+  loadingT:   { ...T.bodySmall, color: C.muted },
 
-  section:  { paddingHorizontal: ms(20), paddingTop: ms(16) },
-  label:    { fontSize: fs(11), fontWeight: "700", color: C.muted, marginBottom: ms(8), textTransform: "uppercase", letterSpacing: 0.5 },
-  hint:     { fontSize: fs(10), color: C.placeholder, marginTop: ms(4) },
-  timeRow:  { flexDirection: "row", gap: ms(12), paddingHorizontal: ms(20), paddingTop: ms(16) },
+  section:  { paddingHorizontal: ms(20), paddingTop: ms(8), paddingBottom: ms(14) },
+  // Matches FormField.tsx's own label exactly (chipText + text color,
+  // uppercased) — that's the shared field primitive StudentAdmissionScreen
+  // uses, and this modal's fields should read the same way.
+  label:    { ...T.chipText, color: C.text, marginBottom: ms(7), textTransform: "uppercase", letterSpacing: 0.3 },
+  hint:     { ...T.caption, color: C.placeholder, marginTop: ms(4) },
 
+  // Light tinted fill, not a white card — with the hairline border now this
+  // thin, a pure-white fill on a white sheet made fields hard to spot.
   input: {
-    borderWidth: 1, borderColor: C.border, borderRadius: ms(10),
-    paddingHorizontal: ms(12), paddingVertical: ms(11),
-    fontSize: fs(14), color: C.text, backgroundColor: C.inputBg,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderRadius: ms(12),
+    paddingHorizontal: ms(14), paddingVertical: ms(12),
+    ...T.body, color: C.text, backgroundColor: C.inputBg,
   },
+
+  // Single time-range field — one bordered card holding both times, so this
+  // lines up with every other field in the form (one field per row) instead
+  // of two separate boxes competing for width side by side.
+  timeRangeRow: {
+    flexDirection: "row", alignItems: "center", gap: ms(10),
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderRadius: ms(12),
+    paddingHorizontal: ms(14), paddingVertical: ms(12),
+    backgroundColor: C.inputBg,
+  },
+  timeRangeTap:   { flex: 1, alignItems: "center" },
+  timeRangeValue: { ...T.body, color: C.text },
+  timeRangeSep:   { ...T.cardTitle, color: C.placeholder },
+
+  // ── iOS time-picker sheet (Android uses the OS's own dialog chrome) ──
+  iosPickerOverlay:  { flex: 1, justifyContent: "flex-end" },
+  iosPickerBackdrop: { ...StyleSheet.absoluteFill },
+  iosPickerSheet:    { backgroundColor: C.card, borderTopLeftRadius: ms(20), borderTopRightRadius: ms(20), paddingBottom: ms(24) },
+  iosPickerHeader: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: ms(16), paddingVertical: ms(12),
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
+  },
+  iosPickerTitle:  { ...T.cardTitle, color: C.text },
+  iosPickerCancel: { ...T.buttonText, color: C.muted },
+  iosPickerDone:   { ...T.buttonText, color: colors.primary },
 
   // ── Day chips ──
   dayGrid:      { flexDirection: "row", flexWrap: "wrap", gap: ms(8) },
   dayChip:      { paddingHorizontal: ms(12), paddingVertical: ms(7), borderRadius: ms(8), borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg },
-  dayChipActive:{ backgroundColor: C.primary, borderColor: C.primary },
-  dayChipT:     { fontSize: fs(12), color: C.muted, fontWeight: "600" },
+  dayChipActive:{ backgroundColor: colors.primary, borderColor: colors.primary },
+  dayChipT:     { ...T.chipText, color: C.muted },
   dayChipTActive:{ color: "#FFFFFF" },
 
-  // ── Picker cards ──
+  // ── Picker cards ── (same field height as m.input, so every field in this
+  // modal — text or picker — lines up at a consistent size)
   pickerCard: {
     flexDirection: "row", alignItems: "center", gap: ms(10),
-    borderWidth: 1.5, borderColor: C.border, borderRadius: ms(12),
-    paddingHorizontal: ms(12), paddingVertical: ms(11),
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderRadius: ms(12),
+    paddingHorizontal: ms(10), paddingVertical: ms(7),
     backgroundColor: C.inputBg,
   },
   pickerIcon: {
-    width: ms(36), height: ms(36), borderRadius: ms(10),
+    width: ms(30), height: ms(30), borderRadius: ms(9),
     alignItems: "center", justifyContent: "center",
   },
   pickerAvatar: {
-    width: ms(36), height: ms(36), borderRadius: ms(10),
+    width: ms(30), height: ms(30), borderRadius: ms(9),
     alignItems: "center", justifyContent: "center",
   },
-  pickerAvatarT:   { fontSize: fs(12), fontWeight: "800", color: "#fff" },
-  pickerSelected:  { fontSize: fs(13), fontWeight: "700", color: C.text },
-  pickerMeta:      { fontSize: fs(10), color: C.muted, marginTop: ms(1) },
-  pickerPlaceholder: { fontSize: fs(13), color: C.placeholder },
+  pickerAvatarT:   { ...T.chipText, color: "#fff" },
+  pickerSelected:  { ...T.listItemTitle, color: C.text },
+  pickerMeta:      { ...T.caption, color: C.muted, marginTop: ms(1) },
+  pickerPlaceholder: { ...T.body, color: C.placeholder },
 
   errorBox: {
     flexDirection: "row", gap: ms(8), alignItems: "flex-start",
     marginHorizontal: ms(20), marginTop: ms(12),
-    backgroundColor: "#FEF0EE", padding: ms(12), borderRadius: ms(10),
+    backgroundColor: C.redBg, padding: ms(12), borderRadius: ms(10),
   },
-  errorT: { flex: 1, fontSize: fs(12), color: C.red },
+  errorT: { flex: 1, ...T.bodySmall, color: C.red },
 
   footer: {
     flexDirection: "row", gap: ms(10),
     paddingHorizontal: ms(20), paddingTop: ms(16), paddingBottom: ms(32),
-    borderTopWidth: 1, borderTopColor: C.border,
   },
   deleteBtn: {
     flexDirection: "row", gap: ms(4),
@@ -770,20 +979,20 @@ const m = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     backgroundColor: C.red + "14",
   },
-  deleteBtnT: { fontSize: fs(13), fontWeight: "700", color: C.red },
+  deleteBtnT: { ...T.buttonText, color: C.red },
   saveBtn: {
     flex: 1, height: ms(46), borderRadius: ms(10),
-    backgroundColor: C.primary,
+    backgroundColor: colors.primary,
     alignItems: "center", justifyContent: "center",
-    shadowColor: C.primary, shadowOffset: { width: 0, height: ms(4) },
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: ms(4) },
     shadowOpacity: 0.35, shadowRadius: ms(8), elevation: 6,
   },
-  saveBtnT: { fontSize: fs(14), fontWeight: "700", color: "#FFFFFF" },
+  saveBtnT: { ...T.buttonText, color: "#FFFFFF" },
 });
 
 // ── Subject grid styles ───────────────────────────────────────────────────────
 
-const sg = StyleSheet.create({
+const makeSgStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { flex: 1 },
   header: {
     flexDirection: "row", alignItems: "center", gap: ms(10),
@@ -794,39 +1003,41 @@ const sg = StyleSheet.create({
     width: ms(32), height: ms(32), borderRadius: ms(10),
     backgroundColor: C.border, alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: fs(15), fontWeight: "800", color: C.text },
-  headerSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(1) },
-  clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: C.primary + "14" },
-  clearT:      { fontSize: fs(12), color: C.primary, fontWeight: "700" },
+  headerTitle: { ...T.cardTitle, color: C.text },
+  headerSub:   { ...T.caption, color: C.muted, marginTop: ms(1) },
+  clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: colors.primary + "14" },
+  clearT:      { ...T.chipText, color: colors.primary },
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
-    margin: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(9),
+    marginHorizontal: ms(12), marginTop: ms(8), marginBottom: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(9),
     backgroundColor: C.inputBg, borderRadius: ms(10),
-    borderWidth: 1, borderColor: C.border,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
   },
-  searchInput: { flex: 1, fontSize: fs(13), color: C.text, padding: 0 },
+  searchInput: { flex: 1, ...T.body, color: C.text, padding: 0 },
 
   listContent: { paddingHorizontal: ms(16), paddingBottom: ms(24) },
   empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(40) },
-  emptyT:      { fontSize: fs(13), fontWeight: "600", color: C.muted },
+  emptyT:      { ...T.body, color: C.muted },
 
   group:       { marginBottom: ms(8) },
   groupHeader: { flexDirection: "row", alignItems: "center", gap: ms(8), paddingTop: ms(14), paddingBottom: ms(10) },
   groupDot:    { width: ms(8), height: ms(8), borderRadius: ms(4), flexShrink: 0 },
-  groupLabel:  { fontSize: fs(11), fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", flex: 1 },
-  groupCount:  { fontSize: fs(10.5), color: C.muted },
+  groupLabel:  { ...T.sectionHeading, letterSpacing: 0.8, flex: 1 },
+  groupCount:  { ...T.caption, color: C.muted },
 
   grid:    { flexDirection: "row", flexWrap: "wrap", gap: ms(10) },
-  card:    { width: "47%", backgroundColor: "#FFFFFF", borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
+  card:    { width: "47%", backgroundColor: C.card, borderRadius: ms(14), borderWidth: 1.5, overflow: "hidden" },
   cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: ms(10), paddingVertical: ms(8) },
   cardDot: { width: ms(9), height: ms(9), borderRadius: ms(4.5) },
-  cardName:{ fontSize: fs(12.5), fontWeight: "700", color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(8), lineHeight: fs(18) },
+  // Was T.cardTitle (15px) — oversized for a half-width grid tile whose only
+  // content is this name; same fix as BatchDetailScreen's info-tile values.
+  cardName:{ ...T.chipText, color: C.text, paddingHorizontal: ms(10), paddingVertical: ms(8) },
 });
 
 // ── Faculty grid styles ───────────────────────────────────────────────────────
 
-const fg = StyleSheet.create({
+const makeFgStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { flex: 1 },
   header: {
     flexDirection: "row", alignItems: "center", gap: ms(10),
@@ -837,32 +1048,32 @@ const fg = StyleSheet.create({
     width: ms(32), height: ms(32), borderRadius: ms(10),
     backgroundColor: C.border, alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: fs(15), fontWeight: "800", color: C.text },
-  headerSub:   { fontSize: fs(11), color: C.muted, marginTop: ms(1) },
-  clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: C.primary + "14" },
-  clearT:      { fontSize: fs(12), color: C.primary, fontWeight: "700" },
+  headerTitle: { ...T.cardTitle, color: C.text },
+  headerSub:   { ...T.caption, color: C.muted, marginTop: ms(1) },
+  clearBtn:    { paddingHorizontal: ms(10), paddingVertical: ms(5), borderRadius: ms(8), backgroundColor: colors.primary + "14" },
+  clearT:      { ...T.chipText, color: colors.primary },
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: ms(8),
-    margin: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(9),
+    marginHorizontal: ms(12), marginTop: ms(8), marginBottom: ms(12), paddingHorizontal: ms(12), paddingVertical: ms(9),
     backgroundColor: C.inputBg, borderRadius: ms(10),
-    borderWidth: 1, borderColor: C.border,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
   },
-  searchInput: { flex: 1, fontSize: fs(13), color: C.text, padding: 0 },
+  searchInput: { flex: 1, ...T.body, color: C.text, padding: 0 },
 
   listContent: { padding: ms(12), gap: ms(8) },
   empty:       { alignItems: "center", gap: ms(8), paddingVertical: ms(40) },
-  emptyT:      { fontSize: fs(13), fontWeight: "600", color: C.muted },
+  emptyT:      { ...T.body, color: C.muted },
 
   card: {
     flexDirection: "row", alignItems: "center", gap: ms(12),
     paddingHorizontal: ms(14), paddingVertical: ms(13),
-    backgroundColor: "#FFFFFF", borderRadius: ms(14),
+    backgroundColor: C.card, borderRadius: ms(14),
     borderWidth: 1.5, borderColor: C.border,
   },
   avatar:   { width: ms(42), height: ms(42), borderRadius: ms(13), alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  initials: { fontSize: fs(14), fontWeight: "800" },
-  name:     { fontSize: fs(13.5), fontWeight: "700", color: C.text },
-  subs:     { fontSize: fs(11), color: C.muted, marginTop: ms(2) },
-  code:     { fontSize: fs(10), color: C.placeholder, marginTop: ms(2), fontWeight: "600" },
+  initials: { ...T.listItemTitle },
+  name:     { ...T.listItemTitle, color: C.text },
+  subs:     { ...T.caption, color: C.muted, marginTop: ms(2) },
+  code:     { ...T.badgeText, color: C.placeholder, marginTop: ms(2) },
 });

@@ -3,12 +3,39 @@ import { resetDb } from "./setup";
 import { createEnrollment, BatchFullError } from "../modules/enrollments/enrollments.service";
 import { convertLead } from "../modules/leads/leads.service";
 
+const TENANT_ID = "11111111-1111-1111-1111-111111111111";
+
+async function ensureTestTenant() {
+  return prisma.tenant.upsert({
+    where:  { id: TENANT_ID },
+    update: {},
+    create: { id: TENANT_ID, name: "Test Institute", slug: "test-institute" },
+  });
+}
+
+async function ensureSscCategory() {
+  return prisma.examCategory.upsert({
+    where:  { tenantId_key: { tenantId: TENANT_ID, key: "ssc" } },
+    update: {},
+    create: { tenantId: TENANT_ID, key: "ssc", label: "SSC" },
+  });
+}
+
 async function makeCourseAndBatch(capacity: number) {
+  await ensureTestTenant();
+  const examCategory = await ensureSscCategory();
   const course = await prisma.course.create({
-    data: { name: "SSC CGL Foundation", examCategory: "ssc", durationMonths: 6, defaultFee: 10000 },
+    data: {
+      tenantId: TENANT_ID,
+      name: "SSC CGL Foundation",
+      durationMonths: 6,
+      defaultFee: 10000,
+      examCategories: { create: [{ examCategoryId: examCategory.id }] },
+    },
   });
   return prisma.batch.create({
     data: {
+      tenantId: TENANT_ID,
       courseId: course.id,
       name: "SSC-Morning-A",
       capacity,
@@ -25,10 +52,10 @@ describe("enrollment capacity", () => {
   it("rejects enrollment once batch is at capacity", async () => {
     const batch = await makeCourseAndBatch(1);
     const s1 = await prisma.student.create({
-      data: { studentCode: "INS-2026-0001", fullName: "Student One", phone: "1" },
+      data: { tenantId: TENANT_ID, studentCode: "INS-2026-0001", fullName: "Student One", phone: "1" },
     });
     const s2 = await prisma.student.create({
-      data: { studentCode: "INS-2026-0002", fullName: "Student Two", phone: "2" },
+      data: { tenantId: TENANT_ID, studentCode: "INS-2026-0002", fullName: "Student Two", phone: "2" },
     });
 
     await prisma.$transaction((tx) => createEnrollment(tx, s1.id, batch.id));
@@ -41,7 +68,7 @@ describe("enrollment capacity", () => {
   it("rejects a duplicate (student, batch) enrollment", async () => {
     const batch = await makeCourseAndBatch(5);
     const student = await prisma.student.create({
-      data: { studentCode: "INS-2026-0003", fullName: "Student Three", phone: "3" },
+      data: { tenantId: TENANT_ID, studentCode: "INS-2026-0003", fullName: "Student Three", phone: "3" },
     });
 
     await prisma.$transaction((tx) => createEnrollment(tx, student.id, batch.id));
@@ -58,16 +85,17 @@ describe("lead conversion", () => {
 
   it("creates exactly one student + one enrollment and marks the lead converted", async () => {
     const batch = await makeCourseAndBatch(10);
+    const examCategory = await ensureSscCategory();
     const lead = await prisma.lead.create({
-      data: { name: "Lead Name", phone: "9", targetExam: "ssc", source: "walk-in" },
+      data: { tenantId: TENANT_ID, name: "Lead Name", phone: "9", targetExamId: examCategory.id, source: "walk-in" },
     });
 
     const result = await convertLead(prisma, lead.id, {
       batchId: batch.id,
-    });
+    }, TENANT_ID);
 
     expect(result.student.fullName).toBe("Lead Name");
-    expect(await prisma.student.count()).toBe(1);
+    expect(await prisma.student.count({ where: { tenantId: TENANT_ID } })).toBe(1);
     expect(await prisma.enrollment.count()).toBe(1);
 
     const updatedLead = await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } });
