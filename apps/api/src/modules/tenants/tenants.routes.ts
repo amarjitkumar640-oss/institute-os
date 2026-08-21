@@ -1,11 +1,20 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/role";
-import { resolveLogoUrl } from "../../lib/s3";
+import { resolveLogoUrl, uploadPhoto, getSignedPhotoUrl, deletePhoto } from "../../lib/s3";
 
 export const tenantsRouter = Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+// A stored logoUrl is either an object key in our own private bucket
+// (uploaded below) or a plain external URL — see resolveLogoUrl's own
+// comment. Only a key we own should ever be deleted from the bucket.
+function isOwnedLogoKey(logoUrl: string): boolean {
+  return !logoUrl.startsWith("http://") && !logoUrl.startsWith("https://");
+}
 
 // ── GET /api/tenants/:tenantId/public — unauthenticated org lookup ────────────
 // Called once at app launch (the tenant is baked into the build), before any
@@ -117,4 +126,32 @@ tenantsRouter.patch("/me/settings", requireAuth, requireRole("admin"), async (re
     classReminderMinutes: tenant.classReminderMinutes,
     overdueGraceDays:     tenant.overdueGraceDays,
   });
+});
+
+// ── POST /api/tenants/me/logo — admin uploads/replaces the logo image ─────────
+tenantsRouter.post("/me/logo", requireAuth, requireRole("admin"), upload.single("logo"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Missing logo file" });
+  const tenant = await prisma.tenant.findUnique({ where: { id: req.auth!.tenantId } });
+  if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+
+  if (tenant.logoUrl && isOwnedLogoKey(tenant.logoUrl)) {
+    await deletePhoto(tenant.logoUrl).catch(() => {});
+  }
+
+  const key = `tenants/${tenant.id}/logo-${Date.now()}-${req.file.originalname}`;
+  await uploadPhoto(key, req.file.buffer, req.file.mimetype);
+  await prisma.tenant.update({ where: { id: tenant.id }, data: { logoUrl: key } });
+  res.json({ logoUrl: await getSignedPhotoUrl(key) });
+});
+
+// ── DELETE /api/tenants/me/logo — admin removes the logo ──────────────────────
+tenantsRouter.delete("/me/logo", requireAuth, requireRole("admin"), async (req, res) => {
+  const tenant = await prisma.tenant.findUnique({ where: { id: req.auth!.tenantId } });
+  if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+
+  if (tenant.logoUrl && isOwnedLogoKey(tenant.logoUrl)) {
+    await deletePhoto(tenant.logoUrl).catch(() => {});
+  }
+  await prisma.tenant.update({ where: { id: tenant.id }, data: { logoUrl: null } });
+  res.json({ ok: true });
 });

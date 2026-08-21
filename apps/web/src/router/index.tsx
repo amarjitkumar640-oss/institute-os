@@ -28,11 +28,18 @@ import { NotificationsPage } from "@/modules/notifications/NotificationsPage";
 import { ProfilePage } from "@/modules/profile/ProfilePage";
 import { SettingsPage } from "@/modules/settings/SettingsPage";
 import { PermissionsPage } from "@/modules/permissions/PermissionsPage";
+import { SiteContentPage } from "@/modules/site-content/SiteContentPage";
 
 export const router = createBrowserRouter([
   // Shareable per-institute link — not wrapped in AuthLayout, it's a
   // near-instant redirect to /login, not a screen anyone lingers on.
   { path: "/org/:slug", element: <TenantEntryPage /> },
+  // Shorter alias for the same thing — /success-tutorial instead of
+  // /org/success-tutorial. Safe to add: React Router ranks every static
+  // route above (/dashboard, /login, /students, etc.) as more specific than
+  // this single dynamic segment, so none of them can be shadowed by it —
+  // this only ever catches a first path segment that isn't one of those.
+  { path: "/:slug", element: <TenantEntryPage /> },
   // Public self-service admission form — fully unauthenticated, no nav shell.
   { path: "/apply/:tenantSlug", element: <ApplyPage /> },
   // Public shareable APK download link — fully unauthenticated, no nav shell.
@@ -199,6 +206,18 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute screenKey="notifications">
             <NotificationsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        // Not in the screenKey permission grid — this is a one-off feature
+        // for a single tenant's standalone marketing site (apps/site), not
+        // a general operational screen, so adminOnly is the right fit here
+        // too (same reasoning as Settings, just not for lockout reasons).
+        path: "/site-content",
+        element: (
+          <ProtectedRoute adminOnly>
+            <SiteContentPage />
           </ProtectedRoute>
         ),
       },

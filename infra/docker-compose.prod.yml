@@ -21,6 +21,26 @@ services:
       - postgres-data:/var/lib/postgresql/data
     # deliberately no "ports:" — unreachable from outside this Docker network
 
+  # Standalone marketing site (apps/site) for thesuccess.in — plain static
+  # nginx, no env_file needed since it has no server-side config of its own;
+  # all its dynamic data comes from api at request time via relative /api/*
+  # calls (see infra/Caddyfile).
+  site:
+    image: ghcr.io/amarjitkumar640-oss/institute-os-site:latest
+    restart: always
+    expose:
+      - "80"
+
+  # Staff portal (apps/web) — one shared multi-tenant build, deployed here
+  # with no path prefix under thesuccess.in for now (see infra/Caddyfile's
+  # comment on this tradeoff). No env_file: same as web-qa, it has no
+  # server-side config — VITE_API_URL is baked in at build time instead.
+  web:
+    image: ghcr.io/amarjitkumar640-oss/institute-os-web:latest
+    restart: always
+    expose:
+      - "80"
+
   caddy:
     image: caddy:2-alpine
     restart: always
@@ -33,6 +53,8 @@ services:
       - caddy-config:/config
     depends_on:
       - api
+      - site
+      - web
 
 volumes:
   postgres-data:

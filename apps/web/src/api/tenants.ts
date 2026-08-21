@@ -36,3 +36,16 @@ export async function updateTenantSettings(payload: UpdateSettingsPayload): Prom
   const { data } = await apiClient.patch("/api/tenants/me/settings", payload);
   return data;
 }
+
+export async function uploadTenantLogo(file: File): Promise<{ logoUrl: string }> {
+  const formData = new FormData();
+  formData.append("logo", file);
+  const { data } = await apiClient.post<{ logoUrl: string }>("/api/tenants/me/logo", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteTenantLogo(): Promise<void> {
+  await apiClient.delete("/api/tenants/me/logo");
+}

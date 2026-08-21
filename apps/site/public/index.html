@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="hi" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Success Tutorial Classes</title>
+<meta name="description" content="SSC, Banking, Railway &amp; Foundation coaching — results-driven classes, experienced faculty, two centers.">
+<!-- The page already has its own EN/हिं toggle (see the script at the bottom),
+     which swaps DOM text on click. Chrome's built-in page translator would
+     otherwise auto-translate on load (page is Hindi, browser is English) and
+     then re-translate every time our toggle changes the DOM, fighting our
+     own switch and reverting it a second later. These two lines opt out. -->
+<meta name="google" content="notranslate">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --primary:#8f2e23; --secondary:#B45309; --accent:#F59E0B; --bg:#f6f5e3;
+    --ink:#211A3A; --ink-soft:#5B5478; --card-radius:24px;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
+  body{
+    font-family:'Manrope', 'Noto Sans Devanagari', sans-serif; color:var(--ink); background:var(--bg);
+    overflow-x:hidden;
+  }
+  a{ color:inherit; text-decoration:none; }
+  img{ max-width:100%; display:block; }
+  .wrap{ max-width:1140px; margin:0 auto; padding:0 24px; }
+  h1,h2,h3{ font-family:'Fredoka', 'Noto Sans Devanagari', sans-serif; font-weight:700; }
+
+  /* ── Nav ── */
+  header{
+    position:sticky; top:0; z-index:50;
+    background:rgba(246,245,227,0.85); backdrop-filter:blur(10px);
+    border-bottom:1px solid rgba(33,26,58,0.08);
+  }
+  nav.wrap{ display:flex; align-items:center; justify-content:space-between; padding:14px 24px; gap:16px; }
+  .brand{ display:flex; align-items:center; gap:10px; font-weight:700; font-size:18px; flex-shrink:0; }
+  .brand img{ width:38px; height:38px; border-radius:12px; object-fit:cover; }
+  .brand .fallback{ width:38px; height:38px; border-radius:12px; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; }
+  .navlinks{ display:flex; gap:24px; font-weight:600; font-size:14px; color:var(--ink-soft); }
+  .navlinks a:hover{ color:var(--primary); }
+  .navcta{ display:flex; align-items:center; gap:10px; }
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:14px;
+    padding:11px 20px; border-radius:12px; border:none; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease;
+    font-family:inherit;
+  }
+  .btn:hover{ transform:translateY(-2px); }
+  .btn-primary{ background:linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, black)); color:#fff; box-shadow:0 10px 24px -8px rgba(143,46,35,0.55); }
+  .btn-outline{ background:#fff; color:var(--primary); border:1.5px solid rgba(143,46,35,0.25); }
+  @media (max-width:820px){ .navlinks{ display:none; } }
+
+  .lang-switch{ display:flex; border:1.5px solid rgba(143,46,35,0.2); border-radius:999px; padding:3px; background:#fff; flex-shrink:0; }
+  .lang-switch button{ border:none; background:transparent; font-weight:700; font-size:12px; padding:6px 11px; border-radius:999px; cursor:pointer; color:var(--ink-soft); font-family:inherit; }
+  .lang-switch button.active{ background:var(--primary); color:#fff; }
+
+  /* ── Hero ── */
+  .hero{ position:relative; overflow:hidden; padding:90px 24px 110px; text-align:center; }
+  .hero::before{
+    content:''; position:absolute; inset:0; z-index:0;
+    background:
+      radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--primary) 16%, transparent) 0%, transparent 45%),
+      radial-gradient(circle at 85% 10%, color-mix(in srgb, var(--secondary) 18%, transparent) 0%, transparent 40%),
+      radial-gradient(circle at 75% 85%, color-mix(in srgb, var(--accent) 20%, transparent) 0%, transparent 45%);
+  }
+  .orb{ position:absolute; border-radius:50%; filter:blur(60px); opacity:.55; z-index:0; animation:morph 13s ease-in-out infinite, drift 17s ease-in-out infinite; }
+  .o1{ width:340px; height:340px; top:-100px; left:-80px; background:radial-gradient(circle, var(--primary), transparent 70%); }
+  .o2{ width:300px; height:300px; bottom:-120px; right:-60px; background:radial-gradient(circle, var(--secondary), transparent 70%); animation-delay:2s,1s; }
+  @keyframes morph{ 0%,100%{ border-radius:50%; } 50%{ border-radius:38% 62% 55% 45%/50% 40% 60% 50%; } }
+  @keyframes drift{ 0%,100%{ transform:translate(0,0); } 50%{ transform:translate(24px,-18px); } }
+  .hero-content{ position:relative; z-index:1; max-width:760px; margin:0 auto; }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid rgba(143,46,35,0.15);
+    padding:8px 16px; border-radius:999px; font-size:12.5px; font-weight:700; color:var(--primary);
+    margin-bottom:22px; opacity:0; animation:fadeUp .6s ease .1s forwards;
+  }
+  .hero h1{ font-size:clamp(30px,5.5vw,54px); line-height:1.14; letter-spacing:-0.01em; margin-bottom:18px; opacity:0; animation:fadeUp .6s ease .22s forwards; }
+  .hero h1 span{ color:var(--primary); }
+  .hero p{ font-size:17px; color:var(--ink-soft); max-width:580px; margin:0 auto 34px; line-height:1.7; opacity:0; animation:fadeUp .6s ease .34s forwards; }
+  .hero-ctas{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; opacity:0; animation:fadeUp .6s ease .46s forwards; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(16px);} to{ opacity:1; transform:translateY(0);} }
+
+  .stats{ position:relative; z-index:1; display:flex; justify-content:center; gap:48px; margin-top:56px; flex-wrap:wrap; opacity:0; animation:fadeUp .6s ease .58s forwards; }
+  .stat b{ display:block; font-family:'Fredoka',sans-serif; font-size:28px; color:var(--primary); }
+  .stat span{ font-size:12.5px; color:var(--ink-soft); font-weight:600; }
+
+  /* ── Section shell ── */
+  section{ padding:80px 24px; }
+  .section-head{ text-align:center; max-width:600px; margin:0 auto 48px; }
+  .section-tag{ font-size:12.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--primary); margin-bottom:10px; }
+  .section-head h2{ font-size:clamp(26px,3.5vw,36px); margin-bottom:12px; }
+  .section-head p{ color:var(--ink-soft); font-size:15.5px; line-height:1.7; }
+
+  .reveal{ opacity:0; transform:translateY(26px); transition:opacity .7s cubic-bezier(.2,.7,.3,1), transform .7s cubic-bezier(.2,.7,.3,1); }
+  .reveal.in{ opacity:1; transform:translateY(0); }
+
+  /* ── About cards ── */
+  .about-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:20px; max-width:1000px; margin:0 auto; }
+  .about-card{ background:#fff; border-radius:var(--card-radius); padding:28px 24px; border:1px solid rgba(33,26,58,0.06); box-shadow:0 12px 28px -18px rgba(33,26,58,0.2); transition:transform .25s ease, box-shadow .25s ease; }
+  .about-card:hover{ transform:translateY(-6px); box-shadow:0 20px 40px -18px rgba(33,26,58,0.28); }
+  .about-card .ico{ width:48px; height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:22px; margin-bottom:16px; background:color-mix(in srgb, var(--primary) 12%, white); }
+  .about-card h3{ font-size:16px; margin-bottom:8px; }
+  .about-card p{ font-size:13.5px; color:var(--ink-soft); line-height:1.6; }
+
+  /* ── Courses ── */
+  .course-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; }
+  .course-card{ background:#fff; border-radius:var(--card-radius); padding:24px; border:1px solid rgba(33,26,58,0.06); box-shadow:0 12px 28px -18px rgba(33,26,58,0.18); }
+  .course-card .cat{ display:inline-block; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:4px 10px; border-radius:999px; background:color-mix(in srgb, var(--accent) 20%, white); color:color-mix(in srgb, var(--accent) 70%, black); margin-bottom:12px; }
+  .course-card h3{ font-size:17px; margin-bottom:8px; }
+  .course-card .meta{ display:flex; justify-content:space-between; align-items:baseline; margin-top:16px; padding-top:14px; border-top:1px dashed rgba(33,26,58,0.12); }
+  .course-card .dur{ font-size:12.5px; color:var(--ink-soft); }
+  .course-card .fee{ font-size:19px; font-weight:800; color:var(--primary); font-family:'Fredoka',sans-serif; }
+  .empty-note{ text-align:center; color:var(--ink-soft); font-size:14px; padding:20px; grid-column:1/-1; }
+
+  /* ── Results wall ── */
+  .results-strip{ display:flex; gap:18px; overflow-x:auto; padding:6px 4px 16px; scroll-snap-type:x mandatory; }
+  .result-card{
+    scroll-snap-align:start; flex:0 0 220px; background:linear-gradient(160deg,#fff, color-mix(in srgb, var(--accent) 8%, white));
+    border-radius:20px; padding:22px; text-align:center; border:1px solid rgba(245,158,11,0.25);
+  }
+  .result-card .avatar{ width:64px; height:64px; border-radius:50%; margin:0 auto 12px; object-fit:cover; background:var(--accent); }
+  .result-card .avatar.fallback{ display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:20px; }
+  .result-card h4{ font-size:14.5px; margin-bottom:4px; }
+  .result-card .rank{ font-size:12px; font-weight:700; color:var(--primary); }
+  .result-card .exam{ font-size:11px; color:var(--ink-soft); margin-top:4px; }
+
+  /* ── Announcements ── */
+  .announce-list{ display:flex; flex-direction:column; gap:14px; max-width:720px; margin:0 auto; }
+  .announce-item{ display:flex; gap:16px; align-items:flex-start; background:#fff; border-radius:16px; padding:18px 20px; border:1px solid rgba(33,26,58,0.06); box-shadow:0 8px 20px -14px rgba(33,26,58,0.2); }
+  .announce-dot{ width:38px; height:38px; border-radius:11px; background:color-mix(in srgb, var(--primary) 12%, white); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px; }
+  .announce-item h4{ font-size:14.5px; margin-bottom:3px; }
+  .announce-item p{ font-size:13px; color:var(--ink-soft); line-height:1.5; }
+  .announce-item time{ font-size:11px; color:#a39dbb; font-weight:600; }
+
+  /* ── Gallery ── */
+  .gallery-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
+  .gallery-grid img{ width:100%; height:150px; object-fit:cover; border-radius:14px; transition:transform .3s ease; }
+  .gallery-grid a:hover img{ transform:scale(1.04); }
+
+  /* ── Contact / CTA band ── */
+  .cta-band{ background:linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, black)); border-radius:32px; padding:56px 40px; text-align:center; color:#fff; max-width:1000px; margin:0 auto; position:relative; overflow:hidden; }
+  .cta-band h2{ font-size:clamp(24px,3vw,32px); margin-bottom:12px; }
+  .cta-band p{ opacity:.85; margin-bottom:28px; font-size:15px; }
+  .cta-band .btn-primary{ background:#fff; color:var(--primary); box-shadow:0 10px 24px -8px rgba(0,0,0,0.3); }
+
+  .contact-grid{ display:grid; grid-template-columns:1fr 1fr; gap:32px; max-width:900px; margin:48px auto 0; }
+  .contact-item{ display:flex; gap:14px; align-items:flex-start; }
+  .contact-item .ico{ width:40px; height:40px; border-radius:12px; background:color-mix(in srgb, var(--primary) 10%, white); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .contact-item h4{ font-size:14px; margin-bottom:3px; }
+  .contact-item p{ font-size:13px; color:var(--ink-soft); }
+  @media (max-width:640px){ .contact-grid{ grid-template-columns:1fr; } }
+
+  footer{ padding:36px 24px; text-align:center; color:var(--ink-soft); font-size:12.5px; border-top:1px solid rgba(33,26,58,0.08); margin-top:40px; }
+  .footer-social{ display:flex; justify-content:center; gap:14px; margin-bottom:14px; }
+  .footer-social a{ width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid rgba(33,26,58,0.1); display:flex; align-items:center; justify-content:center; transition:transform .18s ease; }
+  .footer-social a:hover{ transform:translateY(-2px); }
+
+  .fab-stack{ position:fixed; bottom:22px; right:22px; z-index:60; display:flex; flex-direction:column; gap:12px; }
+  .fab{
+    width:54px; height:54px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 12px 28px -8px rgba(0,0,0,0.35); animation:bob 3s ease-in-out infinite;
+  }
+  .fab-whatsapp{ background:#25D366; }
+  .fab-youtube{ background:#FF0000; animation-delay:.4s; }
+  @keyframes bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-6px); } }
+</style>
+</head>
+<body class="notranslate" translate="no">
+
+<header>
+  <nav class="wrap">
+    <a href="#" class="brand" id="brandLink">
+      <span id="logoWrap"><span class="fallback" id="logoFallback">ST</span></span>
+      <span id="brandName">The Success Tutorial Classes</span>
+    </a>
+    <div class="navlinks">
+      <a href="#about" data-i18n="navAbout">About</a>
+      <a href="#courses" data-i18n="navCourses">Courses</a>
+      <a href="#results" data-i18n="navResults">Selections</a>
+      <a href="#gallery" data-i18n="navGallery">Gallery</a>
+      <a href="#contact" data-i18n="navContact">Contact</a>
+    </div>
+    <div class="navcta">
+      <div class="lang-switch" id="langSwitch">
+        <button type="button" data-lang="hi">हिं</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn-outline" href="/download/success-tutorial" data-i18n="navApp">Get the App</a>
+      <a class="btn btn-primary" href="/apply/success-tutorial" data-i18n="navApply">Apply Now</a>
+    </div>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="orb o1"></div>
+  <div class="orb o2"></div>
+  <div class="hero-content">
+    <span class="eyebrow" data-i18n="heroEyebrow">🎓 SSC · Banking · Railway · Foundation</span>
+    <h1 data-i18n="heroTitle" data-i18n-html="true">Your Trusted Partner for <span>SSC, Banking &amp; Railway</span> Success</h1>
+    <p data-i18n="heroSubtitle">Results-driven coaching with experienced faculty across two centers — join the next batch and see why students trust us with their exam prep.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="/apply/success-tutorial" data-i18n="heroCtaApply">Apply for Admission →</a>
+      <a class="btn btn-outline" href="/download/success-tutorial" data-i18n="heroCtaApp">📱 Download the App</a>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="statCourses">—</b><span data-i18n="statCourses">Courses Offered</span></div>
+    <div class="stat"><b>2</b><span data-i18n="statCenters">Centers</span></div>
+    <div class="stat"><b>15+</b><span data-i18n="statYears">Years Experience</span></div>
+  </div>
+</section>
+
+<section id="about">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag" data-i18n="aboutTag">Why Us</div>
+      <h2 data-i18n="aboutTitle">Built for serious exam prep</h2>
+      <p data-i18n="aboutSubtitle">Everything about how we run classes is designed around one outcome — you clearing your exam.</p>
+    </div>
+    <div class="about-grid">
+      <div class="about-card reveal"><div class="ico">👨‍🏫</div><h3 data-i18n="about1Title">Experienced Faculty</h3><p data-i18n="about1Desc">Teachers with 10+ years of experience specifically in competitive exam coaching, not generic tuition.</p></div>
+      <div class="about-card reveal"><div class="ico">📊</div><h3 data-i18n="about2Title">Result-Focused</h3><p data-i18n="about2Desc">Regular tests, structured syllabus coverage, and a track record of rank holders across batches.</p></div>
+      <div class="about-card reveal"><div class="ico">🏢</div><h3 data-i18n="about3Title">Two Convenient Centers</h3><p data-i18n="about3Desc">Baharagora and Ghatsila — choose whichever's easier for you to reach for daily classes.</p></div>
+      <div class="about-card reveal"><div class="ico">📱</div><h3 data-i18n="about4Title">Stay Connected</h3><p data-i18n="about4Desc">A dedicated app for schedules, fee tracking, and updates — so nothing important gets missed.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="courses" style="background:#fff;">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag" data-i18n="coursesTag">Programs</div>
+      <h2 data-i18n="coursesTitle">Courses we offer</h2>
+      <p data-i18n="coursesSubtitle">Pricing shown here always matches what's currently active — updated automatically.</p>
+    </div>
+    <div class="course-grid reveal" id="courseGrid">
+      <p class="empty-note" data-i18n="loadingCourses">Loading courses…</p>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag" data-i18n="resultsTag">Selections</div>
+      <h2 data-i18n="resultsTitle">Our selected students</h2>
+      <p data-i18n="resultsSubtitle">Students who worked hard and got selected for government service positions.</p>
+    </div>
+    <div class="results-strip reveal" id="resultsStrip">
+      <p class="empty-note" data-i18n="loadingResults">Loading selections…</p>
+    </div>
+  </div>
+</section>
+
+<section id="announcements" style="background:#fff;">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag" data-i18n="announceTag">Latest</div>
+      <h2 data-i18n="announceTitle">Announcements</h2>
+      <p data-i18n="announceSubtitle">New batches, schedule changes, and important notices.</p>
+    </div>
+    <div class="announce-list reveal" id="announceList">
+      <p class="empty-note" data-i18n="loadingAnnounce">Loading announcements…</p>
+    </div>
+  </div>
+</section>
+
+<section id="gallery">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag" data-i18n="galleryTag">Life Here</div>
+      <h2 data-i18n="galleryTitle">Gallery</h2>
+      <p data-i18n="gallerySubtitle">Campus, classes, and events.</p>
+    </div>
+    <div class="gallery-grid reveal" id="galleryGrid">
+      <p class="empty-note" data-i18n="loadingGallery">Loading photos…</p>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <div class="cta-band reveal">
+      <h2 data-i18n="ctaTitle">Ready to start?</h2>
+      <p data-i18n="ctaSubtitle">Applications are open — apply online in a few minutes.</p>
+      <a class="btn btn-primary" href="/apply/success-tutorial" data-i18n="heroCtaApply">Apply for Admission →</a>
+    </div>
+    <div class="contact-grid reveal">
+      <div class="contact-item"><div class="ico">📍</div><div><h4 data-i18n="center1Name">Baharagora Center</h4><p data-i18n="center1Addr">Baharagora, Near college road</p></div></div>
+      <div class="contact-item"><div class="ico">📍</div><div><h4 data-i18n="center2Name">Ghatsila Main Center</h4><p data-i18n="center2Addr">Ghatsila, near BOI</p></div></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-social">
+    <a href="https://www.youtube.com/@thesuccesstutorialclassesg8451" target="_blank" rel="noopener" aria-label="YouTube" title="YouTube">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="#FF0000"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.51 3.5 12 3.5 12 3.5s-7.51 0-9.38.55A3.02 3.02 0 0 0 .5 6.19 31.6 31.6 0 0 0 0 12a31.6 31.6 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14C4.49 20.5 12 20.5 12 20.5s7.51 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14A31.6 31.6 0 0 0 24 12a31.6 31.6 0 0 0-.5-5.81ZM9.6 15.6V8.4L15.8 12Z"/></svg>
+    </a>
+    <a href="https://wa.me/" target="_blank" rel="noopener" aria-label="WhatsApp" title="WhatsApp">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.07-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.6 0-3.1-.44-4.38-1.2l-.31-.18-3 .79.8-2.92-.2-.3A7.94 7.94 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8zm4.4-5.6c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.37-1.9-1.17-.7-.62-1.18-1.39-1.32-1.63-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.4-.54-.4-.14 0-.3-.02-.46-.02s-.42.06-.64.3c-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.43-.58 1.63-1.15.2-.56.2-1.04.14-1.15-.06-.1-.22-.16-.46-.28z"/></svg>
+    </a>
+  </div>
+  <p><span id="year"></span> The Success Tutorial Classes. <span data-i18n="footerRights">All rights reserved.</span></p>
+</footer>
+
+<div class="fab-stack">
+  <a class="fab fab-youtube" href="https://www.youtube.com/@thesuccesstutorialclassesg8451" target="_blank" rel="noopener" aria-label="Watch us on YouTube" title="Watch us on YouTube">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.51 3.5 12 3.5 12 3.5s-7.51 0-9.38.55A3.02 3.02 0 0 0 .5 6.19 31.6 31.6 0 0 0 0 12a31.6 31.6 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14C4.49 20.5 12 20.5 12 20.5s7.51 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14A31.6 31.6 0 0 0 24 12a31.6 31.6 0 0 0-.5-5.81ZM9.6 15.6V8.4L15.8 12Z"/></svg>
+  </a>
+  <a class="fab fab-whatsapp" href="https://wa.me/" target="_blank" rel="noopener" aria-label="Chat on WhatsApp" title="Chat with us on WhatsApp">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.07-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.6 0-3.1-.44-4.38-1.2l-.31-.18-3 .79.8-2.92-.2-.3A7.94 7.94 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8zm4.4-5.6c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.37-1.9-1.17-.7-.62-1.18-1.39-1.32-1.63-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.4-.54-.4-.14 0-.3-.02-.46-.02s-.42.06-.64.3c-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.43-.58 1.63-1.15.2-.56.2-1.04.14-1.15-.06-.1-.22-.16-.46-.28z"/></svg>
+  </a>
+</div>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+  const TENANT_SLUG = 'success-tutorial';
+
+  // ── i18n ─────────────────────────────────────────────────────
+  const translations = {
+    en: {
+      navAbout:"About", navCourses:"Courses", navResults:"Selections", navGallery:"Gallery", navContact:"Contact",
+      navApp:"Get the App", navApply:"Apply Now",
+      heroEyebrow:"🎓 SSC · Banking · Railway · Foundation",
+      heroTitle:"Your Trusted Partner for <span>SSC, Banking &amp; Railway</span> Success",
+      heroSubtitle:"Results-driven coaching with experienced faculty across two centers — join the next batch and see why students trust us with their exam prep.",
+      heroCtaApply:"Apply for Admission →", heroCtaApp:"📱 Download the App",
+      statCourses:"Courses Offered", statCenters:"Centers", statYears:"Years Experience",
+      aboutTag:"Why Us", aboutTitle:"Built for serious exam prep",
+      aboutSubtitle:"Everything about how we run classes is designed around one outcome — you clearing your exam.",
+      about1Title:"Experienced Faculty", about1Desc:"Teachers with 10+ years of experience specifically in competitive exam coaching, not generic tuition.",
+      about2Title:"Result-Focused", about2Desc:"Regular tests, structured syllabus coverage, and a track record of students selected across batches.",
+      about3Title:"Two Convenient Centers", about3Desc:"Baharagora and Ghatsila — choose whichever's easier for you to reach for daily classes.",
+      about4Title:"Stay Connected", about4Desc:"A dedicated app for schedules, fee tracking, and updates — so nothing important gets missed.",
+      coursesTag:"Programs", coursesTitle:"Courses we offer",
+      coursesSubtitle:"Pricing shown here always matches what's currently active — updated automatically.",
+      loadingCourses:"Loading courses…", coursesEmpty:"Course list coming soon.", coursesError:"Could not load courses right now.",
+      categoryFallback:"General", monthsSuffix:"months", monthSuffix:"month", contactUsForFee:"Contact us",
+      resultsTag:"Selections", resultsTitle:"Our selected students", resultsSubtitle:"Students who worked hard and got selected for government service positions.",
+      loadingResults:"Loading selections…", resultsEmpty:"Selections will be posted here soon.", resultsError:"Could not load right now.",
+      selectedPrefix:"Selected",
+      announceTag:"Latest", announceTitle:"Announcements", announceSubtitle:"New batches, schedule changes, and important notices.",
+      loadingAnnounce:"Loading announcements…", announceEmpty:"No announcements right now — check back soon.", announceError:"Could not load right now.",
+      galleryTag:"Life Here", galleryTitle:"Gallery", gallerySubtitle:"Campus, classes, and events.",
+      loadingGallery:"Loading photos…", galleryEmpty:"Photos coming soon.", galleryError:"Could not load right now.",
+      ctaTitle:"Ready to start?", ctaSubtitle:"Applications are open — apply online in a few minutes.",
+      center1Name:"Baharagora Center", center1Addr:"Baharagora, Near college road",
+      center2Name:"Ghatsila Main Center", center2Addr:"Ghatsila, near BOI",
+      footerRights:"All rights reserved.",
+    },
+    hi: {
+      navAbout:"परिचय", navCourses:"कोर्स", navResults:"चयन", navGallery:"गैलरी", navContact:"संपर्क करें",
+      navApp:"ऐप डाउनलोड करें", navApply:"अभी आवेदन करें",
+      heroEyebrow:"🎓 एसएससी · बैंकिंग · रेलवे · फाउंडेशन",
+      heroTitle:"<span>एसएससी, बैंकिंग और रेलवे</span> की सफलता के लिए आपका भरोसेमंद साथी",
+      heroSubtitle:"अनुभवी शिक्षकों के साथ परिणाम-उन्मुख कोचिंग, दो केंद्रों पर उपलब्ध — अगली बैच में शामिल हों और जानें कि छात्र हम पर भरोसा क्यों करते हैं।",
+      heroCtaApply:"प्रवेश के लिए आवेदन करें →", heroCtaApp:"📱 ऐप डाउनलोड करें",
+      statCourses:"उपलब्ध कोर्स", statCenters:"केंद्र", statYears:"वर्षों का अनुभव",
+      aboutTag:"हमारे बारे में", aboutTitle:"गंभीर परीक्षा तैयारी के लिए बनाया गया",
+      aboutSubtitle:"हमारी कक्षाएं जिस तरह से चलाई जाती हैं, वह सब एक ही लक्ष्य के इर्द-गिर्द बना है — आपका परीक्षा पास करना।",
+      about1Title:"अनुभवी शिक्षक", about1Desc:"प्रतिस्पर्धी परीक्षा कोचिंग में 10+ वर्षों के अनुभव वाले शिक्षक, सामान्य ट्यूशन नहीं।",
+      about2Title:"परिणाम-केंद्रित", about2Desc:"नियमित टेस्ट, व्यवस्थित पाठ्यक्रम कवरेज, और बैचों में चयनित छात्रों का ट्रैक रिकॉर्ड।",
+      about3Title:"दो सुविधाजनक केंद्र", about3Desc:"बहरागोड़ा और घाटशिला — दैनिक कक्षाओं के लिए जो भी आपके लिए सुविधाजनक हो, चुनें।",
+      about4Title:"जुड़े रहें", about4Desc:"शेड्यूल, फीस ट्रैकिंग और अपडेट के लिए एक समर्पित ऐप — ताकि कोई भी जरूरी जानकारी न छूटे।",
+      coursesTag:"पाठ्यक्रम", coursesTitle:"हमारे कोर्स",
+      coursesSubtitle:"यहाँ दिखाई गई फीस हमेशा वर्तमान में सक्रिय दरों से मेल खाती है — स्वतः अपडेट होती है।",
+      loadingCourses:"कोर्स लोड हो रहे हैं…", coursesEmpty:"कोर्स सूची जल्द आ रही है।", coursesError:"अभी कोर्स लोड नहीं हो सके।",
+      categoryFallback:"सामान्य", monthsSuffix:"महीने", monthSuffix:"महीना", contactUsForFee:"संपर्क करें",
+      resultsTag:"चयन", resultsTitle:"हमारे चयनित छात्र", resultsSubtitle:"मेहनत करने वाले छात्र जिनका सरकारी सेवा पदों के लिए चयन हुआ।",
+      loadingResults:"चयन की जानकारी लोड हो रही है…", resultsEmpty:"चयन की जानकारी जल्द ही यहाँ पोस्ट की जाएगी।", resultsError:"अभी लोड नहीं हो सका।",
+      selectedPrefix:"चयनित",
+      announceTag:"नवीनतम", announceTitle:"सूचनाएं", announceSubtitle:"नई बैच, शेड्यूल परिवर्तन और महत्वपूर्ण सूचनाएं।",
+      loadingAnnounce:"सूचनाएं लोड हो रही हैं…", announceEmpty:"फिलहाल कोई सूचना नहीं है — जल्द ही देखें।", announceError:"अभी लोड नहीं हो सका।",
+      galleryTag:"यहां की झलक", galleryTitle:"गैलरी", gallerySubtitle:"कैंपस, कक्षाएं और आयोजन।",
+      loadingGallery:"फ़ोटो लोड हो रही हैं…", galleryEmpty:"फ़ोटो जल्द आ रही हैं।", galleryError:"अभी लोड नहीं हो सका।",
+      ctaTitle:"शुरू करने के लिए तैयार हैं?", ctaSubtitle:"आवेदन खुले हैं — कुछ ही मिनटों में ऑनलाइन आवेदन करें।",
+      center1Name:"बहरागोड़ा केंद्र", center1Addr:"बहरागोड़ा, कॉलेज रोड के पास",
+      center2Name:"घाटशिला मुख्य केंद्र", center2Addr:"घाटशिला, बीओआई के पास",
+      footerRights:"सर्वाधिकार सुरक्षित।",
+    },
+  };
+
+  let lang = localStorage.getItem('siteLang') || 'hi';
+
+  function t(key) { return (translations[lang] && translations[lang][key]) ?? translations.en[key] ?? key; }
+
+  function applyStaticTranslations() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const val = t(el.dataset.i18n);
+      if (el.dataset.i18nHtml === 'true') el.innerHTML = val; else el.textContent = val;
+    });
+    document.querySelectorAll('#langSwitch button').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+  }
+
+  document.getElementById('langSwitch').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-lang]');
+    if (!btn || btn.dataset.lang === lang) return;
+    lang = btn.dataset.lang;
+    localStorage.setItem('siteLang', lang);
+    applyStaticTranslations();
+    renderCourses(); renderAnnouncements(); renderResults(); renderGallery();
+  });
+
+  applyStaticTranslations();
+
+  // ── Scroll reveal ──────────────────────────────────────────────
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // ── Tenant branding (name/logo/colors) ─────────────────────────
+  fetch(`/api/tenants/slug/${TENANT_SLUG}/public`)
+    .then(r => r.ok ? r.json() : null)
+    .then(t => {
+      if (!t) return;
+      document.getElementById('brandName').textContent = t.name;
+      document.title = t.name;
+      if (t.branding.logoUrl) {
+        document.getElementById('logoWrap').innerHTML = `<img src="${t.branding.logoUrl}" alt="${t.name}">`;
+      } else {
+        document.getElementById('logoFallback').textContent = t.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+      }
+      if (t.branding.primary) document.documentElement.style.setProperty('--primary', t.branding.primary);
+      if (t.branding.secondary) document.documentElement.style.setProperty('--secondary', t.branding.secondary);
+      if (t.branding.accent) document.documentElement.style.setProperty('--accent', t.branding.accent);
+      if (t.branding.background) document.documentElement.style.setProperty('--bg', t.branding.background);
+    })
+    .catch(() => {});
+
+  // ── Courses + fees, live from the DB ────────────────────────────
+  let coursesData = null;
+  function renderCourses() {
+    const grid = document.getElementById('courseGrid');
+    if (coursesData === null) { grid.innerHTML = `<p class="empty-note">${t('loadingCourses')}</p>`; return; }
+    if (coursesData === 'error') { grid.innerHTML = `<p class="empty-note">${t('coursesError')}</p>`; return; }
+    document.getElementById('statCourses').textContent = coursesData.length;
+    if (!coursesData.length) { grid.innerHTML = `<p class="empty-note">${t('coursesEmpty')}</p>`; return; }
+    grid.innerHTML = coursesData.map(c => `
+      <div class="course-card">
+        <span class="cat">${(c.examCategories[0] && c.examCategories[0].label) || t('categoryFallback')}</span>
+        <h3>${escapeHtml(c.name)}</h3>
+        <div class="meta">
+          <span class="dur">${c.durationMonths} ${c.durationMonths === 1 ? t('monthSuffix') : t('monthsSuffix')}</span>
+          <span class="fee">${c.defaultFee > 0 ? '₹' + c.defaultFee.toLocaleString('en-IN') : t('contactUsForFee')}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+  fetch(`/api/public/${TENANT_SLUG}/courses`)
+    .then(r => r.json())
+    .then(data => { coursesData = data; renderCourses(); })
+    .catch(() => { coursesData = 'error'; renderCourses(); });
+
+  // ── Announcements / Results / Gallery — the editable content ───
+  let announceData = null, resultsData = null, galleryData = null;
+
+  function renderAnnouncements() {
+    const el = document.getElementById('announceList');
+    if (announceData === null) { el.innerHTML = `<p class="empty-note">${t('loadingAnnounce')}</p>`; return; }
+    if (announceData === 'error') { el.innerHTML = `<p class="empty-note">${t('announceError')}</p>`; return; }
+    if (!announceData.length) { el.innerHTML = `<p class="empty-note">${t('announceEmpty')}</p>`; return; }
+    el.innerHTML = announceData.map(a => `
+      <div class="announce-item">
+        <div class="announce-dot">📢</div>
+        <div>
+          <h4>${escapeHtml(a.title)}</h4>
+          ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ''}
+          <time>${new Date(a.publishedAt).toLocaleDateString(lang === 'hi' ? 'hi-IN' : 'en-IN', { day:'numeric', month:'short', year:'numeric' })}</time>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderResults() {
+    const el = document.getElementById('resultsStrip');
+    if (resultsData === null) { el.innerHTML = `<p class="empty-note">${t('loadingResults')}</p>`; return; }
+    if (resultsData === 'error') { el.innerHTML = `<p class="empty-note">${t('resultsError')}</p>`; return; }
+    if (!resultsData.length) { el.innerHTML = `<p class="empty-note">${t('resultsEmpty')}</p>`; return; }
+    el.innerHTML = resultsData.map(r => {
+      const meta = r.meta || {};
+      return `
+        <div class="result-card">
+          ${r.imageUrl
+            ? `<img class="avatar" src="${r.imageUrl}" alt="${escapeHtml(r.title)}">`
+            : `<div class="avatar fallback">${escapeHtml(r.title).slice(0,2).toUpperCase()}</div>`}
+          <h4>${escapeHtml(r.title)}</h4>
+          ${meta.position ? `<div class="rank">${t('selectedPrefix')}: ${escapeHtml(meta.position)}</div>` : ''}
+          ${meta.exam ? `<div class="exam">${escapeHtml(meta.exam)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderGallery() {
+    const el = document.getElementById('galleryGrid');
+    if (galleryData === null) { el.innerHTML = `<p class="empty-note">${t('loadingGallery')}</p>`; return; }
+    if (galleryData === 'error') { el.innerHTML = `<p class="empty-note">${t('galleryError')}</p>`; return; }
+    const withImages = galleryData.filter(g => g.imageUrl);
+    if (!withImages.length) { el.innerHTML = `<p class="empty-note">${t('galleryEmpty')}</p>`; return; }
+    el.innerHTML = withImages.map(g => `
+      <a href="${g.imageUrl}" target="_blank" rel="noopener"><img src="${g.imageUrl}" alt="${escapeHtml(g.title)}" loading="lazy"></a>
+    `).join('');
+  }
+
+  function loadHighlights(type, onData, onError) {
+    fetch(`/api/site/highlights?type=${type}`)
+      .then(r => r.json())
+      .then(items => { onData(items); })
+      .catch(() => onError());
+  }
+
+  loadHighlights('announcement', d => { announceData = d; renderAnnouncements(); }, () => { announceData = 'error'; renderAnnouncements(); });
+  loadHighlights('result',       d => { resultsData = d; renderResults(); },       () => { resultsData = 'error'; renderResults(); });
+  loadHighlights('gallery',      d => { galleryData = d; renderGallery(); },       () => { galleryData = 'error'; renderGallery(); });
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str ?? '';
+    return d.innerHTML;
+  }
+</script>
+
+</body>
+</html>

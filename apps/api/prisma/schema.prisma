@@ -132,6 +132,18 @@ enum NotificationType {
   new_application
 }
 
+// ── Public marketing site content ───────────────────────────────────────────────
+// Backs a small, separate content system (see apps/api/src/modules/site) for the
+// standalone marketing site — deliberately NOT the same thing as the operational
+// app above. One shared shape covers all three post types since they're all
+// "something the owner posts and updates periodically," rather than three
+// separate one-off tables.
+enum SiteContentType {
+  announcement
+  result
+  gallery
+}
+
 // ── Tenant (top-level SaaS boundary — one row per institute) ──────────────────
 
 model Tenant {
@@ -172,8 +184,31 @@ model Tenant {
   admissionApplications    AdmissionApplication[]
   permissionGrants         PermissionGrant[]
   appReleases              AppRelease[]
+  siteHighlights           SiteHighlight[]
 
   @@map("tenants")
+}
+
+// One row per posted announcement / result / gallery photo on the standalone
+// marketing site. `meta` carries type-specific extras (e.g. a result's exam
+// name + rank/score) without needing separate tables per type — the site's
+// admin page and public feed both just filter by `type`.
+model SiteHighlight {
+  id          String           @id @default(uuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id])
+  type        SiteContentType
+  title       String
+  description String?
+  imageUrl    String?
+  meta        Json?
+  isActive    Boolean          @default(true)
+  publishedAt DateTime         @default(now())
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([tenantId, type, isActive, publishedAt])
+  @@map("site_highlights")
 }
 
 // Tenant-scoped (unlike JobConfig/JobRun) — each tenant's mobile app is a
