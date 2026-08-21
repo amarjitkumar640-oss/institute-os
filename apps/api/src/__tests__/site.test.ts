@@ -7,13 +7,24 @@ import { resetDb, legacyPermissionsForRole } from "./setup";
 import type { AuthPayload } from "../middleware/auth";
 
 const TENANT_ID = "44444444-4444-4444-4444-444444444444";
-const TENANT_SLUG = "site-test-tenant";
+// Must match whatever SITE_TENANT_SLUG is actually set to in the running
+// environment (.env.test locally, QA_ENV_FILE/PROD_ENV_FILE in CI) — the
+// site module resolves the tenant purely from that env var, so the seeded
+// fixture has to have the exact same slug or getSiteTenant() finds nothing,
+// regardless of what test data actually exists. Falls back to a fixed value
+// only for the case where the env var is entirely unset (e.g. a stray local
+// run without .env.test loaded).
+const TENANT_SLUG = env.SITE_TENANT_SLUG || "site-test-tenant";
 const OTHER_TENANT_ID = "55555555-5555-5555-5555-555555555555";
 
 async function seedTenant() {
+  // update: { slug } (not {}) — TENANT_SLUG is derived from an env var that
+  // can differ between runs (local .env.test vs CI's QA_ENV_FILE), so a
+  // pre-existing row from an earlier run with a different value must be
+  // resynced, not left stale.
   return prisma.tenant.upsert({
     where:  { id: TENANT_ID },
-    update: {},
+    update: { slug: TENANT_SLUG },
     create: { id: TENANT_ID, name: "Site Test Institute", slug: TENANT_SLUG },
   });
 }
@@ -21,15 +32,16 @@ async function seedTenant() {
 async function seedOtherTenant() {
   return prisma.tenant.upsert({
     where:  { id: OTHER_TENANT_ID },
-    update: {},
+    update: { slug: "site-test-other-tenant" },
     create: { id: OTHER_TENANT_ID, name: "Other Institute", slug: "site-test-other-tenant" },
   });
 }
 
-// SITE_TENANT_SLUG=site-test-tenant is set in .env.test (loaded by
-// jest.setup-env.js before any test file imports run) — env.ts reads it at
-// module-import time, too early for a plain process.env assignment here to
-// take effect.
+// SITE_TENANT_SLUG is set in .env.test locally (loaded by jest.setup-env.js
+// before any test file imports run) and in CI via QA_ENV_FILE/PROD_ENV_FILE
+// — env.ts reads it at module-import time, too early for a plain
+// process.env assignment here to take effect, which is also why TENANT_SLUG
+// above reads it back out rather than hardcoding an assumed value.
 
 function tokenFor(payload: AuthPayload) {
   const permissions = payload.permissions ?? legacyPermissionsForRole([payload.activeRole]);
