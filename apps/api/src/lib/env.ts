@@ -27,4 +27,11 @@ export const env = cleanEnv(process.env, {
   // Base URL of the web portal, used to build the emailed reset link
   // (`${WEB_APP_URL}/reset-password?...`).
   WEB_APP_URL: str({ default: "http://localhost:3000" }),
+
+  // Standalone marketing site (apps/site) — deliberately separate from the
+  // multi-tenant operational app: public content lives under one fixed
+  // tenant rather than being resolved per-request. Content management itself
+  // goes through the normal apps/web staff login (see site-admin.routes.ts,
+  // apps/web/src/modules/site-content), not a separate credential.
+  SITE_TENANT_SLUG: str({ default: "" }),
 });

@@ -29,13 +29,21 @@ admissionsPublicRouter.get("/:tenantSlug/courses", async (req, res) => {
       id: true,
       name: true,
       durationMonths: true,
+      // Publicly showing course pricing is normal for a coaching institute
+      // (both the apply form's course picker and the marketing site's
+      // course listing use this same endpoint) — no confidentiality concern.
+      defaultFee: true,
       examCategories: { include: { examCategory: { select: { id: true, key: true, label: true } } } },
     },
     orderBy: { name: "asc" },
   });
 
-  res.json(courses.map(({ examCategories, ...c }) => ({
+  res.json(courses.map(({ examCategories, defaultFee, ...c }) => ({
     ...c,
+    // Prisma Decimal serializes to a string by default (avoids float
+    // precision loss) — converted here to match how courses.service.ts's
+    // own serializeCourse() already exposes this same field elsewhere.
+    defaultFee: Number(defaultFee),
     examCategories: examCategories.map((ec) => ec.examCategory),
   })));
 });

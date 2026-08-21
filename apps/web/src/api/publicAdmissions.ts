@@ -5,6 +5,7 @@ export interface PublicCourse {
   id: string;
   name: string;
   durationMonths: number;
+  defaultFee: number;
   examCategories: { id: string; key: string; label: string }[];
 }
 

@@ -23,6 +23,8 @@ import { admissionApplicationsRouter } from "./modules/admissions/admissionAppli
 import { jobsRouter } from "./modules/jobs/jobs.routes";
 import { permissionsRouter } from "./modules/permissions/permissions.routes";
 import { appReleasesRouter } from "./modules/app-releases/app-releases.routes";
+import { siteRouter } from "./modules/site/site.routes";
+import { siteAdminRouter } from "./modules/site/site-admin.routes";
 import { errorHandler }  from "./middleware/errorHandler";
 
 export const app = express();
@@ -67,5 +69,7 @@ app.use("/api/public", admissionsPublicRouter);
 app.use("/api/admission-applications", admissionApplicationsRouter);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/permissions", permissionsRouter);
+app.use("/api/site", siteRouter);
+app.use("/api/site/admin", siteAdminRouter);
 
 app.use(errorHandler);

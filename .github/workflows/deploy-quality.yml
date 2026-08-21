@@ -70,6 +70,11 @@ jobs:
       # One image, every tenant — the tenant is resolved at runtime from the
       # URL (see apps/web/src/context/TenantContext.tsx), so this never needs
       # a per-tenant build. VITE_API_URL/BASE_PATH are the only build args.
+      #
+      # VITE_API_URL is the literal domain, not secrets.VPS_HOST (a raw IP) —
+      # infra/Caddyfile now keys its site block on the hostname
+      # "thesuccess.in" specifically (required for automatic HTTPS), so it no
+      # longer answers requests whose Host header is the bare IP.
       - name: Build and push web — amd64, matching the Oracle instance
         uses: docker/build-push-action@v5
         with:
@@ -79,7 +84,7 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/institute-os-web:quality
           build-args: |
-            VITE_API_URL=http://${{ secrets.VPS_HOST }}/qa
+            VITE_API_URL=https://thesuccess.in/qa
             BASE_PATH=/qa/
 
       - name: Sync infra config to VPS

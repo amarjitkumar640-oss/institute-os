@@ -25,7 +25,11 @@ import { selectCenter as selectCenterApi } from "@/api/auth";
 // Nav visibility and route access now derive from the exact same
 // staff.permissions data ProtectedRoute reads, so they can't drift apart the
 // way roles-array-here vs roles-prop-there used to.
-interface NavItem { label: string; to: string; icon: React.ElementType; screenKey: string | null; adminOnly?: boolean; end?: boolean }
+// requiresTenantSlug is a one-off escape hatch for the "Marketing Site" item
+// below — that feature (apps/site) exists for exactly one tenant, not as a
+// generic capability every institute gets, so it shouldn't show up for
+// every other tenant's admin the way Settings/Access Control do.
+interface NavItem { label: string; to: string; icon: React.ElementType; screenKey: string | null; adminOnly?: boolean; end?: boolean; requiresTenantSlug?: string }
 interface NavGroup { module: string; items: NavItem[] }
 
 // Ungrouped, pinned at the very top — Dashboard has no CRUD concept, isn't in
@@ -75,6 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
 // Ungrouped, admin-only, pinned below a divider at the bottom — same
 // self-lockout exclusion as the permission system itself (see ProtectedRoute).
 const NAV_BOTTOM: NavItem[] = [
+  { label: "Marketing Site",  to: "/site-content",         icon: Globe,       screenKey: null, adminOnly: true, requiresTenantSlug: "success-tutorial" },
   // end: true — otherwise NavLink's default prefix match treats
   // /settings/permissions as still "within" /settings and lights up both.
   { label: "Settings",       to: "/settings",             icon: Settings,    screenKey: null, adminOnly: true, end: true },
@@ -128,6 +133,7 @@ export function AppLayout() {
   const permissions = staff?.permissions ?? {};
 
   function isVisible(item: NavItem) {
+    if (item.requiresTenantSlug && tenantSettings?.slug !== item.requiresTenantSlug) return false;
     if (item.adminOnly) return staff?.activeRole === "admin";
     if (item.screenKey === null) return true;
     return permissions[item.screenKey]?.includes("r") ?? false;

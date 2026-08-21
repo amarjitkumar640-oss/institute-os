@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Settings2, Bell, RefreshCw } from "lucide-react";
-import { getTenantSettings, updateTenantSettings } from "@/api/tenants";
+import { Settings2, Bell, RefreshCw, Camera, Loader2, X, Building2 } from "lucide-react";
+import { getTenantSettings, updateTenantSettings, uploadTenantLogo, deleteTenantLogo } from "@/api/tenants";
 import { getNotificationRouting, updateNotificationRouting } from "@/api/notifications";
 import { listJobs, runJobNow, updateJob, type Job } from "@/api/jobs";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ function BrandingSettings() {
   const [secondary, setSecondary] = useState("");
   const [accent, setAccent] = useState("");
   const [background, setBackground] = useState("");
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (settings) {
@@ -44,10 +45,74 @@ function BrandingSettings() {
     onError: () => toast({ variant: "destructive", title: "Failed to save settings" }),
   });
 
+  const uploadLogoMutation = useMutation({
+    mutationFn: uploadTenantLogo,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant-settings"] });
+      toast({ title: "Logo updated" });
+    },
+    onError: () => toast({ variant: "destructive", title: "Logo upload failed" }),
+  });
+  const deleteLogoMutation = useMutation({
+    mutationFn: deleteTenantLogo,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant-settings"] });
+      toast({ title: "Logo removed" });
+    },
+    onError: () => toast({ variant: "destructive", title: "Could not remove logo" }),
+  });
+
+  function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) uploadLogoMutation.mutate(file);
+  }
+
   if (isLoading) return <Skeleton className="h-48 w-full" />;
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Institute Logo</CardTitle></CardHeader>
+        <CardContent className="flex items-center gap-5">
+          <div className="relative shrink-0">
+            {settings?.branding.logoUrl ? (
+              <img src={settings.branding.logoUrl} alt={settings.name} className="h-20 w-20 rounded-2xl object-cover border border-gray-100" />
+            ) : (
+              <div className="h-20 w-20 rounded-2xl bg-violet-50 flex items-center justify-center">
+                <Building2 className="h-8 w-8 text-violet-300" />
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={uploadLogoMutation.isPending}
+              className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-white border border-gray-200 shadow flex items-center justify-center hover:bg-gray-50"
+              title={settings?.branding.logoUrl ? "Replace logo" : "Add logo"}
+            >
+              {uploadLogoMutation.isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-500" />
+                : <Camera className="h-3.5 w-3.5 text-gray-600" />}
+            </button>
+            {settings?.branding.logoUrl && (
+              <button
+                type="button"
+                onClick={() => deleteLogoMutation.mutate()}
+                disabled={deleteLogoMutation.isPending}
+                className="absolute -bottom-1 -left-1 h-7 w-7 rounded-full bg-white border border-gray-200 shadow flex items-center justify-center hover:bg-red-50"
+                title="Remove logo"
+              >
+                <X className="h-3.5 w-3.5 text-red-500" />
+              </button>
+            )}
+            <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoFile} />
+          </div>
+          <div className="text-sm text-gray-400">
+            Shown on the login screen, sidebar, and the mobile app. Square images work best.
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader><CardTitle className="text-sm">Login Method</CardTitle></CardHeader>
         <CardContent>
