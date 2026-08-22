@@ -25,6 +25,8 @@ import { permissionsRouter } from "./modules/permissions/permissions.routes";
 import { appReleasesRouter } from "./modules/app-releases/app-releases.routes";
 import { siteRouter } from "./modules/site/site.routes";
 import { siteAdminRouter } from "./modules/site/site-admin.routes";
+import { govExamsRouter } from "./modules/gov-exams/gov-exams.routes";
+import { govExamsAdminRouter } from "./modules/gov-exams/gov-exams-admin.routes";
 import { errorHandler }  from "./middleware/errorHandler";
 
 export const app = express();
@@ -71,5 +73,7 @@ app.use("/api/jobs", jobsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/site", siteRouter);
 app.use("/api/site/admin", siteAdminRouter);
+app.use("/api/gov-exams", govExamsRouter);
+app.use("/api/gov-exams/admin", govExamsAdminRouter);
 
 app.use(errorHandler);
