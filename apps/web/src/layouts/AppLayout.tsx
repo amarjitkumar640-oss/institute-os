@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, UserPlus, BookOpen, Layers,
   Calendar, GraduationCap, UserCog, DollarSign, Settings,
   LogOut, Building2, ChevronDown, Bell, ChevronRight, Globe, FileText, ShieldCheck,
-  UserCircle, CheckCircle2,
+  UserCircle, CheckCircle2, Landmark,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getMyProfile } from "@/api/staff";
@@ -80,6 +80,7 @@ const NAV_GROUPS: NavGroup[] = [
 // self-lockout exclusion as the permission system itself (see ProtectedRoute).
 const NAV_BOTTOM: NavItem[] = [
   { label: "Marketing Site",  to: "/site-content",         icon: Globe,       screenKey: null, adminOnly: true, requiresTenantSlug: "success-tutorial" },
+  { label: "Government Exams", to: "/gov-exams",           icon: Landmark,    screenKey: null, adminOnly: true, requiresTenantSlug: "success-tutorial" },
   // end: true — otherwise NavLink's default prefix match treats
   // /settings/permissions as still "within" /settings and lights up both.
   { label: "Settings",       to: "/settings",             icon: Settings,    screenKey: null, adminOnly: true, end: true },

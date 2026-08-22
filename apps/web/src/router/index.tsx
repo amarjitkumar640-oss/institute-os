@@ -29,6 +29,7 @@ import { ProfilePage } from "@/modules/profile/ProfilePage";
 import { SettingsPage } from "@/modules/settings/SettingsPage";
 import { PermissionsPage } from "@/modules/permissions/PermissionsPage";
 import { SiteContentPage } from "@/modules/site-content/SiteContentPage";
+import { GovExamsPage } from "@/modules/gov-exams/GovExamsPage";
 
 export const router = createBrowserRouter([
   // Shareable per-institute link — not wrapped in AuthLayout, it's a
@@ -218,6 +219,17 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute adminOnly>
             <SiteContentPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        // Same reasoning as /site-content above — single-tenant feature
+        // (SITE_TENANT_SLUG-gated on the backend too), not a general
+        // operational screen.
+        path: "/gov-exams",
+        element: (
+          <ProtectedRoute adminOnly>
+            <GovExamsPage />
           </ProtectedRoute>
         ),
       },
