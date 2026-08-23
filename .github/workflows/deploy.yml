@@ -99,6 +99,21 @@ jobs:
           build-args: |
             VITE_API_URL=https://thesuccess.in
 
+      # Public Government Exam Intelligence portal — served at /exams/* (see
+      # infra/Caddyfile), so BASE_PATH=/exams/ same as web's QA build uses
+      # /qa/.
+      - name: Build and push exam-portal — amd64, matching the Oracle instance
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/exam-portal/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/institute-os-exam-portal:latest
+          build-args: |
+            VITE_API_URL=https://thesuccess.in
+            BASE_PATH=/exams/
+
       - name: Sync infra config to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -120,8 +135,8 @@ jobs:
             ${{ secrets.PROD_ENV_FILE }}
             ENVEOF
             cd ~/institute-os/infra
-            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api site web
-            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d api site web postgres caddy
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api site web exam-portal
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d api site web exam-portal postgres caddy
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api npx prisma migrate deploy --schema prisma/schema.prisma
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api npx tsx prisma/backfillPhotoKeys.ts
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api npx tsx prisma/seedDocumentTypes.ts

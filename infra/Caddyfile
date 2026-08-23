@@ -13,6 +13,13 @@ thesuccess.in {
 		reverse_proxy api-qa:4000
 	}
 
+	# Must precede the generic /qa/* fallthrough below, or web-qa would
+	# swallow it — same ordering requirement as /exams* vs. the bare-domain
+	# catch-all further down.
+	handle_path /qa/exams* {
+		reverse_proxy exam-portal-qa:80
+	}
+
 	handle_path /qa/* {
 		reverse_proxy web-qa:80
 	}
@@ -32,6 +39,18 @@ thesuccess.in {
 	@site_root path /
 	handle @site_root {
 		reverse_proxy site:80
+	}
+
+	# Government Exam Intelligence public portal (apps/exam-portal) — its own
+	# app under one prefix, not top-level /jobs, /exams, /current-affairs:
+	# handle_path strips exactly one prefix before proxying, and a Vite build
+	# has exactly one BASE_PATH, so multiple independent top-level paths can't
+	# point at the same app in one build. Internal pages (/exams/jobs,
+	# /exams/current-affairs, etc.) are still separate react-router routes —
+	# this only shapes the URL, not the site's structure. Must precede the
+	# catch-all below or web:80 would swallow it.
+	handle_path /exams* {
+		reverse_proxy exam-portal:80
 	}
 
 	# Everything else at the bare domain — the staff portal (apps/web):

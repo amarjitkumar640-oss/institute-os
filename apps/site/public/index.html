@@ -35,13 +35,14 @@
     background:rgba(246,245,227,0.85); backdrop-filter:blur(10px);
     border-bottom:1px solid rgba(33,26,58,0.08);
   }
-  nav.wrap{ display:flex; align-items:center; justify-content:space-between; padding:14px 24px; gap:16px; }
-  .brand{ display:flex; align-items:center; gap:10px; font-weight:700; font-size:18px; flex-shrink:0; }
-  .brand img{ width:38px; height:38px; border-radius:12px; object-fit:cover; }
-  .brand .fallback{ width:38px; height:38px; border-radius:12px; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; }
-  .navlinks{ display:flex; gap:24px; font-weight:600; font-size:14px; color:var(--ink-soft); }
+  nav.wrap{ display:flex; align-items:center; justify-content:space-between; max-width:1320px; padding:14px 24px; gap:20px; }
+  .brand{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:16.5px; flex-shrink:0; line-height:1.2; }
+  .brand img{ width:34px; height:34px; border-radius:11px; object-fit:cover; }
+  .brand .fallback{ width:34px; height:34px; border-radius:11px; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; }
+  .navlinks{ display:flex; align-items:center; gap:19px; font-weight:600; font-size:13.5px; color:var(--ink-soft); white-space:nowrap; }
   .navlinks a:hover{ color:var(--primary); }
-  .navcta{ display:flex; align-items:center; gap:10px; }
+  .navcta{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .navcta .btn{ padding:9px 16px; font-size:13px; white-space:nowrap; }
   .btn{
     display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:14px;
     padding:11px 20px; border-radius:12px; border:none; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease;
@@ -50,7 +51,37 @@
   .btn:hover{ transform:translateY(-2px); }
   .btn-primary{ background:linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, black)); color:#fff; box-shadow:0 10px 24px -8px rgba(143,46,35,0.55); }
   .btn-outline{ background:#fff; color:var(--primary); border:1.5px solid rgba(143,46,35,0.25); }
-  @media (max-width:820px){ .navlinks{ display:none; } }
+  @media (max-width:960px){ .navlinks{ display:none; } }
+
+  .nav-dropdown{ position:relative; }
+  .nav-dropdown-trigger{ display:inline-flex; align-items:center; gap:4px; background:none; border:none; font:inherit; font-weight:600; font-size:13.5px; color:var(--ink-soft); cursor:pointer; padding:0; }
+  .nav-dropdown-trigger:hover{ color:var(--primary); }
+  .nav-dropdown-trigger .caret{ font-size:9px; transition:transform .15s ease; }
+  .nav-dropdown.open .nav-dropdown-trigger .caret{ transform:rotate(180deg); }
+  .nav-dropdown-menu{
+    position:absolute; top:calc(100% + 16px); left:50%; transform:translateX(-50%) translateY(6px);
+    background:#fff; border-radius:14px; padding:8px; min-width:200px;
+    box-shadow:0 20px 40px -12px rgba(33,26,58,0.25); border:1px solid rgba(33,26,58,0.06);
+    opacity:0; visibility:hidden; transition:opacity .15s ease, transform .15s ease, visibility .15s; z-index:10;
+  }
+  .nav-dropdown-menu a{ display:block; padding:10px 12px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--ink); white-space:nowrap; }
+  .nav-dropdown-menu a:hover{ background:color-mix(in srgb, var(--primary) 6%, white); color:var(--primary); }
+  .nav-dropdown:hover .nav-dropdown-menu,
+  .nav-dropdown.open .nav-dropdown-menu,
+  .nav-dropdown:focus-within .nav-dropdown-menu{
+    opacity:1; visibility:visible; transform:translateX(-50%) translateY(0);
+  }
+
+  /* ── Live ticker (surfaces vacancies/current affairs above the fold) ── */
+  .live-ticker{ background:linear-gradient(90deg, color-mix(in srgb, var(--primary) 92%, black), var(--primary)); }
+  .live-ticker-inner{ display:flex; align-items:center; gap:16px; padding:9px 24px; }
+  .live-badge{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; letter-spacing:.04em; color:#fff; background:rgba(255,255,255,0.16); padding:4px 10px; border-radius:999px; flex-shrink:0; }
+  .ticker-track{ flex:1; min-width:0; overflow:hidden; position:relative; height:18px; }
+  .ticker-item{ position:absolute; inset:0; display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0; transform:translateY(6px); transition:opacity .4s ease, transform .4s ease; pointer-events:none; }
+  .ticker-item.active{ opacity:1; transform:translateY(0); pointer-events:auto; }
+  .ticker-cta{ flex-shrink:0; font-size:11.5px; font-weight:700; color:#fff; background:rgba(255,255,255,0.16); padding:6px 12px; border-radius:999px; }
+  .ticker-cta:hover{ background:rgba(255,255,255,0.26); }
+  @media (max-width:640px){ .ticker-cta{ display:none; } }
 
   .lang-switch{ display:flex; border:1.5px solid rgba(143,46,35,0.2); border-radius:999px; padding:3px; background:#fff; flex-shrink:0; }
   .lang-switch button{ border:none; background:transparent; font-weight:700; font-size:12px; padding:6px 11px; border-radius:999px; cursor:pointer; color:var(--ink-soft); font-family:inherit; }
@@ -82,9 +113,71 @@
   .hero-ctas{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; opacity:0; animation:fadeUp .6s ease .46s forwards; }
   @keyframes fadeUp{ from{ opacity:0; transform:translateY(16px);} to{ opacity:1; transform:translateY(0);} }
 
-  .stats{ position:relative; z-index:1; display:flex; justify-content:center; gap:48px; margin-top:56px; flex-wrap:wrap; opacity:0; animation:fadeUp .6s ease .58s forwards; }
-  .stat b{ display:block; font-family:'Fredoka',sans-serif; font-size:28px; color:var(--primary); }
-  .stat span{ font-size:12.5px; color:var(--ink-soft); font-weight:600; }
+  .hero-grid{ position:relative; z-index:1; display:grid; grid-template-columns:1.1fr 0.9fr; gap:48px; align-items:center; text-align:left; }
+  .hero-grid .hero-content{ margin:0; max-width:none; }
+  .hero-grid .hero-content p{ margin:0 0 34px; }
+  .hero-grid .hero-ctas{ justify-content:flex-start; }
+  @media (max-width:900px){
+    .hero-grid{ grid-template-columns:1fr; text-align:center; }
+    .hero-grid .hero-content{ margin:0 auto; }
+    .hero-grid .hero-content p{ margin:0 auto 34px; }
+    .hero-grid .hero-ctas{ justify-content:center; }
+  }
+
+  .promise-card{
+    background:linear-gradient(150deg, var(--primary), color-mix(in srgb, var(--secondary) 60%, var(--primary)));
+    border-radius:28px; padding:36px 32px; color:#fff; position:relative; overflow:hidden;
+    box-shadow:0 24px 50px -20px rgba(143,46,35,0.5);
+    opacity:0; animation:fadeUp .6s ease .3s forwards;
+  }
+  .promise-card::before{ content:'🏆'; position:absolute; right:-10px; top:-10px; font-size:110px; opacity:.12; transform:rotate(12deg); }
+  .promise-badge{ position:relative; display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,0.18); padding:6px 14px; border-radius:999px; font-size:12px; font-weight:700; margin-bottom:16px; }
+  .promise-card h3{ font-size:clamp(20px,2.6vw,26px); line-height:1.25; margin-bottom:22px; position:relative; }
+  .promise-list{ display:flex; flex-direction:column; gap:14px; position:relative; }
+  .promise-list li{ display:flex; align-items:flex-start; gap:10px; font-size:14px; font-weight:600; line-height:1.5; }
+  .promise-list .check{ width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,0.22); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:12px; }
+  @media (max-width:900px){ .promise-card{ max-width:460px; margin:0 auto; } }
+
+  .stats{ position:relative; z-index:1; display:flex; justify-content:center; gap:16px; margin-top:56px; flex-wrap:wrap; opacity:0; animation:fadeUp .6s ease .58s forwards; }
+  .stat{ display:flex; align-items:center; gap:12px; background:#fff; border:1px solid rgba(33,26,58,0.08); border-radius:16px; padding:14px 24px; box-shadow:0 10px 24px -18px rgba(33,26,58,0.25); }
+  .stat-ico{ width:38px; height:38px; border-radius:11px; background:color-mix(in srgb, var(--primary) 12%, white); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+  .stat b{ display:block; font-family:'Fredoka',sans-serif; font-size:22px; color:var(--primary); line-height:1.1; }
+  .stat span{ font-size:11.5px; color:var(--ink-soft); font-weight:600; }
+
+  /* ── Dashboard grid (Vacancies / Syllabus / Current Affairs) ── */
+  .dash-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; align-items:start; }
+  @media (max-width:900px){ .dash-grid{ grid-template-columns:1fr; } }
+  .dash-card{ background:#fff; border-radius:var(--card-radius); padding:24px; border:1px solid rgba(33,26,58,0.06); box-shadow:0 12px 28px -18px rgba(33,26,58,0.18); }
+  .dash-card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; gap:10px; }
+  .dash-card-head h3{ font-size:16px; }
+  .dash-card-head a{ font-size:12px; font-weight:700; color:var(--primary); flex-shrink:0; }
+  .dash-dark{ background:linear-gradient(160deg, var(--ink), color-mix(in srgb, var(--ink) 75%, var(--primary))); color:#fff; }
+  .dash-dark .dash-card-head h3{ color:#fff; }
+  .dash-dark .dash-card-head a{ color:color-mix(in srgb, var(--accent) 90%, white); }
+  .vac-row{ display:flex; flex-direction:column; gap:6px; padding:14px 0; border-bottom:1px solid rgba(255,255,255,0.1); }
+  .vac-row:last-child{ border-bottom:none; padding-bottom:0; }
+  .vac-row-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .vac-row h4{ font-size:13.5px; font-weight:700; line-height:1.35; }
+  .vac-pill{ flex-shrink:0; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:4px 9px; border-radius:999px; background:var(--accent); color:#2b1c00; }
+  .vac-row time{ font-size:11px; opacity:.65; }
+  .dash-viewall-btn{ display:block; text-align:center; margin-top:18px; font-size:12.5px; font-weight:700; background:rgba(255,255,255,0.12); border-radius:11px; padding:10px; }
+  .syllabus-list{ display:flex; flex-direction:column; gap:4px; }
+  .syllabus-item{ display:flex; align-items:center; gap:12px; padding:12px 8px; border-radius:12px; transition:background .15s ease; }
+  .syllabus-item:hover{ background:color-mix(in srgb, var(--primary) 6%, white); }
+  .syllabus-ico{ width:36px; height:36px; border-radius:10px; background:color-mix(in srgb, var(--secondary) 14%, white); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .syllabus-item b{ display:block; font-size:13.5px; }
+  .syllabus-item small{ display:block; font-size:11px; color:var(--ink-soft); margin-top:1px; }
+  .syllabus-item .chev{ margin-left:auto; color:var(--ink-soft); }
+  .dash-col{ display:flex; flex-direction:column; gap:22px; }
+  .ca-row{ display:flex; gap:10px; align-items:flex-start; padding:11px 0; border-bottom:1px dashed rgba(33,26,58,0.1); }
+  .ca-row:last-child{ border-bottom:none; padding-bottom:0; }
+  .ca-dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); margin-top:6px; flex-shrink:0; }
+  .ca-row p{ font-size:12.5px; line-height:1.5; }
+  .ca-row time{ font-size:10.5px; color:var(--ink-soft); }
+  .promo-card{ background:linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--secondary))); border-radius:var(--card-radius); padding:24px; color:#fff; text-align:center; }
+  .promo-card h4{ font-family:'Fredoka',sans-serif; font-size:16px; margin-bottom:6px; }
+  .promo-card p{ font-size:12.5px; opacity:.9; margin-bottom:16px; }
+  .promo-card .btn-primary{ background:#fff; color:color-mix(in srgb, var(--secondary) 80%, black); box-shadow:none; width:100%; justify-content:center; }
 
   /* ── Section shell ── */
   section{ padding:80px 24px; }
@@ -177,6 +270,14 @@
     </a>
     <div class="navlinks">
       <a href="#about" data-i18n="navAbout">About</a>
+      <div class="nav-dropdown" id="govtExamsDropdown">
+        <button type="button" class="nav-dropdown-trigger"><span data-i18n="navGovtExams">Govt Exams</span> <span class="caret">▾</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/exams/" data-i18n="navJobs">Government Jobs</a>
+          <a href="#dashboard" data-i18n="navSyllabus">Syllabus</a>
+          <a href="/exams/current-affairs/" data-i18n="navCurrentAffairs">Current Affairs</a>
+        </div>
+      </div>
       <a href="#courses" data-i18n="navCourses">Courses</a>
       <a href="#results" data-i18n="navResults">Selections</a>
       <a href="#gallery" data-i18n="navGallery">Gallery</a>
@@ -193,22 +294,110 @@
   </nav>
 </header>
 
+<div class="live-ticker">
+  <div class="wrap live-ticker-inner">
+    <span class="live-badge">🔴 <span data-i18n="liveBadge">Live</span></span>
+    <div class="ticker-track" id="tickerTrack">
+      <span class="ticker-item active" data-i18n="tickerLoading">Loading latest vacancies &amp; current affairs…</span>
+    </div>
+    <a class="ticker-cta" href="/exams/" data-i18n="viewAll">View All →</a>
+  </div>
+</div>
+
 <section class="hero">
   <div class="orb o1"></div>
   <div class="orb o2"></div>
-  <div class="hero-content">
-    <span class="eyebrow" data-i18n="heroEyebrow">🎓 SSC · Banking · Railway · Foundation</span>
-    <h1 data-i18n="heroTitle" data-i18n-html="true">Your Trusted Partner for <span>SSC, Banking &amp; Railway</span> Success</h1>
-    <p data-i18n="heroSubtitle">Results-driven coaching with experienced faculty across two centers — join the next batch and see why students trust us with their exam prep.</p>
-    <div class="hero-ctas">
-      <a class="btn btn-primary" href="/apply/success-tutorial" data-i18n="heroCtaApply">Apply for Admission →</a>
-      <a class="btn btn-outline" href="/download/success-tutorial" data-i18n="heroCtaApp">📱 Download the App</a>
+  <div class="wrap hero-grid">
+    <div class="hero-content">
+      <span class="eyebrow" data-i18n="heroEyebrow">🎓 SSC · Banking · Railway · Foundation</span>
+      <h1 data-i18n="heroTitle" data-i18n-html="true">Your Trusted Partner for <span>SSC, Banking &amp; Railway</span> Success</h1>
+      <p data-i18n="heroSubtitle">Results-driven coaching with experienced faculty across two centers — join the next batch and see why students trust us with their exam prep.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="/apply/success-tutorial" data-i18n="heroCtaApply">Apply for Admission →</a>
+        <a class="btn btn-outline" href="/download/success-tutorial" data-i18n="heroCtaApp">📱 Download the App</a>
+      </div>
+    </div>
+    <div class="promise-card">
+      <span class="promise-badge">🏆 <span data-i18n="promiseBadge">Our Promise</span></span>
+      <h3 data-i18n="promiseTitle">Your Dream Job Is Our Mission</h3>
+      <ul class="promise-list">
+        <li><span class="check">👨‍🏫</span><span data-i18n="promise1">Expert Faculty</span></li>
+        <li><span class="check">📈</span><span data-i18n="promise2">Proven Results</span></li>
+        <li><span class="check">🎯</span><span data-i18n="promise3">Personalized Guidance</span></li>
+      </ul>
     </div>
   </div>
-  <div class="stats">
-    <div class="stat"><b id="statCourses">—</b><span data-i18n="statCourses">Courses Offered</span></div>
-    <div class="stat"><b>2</b><span data-i18n="statCenters">Centers</span></div>
-    <div class="stat"><b>15+</b><span data-i18n="statYears">Years Experience</span></div>
+  <div class="stats wrap">
+    <div class="stat"><span class="stat-ico">📚</span><div><b id="statCourses">—</b><span data-i18n="statCourses">Courses Offered</span></div></div>
+    <div class="stat"><span class="stat-ico">🏢</span><div><b>2</b><span data-i18n="statCenters">Centers</span></div></div>
+    <div class="stat"><span class="stat-ico">⭐</span><div><b>15+</b><span data-i18n="statYears">Years Experience</span></div></div>
+  </div>
+</section>
+
+<section id="dashboard" style="background:#fff;">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag" data-i18n="dashboardTag">One-Stop Exam Hub</div>
+      <h2 data-i18n="dashboardTitle">Everything you need, in one place</h2>
+      <p data-i18n="dashboardSubtitle">Latest vacancies, syllabus by category, and daily current affairs — updated regularly.</p>
+    </div>
+    <div class="dash-grid reveal">
+      <div class="dash-card dash-dark">
+        <div class="dash-card-head">
+          <h3 data-i18n="dashVacanciesTitle">Latest Vacancies</h3>
+          <a href="/exams/jobs/" data-i18n="viewAll">View All →</a>
+        </div>
+        <div id="dashVacancyList">
+          <p class="empty-note" style="color:rgba(255,255,255,.7);" data-i18n="loadingVacancies">Loading vacancies…</p>
+        </div>
+        <a class="dash-viewall-btn" href="/exams/jobs/" data-i18n="viewAllVacancies">View All Vacancies →</a>
+      </div>
+
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3 data-i18n="dashSyllabusTitle">Syllabus by Category</h3>
+        </div>
+        <div class="syllabus-list">
+          <a class="syllabus-item" href="/exams/jobs?type=ssc">
+            <span class="syllabus-ico">🏛️</span>
+            <span><b data-i18n="syllabusSSC">SSC</b><small data-i18n="syllabusSSCDesc">CGL, CHSL, MTS, GD &amp; more</small></span>
+            <span class="chev">›</span>
+          </a>
+          <a class="syllabus-item" href="/exams/jobs?type=banking">
+            <span class="syllabus-ico">🏦</span>
+            <span><b data-i18n="syllabusBanking">Banking</b><small data-i18n="syllabusBankingDesc">IBPS, SBI, RBI exams</small></span>
+            <span class="chev">›</span>
+          </a>
+          <a class="syllabus-item" href="/exams/jobs?type=railway">
+            <span class="syllabus-ico">🚆</span>
+            <span><b data-i18n="syllabusRailway">Railway</b><small data-i18n="syllabusRailwayDesc">RRB NTPC, Group D &amp; more</small></span>
+            <span class="chev">›</span>
+          </a>
+          <a class="syllabus-item" href="/exams/jobs?type=other">
+            <span class="syllabus-ico">📋</span>
+            <span><b data-i18n="syllabusOther">Other Govt Exams</b><small data-i18n="syllabusOtherDesc">State &amp; defence recruitments</small></span>
+            <span class="chev">›</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="dash-col">
+        <div class="dash-card">
+          <div class="dash-card-head">
+            <h3 data-i18n="currentAffairsTitle">Current Affairs</h3>
+            <a href="/exams/current-affairs/" data-i18n="viewAll">View All →</a>
+          </div>
+          <div id="dashCurrentAffairsList">
+            <p class="empty-note" data-i18n="loadingCurrentAffairs">Loading current affairs…</p>
+          </div>
+        </div>
+        <div class="promo-card">
+          <h4 data-i18n="promoTitle">New Batch Starting Soon!</h4>
+          <p data-i18n="promoSubtitle">Join now &amp; get early bird discounts</p>
+          <a class="btn btn-primary" href="/apply/success-tutorial" data-i18n="promoCta">Enquire Now</a>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -322,19 +511,38 @@
   // ── i18n ─────────────────────────────────────────────────────
   const translations = {
     en: {
-      navAbout:"About", navCourses:"Courses", navResults:"Selections", navGallery:"Gallery", navContact:"Contact",
+      navAbout:"About", navGovtExams:"Govt Exams", navJobs:"Government Jobs", navSyllabus:"Syllabus", navCurrentAffairs:"Current Affairs", navCourses:"Courses", navResults:"Selections", navGallery:"Gallery", navContact:"Contact",
       navApp:"Get the App", navApply:"Apply Now",
       heroEyebrow:"🎓 SSC · Banking · Railway · Foundation",
       heroTitle:"Your Trusted Partner for <span>SSC, Banking &amp; Railway</span> Success",
       heroSubtitle:"Results-driven coaching with experienced faculty across two centers — join the next batch and see why students trust us with their exam prep.",
       heroCtaApply:"Apply for Admission →", heroCtaApp:"📱 Download the App",
+      promiseBadge:"Our Promise", promiseTitle:"Your Dream Job Is Our Mission",
+      promise1:"Expert Faculty", promise2:"Proven Results", promise3:"Personalized Guidance",
       statCourses:"Courses Offered", statCenters:"Centers", statYears:"Years Experience",
+      dashboardTag:"One-Stop Exam Hub", dashboardTitle:"Everything you need, in one place",
+      dashboardSubtitle:"Latest vacancies, syllabus by category, and daily current affairs — updated regularly.",
+      liveBadge:"Live", tickerLoading:"Loading latest vacancies & current affairs…", tickerEmpty:"New vacancies &amp; current affairs will appear here soon.",
+      viewAll:"View All →", dashVacanciesTitle:"Latest Vacancies", dashSyllabusTitle:"Syllabus by Category",
+      syllabusSSC:"SSC", syllabusSSCDesc:"CGL, CHSL, MTS, GD & more",
+      syllabusBanking:"Banking", syllabusBankingDesc:"IBPS, SBI, RBI exams",
+      syllabusRailway:"Railway", syllabusRailwayDesc:"RRB NTPC, Group D & more",
+      syllabusOther:"Other Govt Exams", syllabusOtherDesc:"State & defence recruitments",
+      promoTitle:"New Batch Starting Soon!", promoSubtitle:"Join now & get early bird discounts", promoCta:"Enquire Now",
       aboutTag:"Why Us", aboutTitle:"Built for serious exam prep",
       aboutSubtitle:"Everything about how we run classes is designed around one outcome — you clearing your exam.",
       about1Title:"Experienced Faculty", about1Desc:"Teachers with 10+ years of experience specifically in competitive exam coaching, not generic tuition.",
       about2Title:"Result-Focused", about2Desc:"Regular tests, structured syllabus coverage, and a track record of students selected across batches.",
       about3Title:"Two Convenient Centers", about3Desc:"Baharagora and Ghatsila — choose whichever's easier for you to reach for daily classes.",
       about4Title:"Stay Connected", about4Desc:"A dedicated app for schedules, fee tracking, and updates — so nothing important gets missed.",
+      vacanciesTag:"Government Jobs", vacanciesTitle:"Latest Government Vacancies",
+      vacanciesSubtitle:"SSC, Banking, Railway, and other government job openings — updated regularly.",
+      loadingVacancies:"Loading vacancies…", vacanciesEmpty:"New vacancies will be posted here soon.", vacanciesError:"Could not load vacancies right now.",
+      viewAllVacancies:"View All Vacancies →", vacanciesSuffix:"posts", lastDatePrefix:"Last date",
+      currentAffairsTag:"Stay Updated", currentAffairsTitle:"Current Affairs",
+      currentAffairsSubtitle:"Daily updates relevant to SSC, Banking, Railway, and other competitive exams.",
+      loadingCurrentAffairs:"Loading current affairs…", currentAffairsEmpty:"New updates will be posted here soon.", currentAffairsError:"Could not load current affairs right now.",
+      viewAllCurrentAffairs:"View All Current Affairs →",
       coursesTag:"Programs", coursesTitle:"Courses we offer",
       coursesSubtitle:"Pricing shown here always matches what's currently active — updated automatically.",
       loadingCourses:"Loading courses…", coursesEmpty:"Course list coming soon.", coursesError:"Could not load courses right now.",
@@ -352,19 +560,38 @@
       footerRights:"All rights reserved.",
     },
     hi: {
-      navAbout:"परिचय", navCourses:"कोर्स", navResults:"चयन", navGallery:"गैलरी", navContact:"संपर्क करें",
+      navAbout:"परिचय", navGovtExams:"सरकारी परीक्षाएं", navJobs:"सरकारी नौकरियां", navSyllabus:"पाठ्यक्रम", navCurrentAffairs:"करेंट अफेयर्स", navCourses:"कोर्स", navResults:"चयन", navGallery:"गैलरी", navContact:"संपर्क करें",
       navApp:"ऐप डाउनलोड करें", navApply:"अभी आवेदन करें",
       heroEyebrow:"🎓 एसएससी · बैंकिंग · रेलवे · फाउंडेशन",
       heroTitle:"<span>एसएससी, बैंकिंग और रेलवे</span> की सफलता के लिए आपका भरोसेमंद साथी",
       heroSubtitle:"अनुभवी शिक्षकों के साथ परिणाम-उन्मुख कोचिंग, दो केंद्रों पर उपलब्ध — अगली बैच में शामिल हों और जानें कि छात्र हम पर भरोसा क्यों करते हैं।",
       heroCtaApply:"प्रवेश के लिए आवेदन करें →", heroCtaApp:"📱 ऐप डाउनलोड करें",
+      promiseBadge:"हमारा वादा", promiseTitle:"आपकी सपनों की नौकरी हमारा लक्ष्य है",
+      promise1:"विशेषज्ञ शिक्षक", promise2:"सिद्ध परिणाम", promise3:"व्यक्तिगत मार्गदर्शन",
       statCourses:"उपलब्ध कोर्स", statCenters:"केंद्र", statYears:"वर्षों का अनुभव",
+      dashboardTag:"एक ही जगह सब कुछ", dashboardTitle:"आपकी हर ज़रूरत, एक ही जगह",
+      dashboardSubtitle:"नवीनतम रिक्तियां, श्रेणी अनुसार पाठ्यक्रम और रोज़ाना करेंट अफेयर्स — नियमित रूप से अपडेट किए जाते हैं।",
+      liveBadge:"लाइव", tickerLoading:"नवीनतम रिक्तियां और करेंट अफेयर्स लोड हो रहे हैं…", tickerEmpty:"नई रिक्तियां और करेंट अफेयर्स जल्द ही यहां दिखेंगे।",
+      viewAll:"सभी देखें →", dashVacanciesTitle:"नवीनतम रिक्तियां", dashSyllabusTitle:"श्रेणी अनुसार पाठ्यक्रम",
+      syllabusSSC:"एसएससी", syllabusSSCDesc:"सीजीएल, सीएचएसएल, एमटीएस, जीडी और अधिक",
+      syllabusBanking:"बैंकिंग", syllabusBankingDesc:"आईबीपीएस, एसबीआई, आरबीआई परीक्षाएं",
+      syllabusRailway:"रेलवे", syllabusRailwayDesc:"आरआरबी एनटीपीसी, ग्रुप डी और अधिक",
+      syllabusOther:"अन्य सरकारी परीक्षाएं", syllabusOtherDesc:"राज्य और रक्षा भर्तियां",
+      promoTitle:"नई बैच जल्द शुरू हो रही है!", promoSubtitle:"अभी शामिल हों और शुरुआती छूट पाएं", promoCta:"अभी पूछताछ करें",
       aboutTag:"हमारे बारे में", aboutTitle:"गंभीर परीक्षा तैयारी के लिए बनाया गया",
       aboutSubtitle:"हमारी कक्षाएं जिस तरह से चलाई जाती हैं, वह सब एक ही लक्ष्य के इर्द-गिर्द बना है — आपका परीक्षा पास करना।",
       about1Title:"अनुभवी शिक्षक", about1Desc:"प्रतिस्पर्धी परीक्षा कोचिंग में 10+ वर्षों के अनुभव वाले शिक्षक, सामान्य ट्यूशन नहीं।",
       about2Title:"परिणाम-केंद्रित", about2Desc:"नियमित टेस्ट, व्यवस्थित पाठ्यक्रम कवरेज, और बैचों में चयनित छात्रों का ट्रैक रिकॉर्ड।",
       about3Title:"दो सुविधाजनक केंद्र", about3Desc:"बहरागोड़ा और घाटशिला — दैनिक कक्षाओं के लिए जो भी आपके लिए सुविधाजनक हो, चुनें।",
       about4Title:"जुड़े रहें", about4Desc:"शेड्यूल, फीस ट्रैकिंग और अपडेट के लिए एक समर्पित ऐप — ताकि कोई भी जरूरी जानकारी न छूटे।",
+      vacanciesTag:"सरकारी नौकरियां", vacanciesTitle:"नवीनतम सरकारी रिक्तियां",
+      vacanciesSubtitle:"एसएससी, बैंकिंग, रेलवे और अन्य सरकारी नौकरी के अवसर — नियमित रूप से अपडेट किए जाते हैं।",
+      loadingVacancies:"रिक्तियां लोड हो रही हैं…", vacanciesEmpty:"नई रिक्तियां जल्द ही यहां पोस्ट की जाएंगी।", vacanciesError:"अभी रिक्तियां लोड नहीं हो सकीं।",
+      viewAllVacancies:"सभी रिक्तियां देखें →", vacanciesSuffix:"पद", lastDatePrefix:"अंतिम तिथि",
+      currentAffairsTag:"अपडेट रहें", currentAffairsTitle:"करेंट अफेयर्स",
+      currentAffairsSubtitle:"एसएससी, बैंकिंग, रेलवे और अन्य प्रतियोगी परीक्षाओं से संबंधित दैनिक अपडेट।",
+      loadingCurrentAffairs:"करेंट अफेयर्स लोड हो रहे हैं…", currentAffairsEmpty:"नए अपडेट जल्द ही यहां पोस्ट किए जाएंगे।", currentAffairsError:"अभी करेंट अफेयर्स लोड नहीं हो सके।",
+      viewAllCurrentAffairs:"सभी करेंट अफेयर्स देखें →",
       coursesTag:"पाठ्यक्रम", coursesTitle:"हमारे कोर्स",
       coursesSubtitle:"यहाँ दिखाई गई फीस हमेशा वर्तमान में सक्रिय दरों से मेल खाती है — स्वतः अपडेट होती है।",
       loadingCourses:"कोर्स लोड हो रहे हैं…", coursesEmpty:"कोर्स सूची जल्द आ रही है।", coursesError:"अभी कोर्स लोड नहीं हो सके।",
@@ -396,13 +623,23 @@
     document.querySelectorAll('#langSwitch button').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
   }
 
+  document.querySelectorAll('.nav-dropdown-trigger').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      btn.closest('.nav-dropdown').classList.toggle('open');
+    });
+  });
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.nav-dropdown.open').forEach(d => d.classList.remove('open'));
+  });
+
   document.getElementById('langSwitch').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-lang]');
     if (!btn || btn.dataset.lang === lang) return;
     lang = btn.dataset.lang;
     localStorage.setItem('siteLang', lang);
     applyStaticTranslations();
-    renderCourses(); renderAnnouncements(); renderResults(); renderGallery();
+    renderCourses(); renderVacancies(); renderCurrentAffairsHome(); renderTicker(); renderAnnouncements(); renderResults(); renderGallery();
   });
 
   applyStaticTranslations();
@@ -455,6 +692,94 @@
     .then(r => r.json())
     .then(data => { coursesData = data; renderCourses(); })
     .catch(() => { coursesData = 'error'; renderCourses(); });
+
+  // ── Government Exam Intelligence — Latest Vacancies + Current Affairs ──
+  // Same fetch-then-render pattern as courses/announcements above, reusing
+  // the existing .course-card and .announce-item styles rather than adding
+  // new CSS. Data comes from apps/exam-portal's own public API
+  // (packages: apps/api's gov-exams module) — this is a homepage preview
+  // of it, not a duplicate data source; "View All" links out to the full
+  // portal at /exams.
+  function formatShortDate(d) {
+    return new Date(d).toLocaleDateString(lang === 'hi' ? 'hi-IN' : 'en-IN', { day:'numeric', month:'short', year:'numeric' });
+  }
+
+  // ── Live ticker — surfaces the same vacancies/current-affairs data above
+  // the fold (in the strip under the header) so it doesn't require scrolling
+  // down to the dashboard section to be noticed.
+  let tickerInterval = null;
+  function renderTicker() {
+    const track = document.getElementById('tickerTrack');
+    const items = [];
+    if (Array.isArray(vacanciesData)) {
+      vacanciesData.slice(0, 3).forEach(v => items.push({ href: `/exams/jobs/${v.slug}`, icon: '🆕', text: `${v.organization.shortName}: ${v.title}` }));
+    }
+    if (Array.isArray(currentAffairsHomeData)) {
+      currentAffairsHomeData.slice(0, 3).forEach(ca => items.push({ href: `/exams/current-affairs/${ca.slug}`, icon: '📰', text: ca.title }));
+    }
+    const bothSettled = vacanciesData !== null && currentAffairsHomeData !== null;
+    if (!items.length) {
+      if (!bothSettled) return;
+      track.innerHTML = `<span class="ticker-item active">${t('tickerEmpty')}</span>`;
+      if (tickerInterval) { clearInterval(tickerInterval); tickerInterval = null; }
+      return;
+    }
+    track.innerHTML = items.map((item, i) => `
+      <a class="ticker-item${i === 0 ? ' active' : ''}" href="${item.href}">${item.icon} ${escapeHtml(item.text)}</a>
+    `).join('');
+    if (tickerInterval) clearInterval(tickerInterval);
+    let index = 0;
+    if (items.length > 1) {
+      tickerInterval = setInterval(() => {
+        const nodes = track.querySelectorAll('.ticker-item');
+        nodes[index].classList.remove('active');
+        index = (index + 1) % nodes.length;
+        nodes[index].classList.add('active');
+      }, 3800);
+    }
+  }
+
+  let vacanciesData = null;
+  function renderVacancies() {
+    const list = document.getElementById('dashVacancyList');
+    if (vacanciesData === null) { list.innerHTML = `<p class="empty-note" style="color:rgba(255,255,255,.7);">${t('loadingVacancies')}</p>`; return; }
+    if (vacanciesData === 'error') { list.innerHTML = `<p class="empty-note" style="color:rgba(255,255,255,.7);">${t('vacanciesError')}</p>`; return; }
+    if (!vacanciesData.length) { list.innerHTML = `<p class="empty-note" style="color:rgba(255,255,255,.7);">${t('vacanciesEmpty')}</p>`; return; }
+    list.innerHTML = vacanciesData.map(v => `
+      <a class="vac-row" href="/exams/jobs/${v.slug}" style="display:flex;">
+        <div class="vac-row-top">
+          <h4>${escapeHtml(v.title)}</h4>
+          <span class="vac-pill">${escapeHtml(v.organization.shortName)}</span>
+        </div>
+        <time>${v.totalVacancies != null ? v.totalVacancies + ' ' + t('vacanciesSuffix') + ' · ' : ''}${v.applicationEndDate ? t('lastDatePrefix') + ': ' + formatShortDate(v.applicationEndDate) : ''}</time>
+      </a>
+    `).join('');
+  }
+  fetch(`/api/gov-exams/recruitments?limit=3`)
+    .then(r => r.json())
+    .then(data => { vacanciesData = data.data; renderVacancies(); renderTicker(); })
+    .catch(() => { vacanciesData = 'error'; renderVacancies(); renderTicker(); });
+
+  let currentAffairsHomeData = null;
+  function renderCurrentAffairsHome() {
+    const el = document.getElementById('dashCurrentAffairsList');
+    if (currentAffairsHomeData === null) { el.innerHTML = `<p class="empty-note">${t('loadingCurrentAffairs')}</p>`; return; }
+    if (currentAffairsHomeData === 'error') { el.innerHTML = `<p class="empty-note">${t('currentAffairsError')}</p>`; return; }
+    if (!currentAffairsHomeData.length) { el.innerHTML = `<p class="empty-note">${t('currentAffairsEmpty')}</p>`; return; }
+    el.innerHTML = currentAffairsHomeData.map(ca => `
+      <a class="ca-row" href="/exams/current-affairs/${ca.slug}" style="display:flex;">
+        <span class="ca-dot"></span>
+        <div>
+          <p>${escapeHtml(ca.title)}</p>
+          <time>${formatShortDate(ca.publishedDate)}</time>
+        </div>
+      </a>
+    `).join('');
+  }
+  fetch(`/api/gov-exams/current-affairs?limit=4`)
+    .then(r => r.json())
+    .then(data => { currentAffairsHomeData = data.data; renderCurrentAffairsHome(); renderTicker(); })
+    .catch(() => { currentAffairsHomeData = 'error'; renderCurrentAffairsHome(); renderTicker(); });
 
   // ── Announcements / Results / Gallery — the editable content ───
   let announceData = null, resultsData = null, galleryData = null;

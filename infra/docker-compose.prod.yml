@@ -41,6 +41,15 @@ services:
     expose:
       - "80"
 
+  # Government Exam Intelligence public portal (apps/exam-portal) — same
+  # shape as web/site: no env_file, VITE_API_URL/BASE_PATH baked in at
+  # build time. Served at /exams/* via infra/Caddyfile.
+  exam-portal:
+    image: ghcr.io/amarjitkumar640-oss/institute-os-exam-portal:latest
+    restart: always
+    expose:
+      - "80"
+
   caddy:
     image: caddy:2-alpine
     restart: always
@@ -55,6 +64,7 @@ services:
       - api
       - site
       - web
+      - exam-portal
 
 volumes:
   postgres-data:
