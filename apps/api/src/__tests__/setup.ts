@@ -30,6 +30,7 @@ export function legacyPermissionsForRole(roles: StaffRole[]): Record<string, str
 
 export async function resetDb() {
   await prisma.siteHighlight.deleteMany();
+  await prisma.govSource.deleteMany();
   await prisma.govDocument.deleteMany();
   await prisma.govRecruitment.deleteMany();
   await prisma.govOrganization.deleteMany();

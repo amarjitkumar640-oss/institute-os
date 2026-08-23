@@ -966,6 +966,7 @@ model GovOrganization {
   updatedAt       DateTime   @updatedAt
 
   recruitments GovRecruitment[]
+  sources      GovSource[]
 
   @@map("gov_organizations")
 }
@@ -1079,4 +1080,33 @@ model GovCurrentAffair {
 
   @@index([status, category, publishedDate])
   @@map("gov_current_affairs")
+}
+
+enum GovSourceContentType {
+  recruitment
+  current_affair
+}
+
+// Admin-configurable URL to scrape, by exam category (step 4). recruitment
+// sources should set organizationId so scraped recruitments attach to the
+// right org automatically; current-affairs sources have no natural
+// organization (e.g. a general daily-current-affairs page) and can leave
+// it unset.
+model GovSource {
+  id               String     @id @default(uuid())
+  category         GovOrgType
+  contentType      GovSourceContentType
+  organizationId   String?
+  organization     GovOrganization? @relation(fields: [organizationId], references: [id])
+  label            String
+  url              String
+  enabled          Boolean    @default(true)
+  lastScrapedAt    DateTime?
+  lastScrapeStatus String? // "success" | "partial" | "error"
+  lastScrapeError  String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([category, enabled])
+  @@map("gov_sources")
 }

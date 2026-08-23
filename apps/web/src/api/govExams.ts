@@ -120,6 +120,33 @@ export interface GovCurrentAffairInput {
   sourceUrl?: string;
 }
 
+export type GovSourceContentType = "recruitment" | "current_affair";
+
+export interface GovSource {
+  id: string;
+  category: GovOrgType;
+  contentType: GovSourceContentType;
+  organizationId: string | null;
+  organization: GovOrganization | null;
+  label: string;
+  url: string;
+  enabled: boolean;
+  lastScrapedAt: string | null;
+  lastScrapeStatus: string | null;
+  lastScrapeError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GovSourceInput {
+  category: GovOrgType;
+  contentType: GovSourceContentType;
+  organizationId?: string;
+  label: string;
+  url: string;
+  enabled?: boolean;
+}
+
 export interface PaginatedResult<T> {
   data: T[];
   total: number;
@@ -231,4 +258,27 @@ export async function setCurrentAffairStatus(id: string, status: GovRecruitmentS
 
 export async function deleteCurrentAffair(id: string): Promise<void> {
   await apiClient.delete(`${BASE}/current-affairs/${id}`);
+}
+
+// ── Sources (step 4 — automated scraping) ───────────────────────────────────
+
+const SOURCES_BASE = "/api/gov-exams/admin/sources";
+
+export async function listSources(): Promise<GovSource[]> {
+  const { data } = await apiClient.get<GovSource[]>(SOURCES_BASE);
+  return data;
+}
+
+export async function createSource(input: GovSourceInput): Promise<GovSource> {
+  const { data } = await apiClient.post<GovSource>(SOURCES_BASE, input);
+  return data;
+}
+
+export async function updateSource(id: string, input: Partial<GovSourceInput>): Promise<GovSource> {
+  const { data } = await apiClient.patch<GovSource>(`${SOURCES_BASE}/${id}`, input);
+  return data;
+}
+
+export async function deleteSource(id: string): Promise<void> {
+  await apiClient.delete(`${SOURCES_BASE}/${id}`);
 }

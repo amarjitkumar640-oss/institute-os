@@ -3,8 +3,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OrganizationsTab } from "./OrganizationsTab";
 import { RecruitmentsTab } from "./RecruitmentsTab";
 import { CurrentAffairsTab } from "./CurrentAffairsTab";
+import { SourcesTab } from "./SourcesTab";
 
-type GovExamsTab = "recruitments" | "current-affairs" | "organizations";
+type GovExamsTab = "recruitments" | "current-affairs" | "organizations" | "sources";
 
 export function GovExamsPage() {
   const [tab, setTab] = useState<GovExamsTab>("recruitments");
@@ -24,12 +25,14 @@ export function GovExamsPage() {
             <TabsTrigger value="recruitments">Recruitments</TabsTrigger>
             <TabsTrigger value="current-affairs">Current Affairs</TabsTrigger>
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
+            <TabsTrigger value="sources">Sources</TabsTrigger>
           </TabsList>
         </Tabs>
 
         {tab === "recruitments" && <RecruitmentsTab />}
         {tab === "current-affairs" && <CurrentAffairsTab />}
         {tab === "organizations" && <OrganizationsTab />}
+        {tab === "sources" && <SourcesTab />}
       </div>
     </div>
   );

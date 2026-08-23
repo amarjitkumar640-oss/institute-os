@@ -270,3 +270,70 @@ describe("gov-exams admin", () => {
     expect(afterPublish.status).toBe(200);
   });
 });
+
+describe("gov-sources admin", () => {
+  beforeEach(resetDb);
+  afterAll(async () => prisma.$disconnect());
+
+  it("rejects requests with no token", async () => {
+    const res = await request(app).get("/api/gov-exams/admin/sources");
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects an admin who belongs to a different tenant", async () => {
+    await seedSiteTenant();
+    await seedOtherTenant();
+    const token = adminToken(OTHER_TENANT_ID);
+    const res = await request(app).get("/api/gov-exams/admin/sources").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("404s creating a source with an organizationId that doesn't exist", async () => {
+    const tenant = await seedSiteTenant();
+    const token = adminToken(tenant.id);
+    const res = await request(app)
+      .post("/api/gov-exams/admin/sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        category: "ssc", contentType: "recruitment",
+        organizationId: "00000000-0000-0000-0000-000000000000",
+        label: "SSC Notifications", url: "https://ssc.nic.in/notifications",
+      });
+    expect(res.status).toBe(404);
+  });
+
+  it("full create -> list -> update -> delete cycle", async () => {
+    const tenant = await seedSiteTenant();
+    const token = adminToken(tenant.id);
+    const org = await seedOrganization();
+
+    const create = await request(app)
+      .post("/api/gov-exams/admin/sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        category: "ssc", contentType: "recruitment", organizationId: org.id,
+        label: "SSC Notifications", url: "https://ssc.nic.in/notifications",
+      });
+    expect(create.status).toBe(201);
+    expect(create.body.enabled).toBe(true);
+    expect(create.body.organization.shortName).toBe("SSC");
+    const sourceId = create.body.id;
+
+    const list = await request(app).get("/api/gov-exams/admin/sources").set("Authorization", `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body).toHaveLength(1);
+
+    const update = await request(app)
+      .patch(`/api/gov-exams/admin/sources/${sourceId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ enabled: false });
+    expect(update.status).toBe(200);
+    expect(update.body.enabled).toBe(false);
+
+    const del = await request(app).delete(`/api/gov-exams/admin/sources/${sourceId}`).set("Authorization", `Bearer ${token}`);
+    expect(del.status).toBe(204);
+
+    const afterDelete = await request(app).get("/api/gov-exams/admin/sources").set("Authorization", `Bearer ${token}`);
+    expect(afterDelete.body).toHaveLength(0);
+  });
+});

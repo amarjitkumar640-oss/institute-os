@@ -27,6 +27,7 @@ import { siteRouter } from "./modules/site/site.routes";
 import { siteAdminRouter } from "./modules/site/site-admin.routes";
 import { govExamsRouter } from "./modules/gov-exams/gov-exams.routes";
 import { govExamsAdminRouter } from "./modules/gov-exams/gov-exams-admin.routes";
+import { govSourcesAdminRouter } from "./modules/gov-exams/gov-sources-admin.routes";
 import { errorHandler }  from "./middleware/errorHandler";
 
 export const app = express();
@@ -75,5 +76,6 @@ app.use("/api/site", siteRouter);
 app.use("/api/site/admin", siteAdminRouter);
 app.use("/api/gov-exams", govExamsRouter);
 app.use("/api/gov-exams/admin", govExamsAdminRouter);
+app.use("/api/gov-exams/admin/sources", govSourcesAdminRouter);
 
 app.use(errorHandler);
