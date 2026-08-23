@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { listRecruitments } from "@/api/govExams";
 import { Badge, EmptyState, Skeleton } from "@/components/ui";
 import { formatDate } from "@/lib/utils";
+import { useLang } from "@/i18n";
 
 interface CalendarEvent {
   recruitmentId: string;
@@ -11,10 +12,11 @@ interface CalendarEvent {
   title: string;
   orgShortName: string;
   date: string;
-  label: "Application closes" | "Exam date";
+  label: "applicationCloses" | "examDateLabel";
 }
 
 export function CalendarPage() {
+  const { t, lang } = useLang();
   const { data, isLoading } = useQuery({ queryKey: ["recruitments", "all"], queryFn: () => listRecruitments({}) });
 
   const events = useMemo<CalendarEvent[]>(() => {
@@ -22,10 +24,10 @@ export function CalendarPage() {
     const out: CalendarEvent[] = [];
     for (const r of data.data) {
       if (r.applicationEndDate) {
-        out.push({ recruitmentId: r.id, slug: r.slug, title: r.title, orgShortName: r.organization.shortName, date: r.applicationEndDate, label: "Application closes" });
+        out.push({ recruitmentId: r.id, slug: r.slug, title: r.title, orgShortName: r.organization.shortName, date: r.applicationEndDate, label: "applicationCloses" });
       }
       if (r.examDate) {
-        out.push({ recruitmentId: r.id, slug: r.slug, title: r.title, orgShortName: r.organization.shortName, date: r.examDate, label: "Exam date" });
+        out.push({ recruitmentId: r.id, slug: r.slug, title: r.title, orgShortName: r.organization.shortName, date: r.examDate, label: "examDateLabel" });
       }
     }
     return out.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -34,22 +36,22 @@ export function CalendarPage() {
   const groups = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     for (const event of events) {
-      const key = new Date(event.date).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+      const key = new Date(event.date).toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN", { month: "long", year: "numeric" });
       map.set(key, [...(map.get(key) ?? []), event]);
     }
     return [...map.entries()];
-  }, [events]);
+  }, [events, lang]);
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10">
-      <h1 className="font-heading text-2xl text-ink">Exam Calendar</h1>
-      <p className="text-sm text-ink-soft mt-1">Upcoming application deadlines and exam dates, across all published recruitments.</p>
+    <div className="max-w-3xl mx-auto px-6 py-6">
+      <h1 className="font-heading text-2xl text-ink">{t("calendarTitle")}</h1>
+      <p className="text-sm text-ink-soft mt-1">{t("calendarSubtitle")}</p>
 
       <div className="mt-6">
         {isLoading ? (
           <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
         ) : !groups.length ? (
-          <EmptyState title="No upcoming dates" description="No recruitments have application or exam dates yet." />
+          <EmptyState title={t("noUpcomingDates")} description={t("noUpcomingDatesDesc")} />
         ) : (
           <div className="space-y-6">
             {groups.map(([month, monthEvents]) => (
@@ -67,9 +69,9 @@ export function CalendarPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-ink truncate">{event.title}</p>
-                        <p className="text-xs text-ink-soft">{formatDate(event.date)}</p>
+                        <p className="text-xs text-ink-soft">{formatDate(event.date, lang)}</p>
                       </div>
-                      <Badge>{event.label}</Badge>
+                      <Badge>{t(event.label)}</Badge>
                     </Link>
                   ))}
                 </div>

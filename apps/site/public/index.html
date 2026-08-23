@@ -36,7 +36,7 @@
     border-bottom:1px solid rgba(33,26,58,0.08);
   }
   nav.wrap{ display:flex; align-items:center; justify-content:space-between; max-width:1320px; padding:14px 24px; gap:20px; }
-  .brand{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:16.5px; flex-shrink:0; line-height:1.2; }
+  .brand{ display:flex; align-items:center; gap:8px; font-family:'Fredoka','Noto Sans Devanagari',sans-serif; font-weight:700; font-size:18.5px; flex-shrink:0; line-height:1.2; }
   .brand img{ width:34px; height:34px; border-radius:11px; object-fit:cover; }
   .brand .fallback{ width:34px; height:34px; border-radius:11px; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; }
   .navlinks{ display:flex; align-items:center; gap:19px; font-weight:600; font-size:13.5px; color:var(--ink-soft); white-space:nowrap; }
@@ -88,7 +88,7 @@
   .lang-switch button.active{ background:var(--primary); color:#fff; }
 
   /* ── Hero ── */
-  .hero{ position:relative; overflow:hidden; padding:90px 24px 110px; text-align:center; }
+  .hero{ position:relative; overflow:hidden; padding:48px 24px; text-align:center; }
   .hero::before{
     content:''; position:absolute; inset:0; z-index:0;
     background:
@@ -113,7 +113,7 @@
   .hero-ctas{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; opacity:0; animation:fadeUp .6s ease .46s forwards; }
   @keyframes fadeUp{ from{ opacity:0; transform:translateY(16px);} to{ opacity:1; transform:translateY(0);} }
 
-  .hero-grid{ position:relative; z-index:1; display:grid; grid-template-columns:1.1fr 0.9fr; gap:48px; align-items:center; text-align:left; }
+  .hero-grid{ position:relative; z-index:1; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; text-align:left; }
   .hero-grid .hero-content{ margin:0; max-width:none; }
   .hero-grid .hero-content p{ margin:0 0 34px; }
   .hero-grid .hero-ctas{ justify-content:flex-start; }
@@ -133,9 +133,11 @@
   .promise-card::before{ content:'🏆'; position:absolute; right:-10px; top:-10px; font-size:110px; opacity:.12; transform:rotate(12deg); }
   .promise-badge{ position:relative; display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,0.18); padding:6px 14px; border-radius:999px; font-size:12px; font-weight:700; margin-bottom:16px; }
   .promise-card h3{ font-size:clamp(20px,2.6vw,26px); line-height:1.25; margin-bottom:22px; position:relative; }
-  .promise-list{ display:flex; flex-direction:column; gap:14px; position:relative; }
-  .promise-list li{ display:flex; align-items:flex-start; gap:10px; font-size:14px; font-weight:600; line-height:1.5; }
-  .promise-list .check{ width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,0.22); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:12px; }
+  .promise-list{ display:flex; flex-direction:column; gap:16px; position:relative; }
+  .promise-list li{ display:flex; align-items:flex-start; gap:12px; }
+  .promise-list .check{ width:36px; height:36px; border-radius:11px; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px; }
+  .promise-list b{ display:block; font-size:14px; font-weight:700; }
+  .promise-card .promise-list p{ margin:2px 0 0; max-width:none; font-size:12px; font-weight:500; line-height:1.55; color:#fff; opacity:.82; animation:none; }
   @media (max-width:900px){ .promise-card{ max-width:460px; margin:0 auto; } }
 
   .stats{ position:relative; z-index:1; display:flex; justify-content:center; gap:16px; margin-top:56px; flex-wrap:wrap; opacity:0; animation:fadeUp .6s ease .58s forwards; }
@@ -180,7 +182,7 @@
   .promo-card .btn-primary{ background:#fff; color:color-mix(in srgb, var(--secondary) 80%, black); box-shadow:none; width:100%; justify-content:center; }
 
   /* ── Section shell ── */
-  section{ padding:80px 24px; }
+  section{ padding:48px 24px; }
   .section-head{ text-align:center; max-width:600px; margin:0 auto 48px; }
   .section-tag{ font-size:12.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--primary); margin-bottom:10px; }
   .section-head h2{ font-size:clamp(26px,3.5vw,36px); margin-bottom:12px; }
@@ -188,14 +190,6 @@
 
   .reveal{ opacity:0; transform:translateY(26px); transition:opacity .7s cubic-bezier(.2,.7,.3,1), transform .7s cubic-bezier(.2,.7,.3,1); }
   .reveal.in{ opacity:1; transform:translateY(0); }
-
-  /* ── About cards ── */
-  .about-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:20px; max-width:1000px; margin:0 auto; }
-  .about-card{ background:#fff; border-radius:var(--card-radius); padding:28px 24px; border:1px solid rgba(33,26,58,0.06); box-shadow:0 12px 28px -18px rgba(33,26,58,0.2); transition:transform .25s ease, box-shadow .25s ease; }
-  .about-card:hover{ transform:translateY(-6px); box-shadow:0 20px 40px -18px rgba(33,26,58,0.28); }
-  .about-card .ico{ width:48px; height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:22px; margin-bottom:16px; background:color-mix(in srgb, var(--primary) 12%, white); }
-  .about-card h3{ font-size:16px; margin-bottom:8px; }
-  .about-card p{ font-size:13.5px; color:var(--ink-soft); line-height:1.6; }
 
   /* ── Courses ── */
   .course-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; }
@@ -304,7 +298,7 @@
   </div>
 </div>
 
-<section class="hero">
+<section class="hero" id="about">
   <div class="orb o1"></div>
   <div class="orb o2"></div>
   <div class="wrap hero-grid">
@@ -321,9 +315,22 @@
       <span class="promise-badge">🏆 <span data-i18n="promiseBadge">Our Promise</span></span>
       <h3 data-i18n="promiseTitle">Your Dream Job Is Our Mission</h3>
       <ul class="promise-list">
-        <li><span class="check">👨‍🏫</span><span data-i18n="promise1">Expert Faculty</span></li>
-        <li><span class="check">📈</span><span data-i18n="promise2">Proven Results</span></li>
-        <li><span class="check">🎯</span><span data-i18n="promise3">Personalized Guidance</span></li>
+        <li>
+          <span class="check">👨‍🏫</span>
+          <div><b data-i18n="about1Title">Experienced Faculty</b><p data-i18n="about1Desc">Teachers with 10+ years of experience specifically in competitive exam coaching, not generic tuition.</p></div>
+        </li>
+        <li>
+          <span class="check">📊</span>
+          <div><b data-i18n="about2Title">Result-Focused</b><p data-i18n="about2Desc">Regular tests, structured syllabus coverage, and a track record of rank holders across batches.</p></div>
+        </li>
+        <li>
+          <span class="check">🏢</span>
+          <div><b data-i18n="about3Title">Two Convenient Centers</b><p data-i18n="about3Desc">Baharagora and Ghatsila — choose whichever's easier for you to reach for daily classes.</p></div>
+        </li>
+        <li>
+          <span class="check">📱</span>
+          <div><b data-i18n="about4Title">Stay Connected</b><p data-i18n="about4Desc">A dedicated app for schedules, fee tracking, and updates — so nothing important gets missed.</p></div>
+        </li>
       </ul>
     </div>
   </div>
@@ -397,22 +404,6 @@
           <a class="btn btn-primary" href="/apply/success-tutorial" data-i18n="promoCta">Enquire Now</a>
         </div>
       </div>
-    </div>
-  </div>
-</section>
-
-<section id="about">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <div class="section-tag" data-i18n="aboutTag">Why Us</div>
-      <h2 data-i18n="aboutTitle">Built for serious exam prep</h2>
-      <p data-i18n="aboutSubtitle">Everything about how we run classes is designed around one outcome — you clearing your exam.</p>
-    </div>
-    <div class="about-grid">
-      <div class="about-card reveal"><div class="ico">👨‍🏫</div><h3 data-i18n="about1Title">Experienced Faculty</h3><p data-i18n="about1Desc">Teachers with 10+ years of experience specifically in competitive exam coaching, not generic tuition.</p></div>
-      <div class="about-card reveal"><div class="ico">📊</div><h3 data-i18n="about2Title">Result-Focused</h3><p data-i18n="about2Desc">Regular tests, structured syllabus coverage, and a track record of rank holders across batches.</p></div>
-      <div class="about-card reveal"><div class="ico">🏢</div><h3 data-i18n="about3Title">Two Convenient Centers</h3><p data-i18n="about3Desc">Baharagora and Ghatsila — choose whichever's easier for you to reach for daily classes.</p></div>
-      <div class="about-card reveal"><div class="ico">📱</div><h3 data-i18n="about4Title">Stay Connected</h3><p data-i18n="about4Desc">A dedicated app for schedules, fee tracking, and updates — so nothing important gets missed.</p></div>
     </div>
   </div>
 </section>
@@ -518,7 +509,6 @@
       heroSubtitle:"Results-driven coaching with experienced faculty across two centers — join the next batch and see why students trust us with their exam prep.",
       heroCtaApply:"Apply for Admission →", heroCtaApp:"📱 Download the App",
       promiseBadge:"Our Promise", promiseTitle:"Your Dream Job Is Our Mission",
-      promise1:"Expert Faculty", promise2:"Proven Results", promise3:"Personalized Guidance",
       statCourses:"Courses Offered", statCenters:"Centers", statYears:"Years Experience",
       dashboardTag:"One-Stop Exam Hub", dashboardTitle:"Everything you need, in one place",
       dashboardSubtitle:"Latest vacancies, syllabus by category, and daily current affairs — updated regularly.",
@@ -529,8 +519,6 @@
       syllabusRailway:"Railway", syllabusRailwayDesc:"RRB NTPC, Group D & more",
       syllabusOther:"Other Govt Exams", syllabusOtherDesc:"State & defence recruitments",
       promoTitle:"New Batch Starting Soon!", promoSubtitle:"Join now & get early bird discounts", promoCta:"Enquire Now",
-      aboutTag:"Why Us", aboutTitle:"Built for serious exam prep",
-      aboutSubtitle:"Everything about how we run classes is designed around one outcome — you clearing your exam.",
       about1Title:"Experienced Faculty", about1Desc:"Teachers with 10+ years of experience specifically in competitive exam coaching, not generic tuition.",
       about2Title:"Result-Focused", about2Desc:"Regular tests, structured syllabus coverage, and a track record of students selected across batches.",
       about3Title:"Two Convenient Centers", about3Desc:"Baharagora and Ghatsila — choose whichever's easier for you to reach for daily classes.",
@@ -567,7 +555,6 @@
       heroSubtitle:"अनुभवी शिक्षकों के साथ परिणाम-उन्मुख कोचिंग, दो केंद्रों पर उपलब्ध — अगली बैच में शामिल हों और जानें कि छात्र हम पर भरोसा क्यों करते हैं।",
       heroCtaApply:"प्रवेश के लिए आवेदन करें →", heroCtaApp:"📱 ऐप डाउनलोड करें",
       promiseBadge:"हमारा वादा", promiseTitle:"आपकी सपनों की नौकरी हमारा लक्ष्य है",
-      promise1:"विशेषज्ञ शिक्षक", promise2:"सिद्ध परिणाम", promise3:"व्यक्तिगत मार्गदर्शन",
       statCourses:"उपलब्ध कोर्स", statCenters:"केंद्र", statYears:"वर्षों का अनुभव",
       dashboardTag:"एक ही जगह सब कुछ", dashboardTitle:"आपकी हर ज़रूरत, एक ही जगह",
       dashboardSubtitle:"नवीनतम रिक्तियां, श्रेणी अनुसार पाठ्यक्रम और रोज़ाना करेंट अफेयर्स — नियमित रूप से अपडेट किए जाते हैं।",
@@ -578,8 +565,6 @@
       syllabusRailway:"रेलवे", syllabusRailwayDesc:"आरआरबी एनटीपीसी, ग्रुप डी और अधिक",
       syllabusOther:"अन्य सरकारी परीक्षाएं", syllabusOtherDesc:"राज्य और रक्षा भर्तियां",
       promoTitle:"नई बैच जल्द शुरू हो रही है!", promoSubtitle:"अभी शामिल हों और शुरुआती छूट पाएं", promoCta:"अभी पूछताछ करें",
-      aboutTag:"हमारे बारे में", aboutTitle:"गंभीर परीक्षा तैयारी के लिए बनाया गया",
-      aboutSubtitle:"हमारी कक्षाएं जिस तरह से चलाई जाती हैं, वह सब एक ही लक्ष्य के इर्द-गिर्द बना है — आपका परीक्षा पास करना।",
       about1Title:"अनुभवी शिक्षक", about1Desc:"प्रतिस्पर्धी परीक्षा कोचिंग में 10+ वर्षों के अनुभव वाले शिक्षक, सामान्य ट्यूशन नहीं।",
       about2Title:"परिणाम-केंद्रित", about2Desc:"नियमित टेस्ट, व्यवस्थित पाठ्यक्रम कवरेज, और बैचों में चयनित छात्रों का ट्रैक रिकॉर्ड।",
       about3Title:"दो सुविधाजनक केंद्र", about3Desc:"बहरागोड़ा और घाटशिला — दैनिक कक्षाओं के लिए जो भी आपके लिए सुविधाजनक हो, चुनें।",
