@@ -19,6 +19,17 @@ const currentAffairCategories = [
   "defence", "sports", "awards", "appointments", "govt_schemes", "environment",
 ] as const;
 
+// A hard structural cap, not just a prose instruction — real listing pages
+// (e.g. sarkariresult.com's) can hold 100+ items, and asking a small/fast
+// model to generate that many structured items in one completion reliably
+// produces invalid JSON that Groq's own structured-output mode rejects
+// before it ever reaches us (confirmed live). Bounding array length in the
+// schema itself gives the model's constrained decoding an explicit limit
+// to satisfy, not just a request it can ignore under pressure. A recurring
+// sweep naturally catches more items across multiple runs; duplicates are
+// already skipped via the slug-conflict check.
+export const MAX_EXTRACTION_ITEMS = 10;
+
 export const recruitmentExtractionItemSchema = z.object({
   title: z.string(),
   organizationName: z.string().nullable(),
@@ -34,7 +45,7 @@ export const recruitmentExtractionItemSchema = z.object({
 export type RecruitmentExtractionItem = z.infer<typeof recruitmentExtractionItemSchema>;
 
 export const recruitmentExtractionSchema = z.object({
-  items: z.array(recruitmentExtractionItemSchema),
+  items: z.array(recruitmentExtractionItemSchema).max(MAX_EXTRACTION_ITEMS),
 });
 
 export const currentAffairExtractionItemSchema = z.object({
@@ -48,5 +59,5 @@ export const currentAffairExtractionItemSchema = z.object({
 export type CurrentAffairExtractionItem = z.infer<typeof currentAffairExtractionItemSchema>;
 
 export const currentAffairExtractionSchema = z.object({
-  items: z.array(currentAffairExtractionItemSchema),
+  items: z.array(currentAffairExtractionItemSchema).max(MAX_EXTRACTION_ITEMS),
 });

@@ -3,7 +3,7 @@ import { extractStructured } from "../../lib/aiGatewayClient";
 import { scrapeUrlToMarkdown } from "../../lib/firecrawl";
 import { prisma } from "../../lib/prisma";
 import * as govExams from "./gov-exams.service";
-import { currentAffairExtractionSchema, recruitmentExtractionSchema } from "./scrape-schemas";
+import { currentAffairExtractionSchema, MAX_EXTRACTION_ITEMS, recruitmentExtractionSchema } from "./scrape-schemas";
 import { validateCurrentAffairItem, validateRecruitmentItem } from "./scrape-validator";
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -70,14 +70,22 @@ export interface ScrapeSourceResult {
   unusable: number;
 }
 
+// Real listing pages (e.g. aggregator sites like sarkariresult.com) can run
+// past 500,000 characters of markdown, formatted as a dense flat list of
+// 100+ postings. Asking the model to extract "everything" from that in one
+// completion means generating a huge JSON array in a single shot, which a
+// small/fast model reliably fails to produce validly (confirmed live:
+// Groq's own structured-output JSON validation rejected the output before
+// it ever reached us). Bounding both the input slice and the requested
+// item count keeps each call small and reliable — a recurring hourly sweep
+// naturally catches items further down the page across multiple runs, and
+// duplicates are already skipped via the slug-conflict check.
+const MAX_MARKDOWN_CHARS = 6_000;
+
 const EXTRACTION_SYSTEM_PROMPT =
   "You extract structured data from government-website page content. " +
-  "Output ALL dates as ISO 8601 (YYYY-MM-DD). If a field isn't clearly present in the text, set it to null rather than guessing.";
-
-// Truncated well under typical model context limits — scraped pages can be
-// long, and the extraction only needs the actual listing content, not an
-// entire page's boilerplate.
-const MAX_MARKDOWN_CHARS = 15_000;
+  "Output ALL dates as ISO 8601 (YYYY-MM-DD). If a field isn't clearly present in the text, set it to null rather than guessing. " +
+  `Extract at most ${MAX_EXTRACTION_ITEMS} items — the most recent/prominent ones — even if more are present in the text; do not try to extract everything.`;
 
 type SourceWithOrg = Prisma.GovSourceGetPayload<{ include: { organization: true } }>;
 
@@ -90,7 +98,7 @@ async function scrapeRecruitmentSource(source: SourceWithOrg): Promise<ScrapeSou
   const extracted = await extractStructured({
     messages: [
       { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-      { role: "user", content: `Extract every recruitment/vacancy notice from this page:\n\n${markdown.slice(0, MAX_MARKDOWN_CHARS)}` },
+      { role: "user", content: `Extract the recruitment/vacancy notices from this page:\n\n${markdown.slice(0, MAX_MARKDOWN_CHARS)}` },
     ],
     schema: recruitmentExtractionSchema,
     schemaName: "GovRecruitmentExtraction",
@@ -138,7 +146,7 @@ async function scrapeCurrentAffairSource(source: SourceWithOrg): Promise<ScrapeS
   const extracted = await extractStructured({
     messages: [
       { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-      { role: "user", content: `Extract every current-affairs item relevant to competitive exams from this page:\n\n${markdown.slice(0, MAX_MARKDOWN_CHARS)}` },
+      { role: "user", content: `Extract the current-affairs items relevant to competitive exams from this page:\n\n${markdown.slice(0, MAX_MARKDOWN_CHARS)}` },
     ],
     schema: currentAffairExtractionSchema,
     schemaName: "GovCurrentAffairExtraction",
