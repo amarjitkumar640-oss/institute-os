@@ -98,3 +98,64 @@ export async function extractStructured<T>(options: StructuredExtractOptions<T>)
   }
   return parsed.data;
 }
+
+export interface Citation {
+  url: string;
+  title?: string;
+}
+
+interface WebSearchExtractOptions<T> {
+  query: string;
+  schema: z.ZodType<T>;
+  schemaName: string;
+}
+
+export interface WebSearchExtractResult<T> {
+  data: T;
+  citations: Citation[];
+}
+
+/**
+ * Searches the web for `query` via the AI Gateway's native web search (the
+ * provider searches and reads pages on its own infrastructure — no page
+ * content ever touches this app), then extracts structured data matching
+ * `schema` from the synthesized answer. Same null-on-unconfigured/failure
+ * convention as extractStructured().
+ */
+export async function webSearchExtract<T>(options: WebSearchExtractOptions<T>): Promise<WebSearchExtractResult<T> | null> {
+  if (!isConfigured()) return null;
+
+  const jsonSchema = zodToPlainJsonSchema(options.schema);
+
+  let response: Response;
+  try {
+    response = await fetch(`${env.AI_GATEWAY_URL}/api/v1/web-search-structured`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.AI_GATEWAY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        query: options.query,
+        jsonSchema,
+        schemaName: options.schemaName,
+      }),
+    });
+  } catch (e) {
+    console.error("[aiGatewayClient] web-search request failed:", e);
+    return null;
+  }
+
+  if (!response.ok) {
+    console.error(`[aiGatewayClient] web-search gateway returned ${response.status}:`, await response.text().catch(() => ""));
+    return null;
+  }
+
+  const body = (await response.json()) as { data: unknown; citations?: Citation[] };
+  const parsed = options.schema.safeParse(body.data);
+  if (!parsed.success) {
+    console.error("[aiGatewayClient] web-search gateway response failed local schema re-check:", parsed.error.issues);
+    return null;
+  }
+  return { data: parsed.data, citations: body.citations ?? [] };
+}

@@ -121,15 +121,18 @@ export interface GovCurrentAffairInput {
 }
 
 export type GovSourceContentType = "recruitment" | "current_affair";
+export type GovSourceFetchMode = "url" | "search";
 
 export interface GovSource {
   id: string;
   category: GovOrgType;
   contentType: GovSourceContentType;
+  fetchMode: GovSourceFetchMode;
   organizationId: string | null;
   organization: GovOrganization | null;
   label: string;
-  url: string;
+  url: string | null;
+  searchQuery: string | null;
   enabled: boolean;
   lastScrapedAt: string | null;
   lastScrapeStatus: string | null;
@@ -141,9 +144,11 @@ export interface GovSource {
 export interface GovSourceInput {
   category: GovOrgType;
   contentType: GovSourceContentType;
+  fetchMode: GovSourceFetchMode;
   organizationId?: string;
   label: string;
-  url: string;
+  url?: string;
+  searchQuery?: string;
   enabled?: boolean;
 }
 

@@ -20,6 +20,7 @@ govSourcesAdminRouter.use(async (req, res, next) => {
 
 const orgTypes = ["ssc", "banking", "railway", "other"] as const;
 const contentTypes = ["recruitment", "current_affair"] as const;
+const fetchModes = ["url", "search"] as const;
 
 govSourcesAdminRouter.get("/", async (_req, res) => {
   res.json(await govSources.listSources());
@@ -28,21 +29,29 @@ govSourcesAdminRouter.get("/", async (_req, res) => {
 const sourceSchema = z.object({
   category: z.enum(orgTypes),
   contentType: z.enum(contentTypes),
+  fetchMode: z.enum(fetchModes),
   organizationId: z.string().uuid().optional(),
   label: z.string().min(1).max(200),
-  url: z.string().url(),
+  url: z.string().url().optional(),
+  searchQuery: z.string().min(1).max(300).optional(),
   enabled: z.boolean().optional(),
 });
 
 govSourcesAdminRouter.post("/", validateBody(sourceSchema), async (req, res) => {
   const result = await govSources.createSource(req.body);
-  if (!result.ok) return res.status(404).json({ error: "Organization not found" });
+  if (!result.ok) {
+    if ("invalid" in result) return res.status(400).json({ error: result.invalid });
+    return res.status(404).json({ error: "Organization not found" });
+  }
   res.status(201).json(result.source);
 });
 
 govSourcesAdminRouter.patch("/:id", validateUuidParam("id"), validateBody(sourceSchema.partial()), async (req, res) => {
   const result = await govSources.updateSource(req.params.id, req.body);
-  if (!result.ok) return res.status(404).json({ error: "Source or organization not found" });
+  if (!result.ok) {
+    if ("invalid" in result) return res.status(400).json({ error: result.invalid });
+    return res.status(404).json({ error: "Source or organization not found" });
+  }
   res.json(result.source);
 });
 

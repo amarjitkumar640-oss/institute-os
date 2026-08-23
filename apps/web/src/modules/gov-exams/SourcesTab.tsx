@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Plus, Trash2, Globe } from "lucide-react";
 import {
   listOrganizations, listSources, createSource, updateSource, deleteSource,
-  type GovSource, type GovOrgType, type GovSourceContentType,
+  type GovSource, type GovOrgType, type GovSourceContentType, type GovSourceFetchMode,
 } from "@/api/govExams";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,20 +21,26 @@ import { toast } from "@/components/ui/use-toast";
 
 const ORG_TYPE_LABEL: Record<GovOrgType, string> = { ssc: "SSC", banking: "Banking", railway: "Railway", other: "Other" };
 const CONTENT_TYPE_LABEL: Record<GovSourceContentType, string> = { recruitment: "Recruitments", current_affair: "Current Affairs" };
+const FETCH_MODE_LABEL: Record<GovSourceFetchMode, string> = { url: "Scrape a URL", search: "AI Web Search" };
 
 function extractError(err: unknown): string {
   const msg = (err as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
   return typeof msg === "string" ? msg : "Something went wrong";
 }
 
-const sourceSchema = z.object({
-  category: z.enum(["ssc", "banking", "railway", "other"]),
-  contentType: z.enum(["recruitment", "current_affair"]),
-  organizationId: z.string().uuid().or(z.literal("")).optional(),
-  label: z.string().min(1, "Required").max(200),
-  url: z.string().url("Must be a valid URL"),
-  enabled: z.boolean(),
-});
+const sourceSchema = z
+  .object({
+    category: z.enum(["ssc", "banking", "railway", "other"]),
+    contentType: z.enum(["recruitment", "current_affair"]),
+    fetchMode: z.enum(["url", "search"]),
+    organizationId: z.string().uuid().or(z.literal("")).optional(),
+    label: z.string().min(1, "Required").max(200),
+    url: z.string().url("Must be a valid URL").or(z.literal("")).optional(),
+    searchQuery: z.string().max(300).optional(),
+    enabled: z.boolean(),
+  })
+  .refine((data) => data.fetchMode !== "url" || !!data.url, { message: "Required for 'Scrape a URL'", path: ["url"] })
+  .refine((data) => data.fetchMode !== "search" || !!data.searchQuery, { message: "Required for 'AI Web Search'", path: ["searchQuery"] });
 type SourceFormValues = z.infer<typeof sourceSchema>;
 
 function SourceFormDialog({ open, onClose, existing }: { open: boolean; onClose: () => void; existing?: GovSource }) {
@@ -45,19 +51,26 @@ function SourceFormDialog({ open, onClose, existing }: { open: boolean; onClose:
     resolver: zodResolver(sourceSchema),
     defaultValues: existing
       ? {
-          category: existing.category, contentType: existing.contentType, organizationId: existing.organizationId ?? "",
-          label: existing.label, url: existing.url, enabled: existing.enabled,
+          category: existing.category, contentType: existing.contentType, fetchMode: existing.fetchMode,
+          organizationId: existing.organizationId ?? "", label: existing.label,
+          url: existing.url ?? "", searchQuery: existing.searchQuery ?? "", enabled: existing.enabled,
         }
-      : { category: "ssc", contentType: "recruitment", organizationId: "", label: "", url: "", enabled: true },
+      : { category: "ssc", contentType: "recruitment", fetchMode: "url", organizationId: "", label: "", url: "", searchQuery: "", enabled: true },
   });
   const category = watch("category");
   const contentType = watch("contentType");
+  const fetchMode = watch("fetchMode");
   const organizationId = watch("organizationId");
   const enabled = watch("enabled");
 
   const mutation = useMutation({
     mutationFn: (values: SourceFormValues) => {
-      const input = { ...values, organizationId: values.organizationId || undefined };
+      const input = {
+        ...values,
+        organizationId: values.organizationId || undefined,
+        url: values.url || undefined,
+        searchQuery: values.searchQuery || undefined,
+      };
       return existing ? updateSource(existing.id, input) : createSource(input);
     },
     onSuccess: () => {
@@ -93,6 +106,16 @@ function SourceFormDialog({ open, onClose, existing }: { open: boolean; onClose:
               </SelectContent>
             </Select>
           </FormField>
+          <FormField label="Fetch Mode" required>
+            <Select value={fetchMode} onValueChange={(v) => setValue("fetchMode", v as GovSourceFetchMode)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(FETCH_MODE_LABEL) as GovSourceFetchMode[]).map((t) => (
+                  <SelectItem key={t} value={t}>{FETCH_MODE_LABEL[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
           {contentType === "recruitment" && (
             <FormField label="Organization" error={errors.organizationId}>
               <Select value={organizationId || "__none__"} onValueChange={(v) => setValue("organizationId", v === "__none__" ? "" : v)}>
@@ -109,9 +132,15 @@ function SourceFormDialog({ open, onClose, existing }: { open: boolean; onClose:
           <FormField label="Label" required error={errors.label}>
             <Input {...register("label")} placeholder="e.g. SSC — Latest Notifications" />
           </FormField>
-          <FormField label="URL" required error={errors.url}>
-            <Input {...register("url")} placeholder="https://ssc.nic.in/notifications" />
-          </FormField>
+          {fetchMode === "url" ? (
+            <FormField label="URL" required error={errors.url}>
+              <Input {...register("url")} placeholder="https://ssc.nic.in/notifications" />
+            </FormField>
+          ) : (
+            <FormField label="Search Query" required error={errors.searchQuery}>
+              <Input {...register("searchQuery")} placeholder="e.g. current and upcoming bank job openings with dates" />
+            </FormField>
+          )}
           <FormField label="Enabled">
             <Switch checked={enabled} onCheckedChange={(v) => setValue("enabled", v)} />
           </FormField>
@@ -150,9 +179,9 @@ export function SourcesTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-400">
-        The scheduled "Government Exam Source Scrape" job (see Settings → Jobs) fetches every enabled source below,
-        extracts structured data via AI, and auto-publishes what validates cleanly — anything that doesn't lands as
-        a draft for review instead of being discarded.
+        The scheduled "Government Exam Source Scrape" job (see Settings → Jobs) fetches every enabled source below —
+        either scraping a fixed URL or running an AI web search — extracts structured data, and auto-publishes what
+        validates cleanly. Anything that doesn't lands as a draft for review instead of being discarded.
       </p>
       <div className="flex justify-end">
         <Button onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> Add Source</Button>
@@ -161,7 +190,7 @@ export function SourcesTab() {
       {isLoading ? (
         <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
       ) : !sources?.length ? (
-        <EmptyState icon={Globe} title="No sources yet" description="Add a URL to scrape for a category — e.g. SSC's notifications page." actionLabel="Add Source" onAction={() => setShowCreate(true)} />
+        <EmptyState icon={Globe} title="No sources yet" description="Add a URL to scrape, or a search query, for a category — e.g. SSC's notifications page." actionLabel="Add Source" onAction={() => setShowCreate(true)} />
       ) : (
         <div className="space-y-2">
           {sources.map((source) => (
@@ -171,6 +200,7 @@ export function SourcesTab() {
                   <p className="text-sm font-medium text-gray-900">{source.label}</p>
                   <Badge variant="outline">{ORG_TYPE_LABEL[source.category]}</Badge>
                   <Badge variant="purple">{CONTENT_TYPE_LABEL[source.contentType]}</Badge>
+                  <Badge variant="outline">{FETCH_MODE_LABEL[source.fetchMode]}</Badge>
                   {source.organization && <Badge variant="outline">{source.organization.shortName}</Badge>}
                   {source.lastScrapeStatus && (
                     <Badge variant={source.lastScrapeStatus === "error" ? "danger" : "outline"}>
@@ -178,7 +208,7 @@ export function SourcesTab() {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 truncate mt-0.5">{source.url}</p>
+                <p className="text-xs text-gray-400 truncate mt-0.5">{source.fetchMode === "url" ? source.url : source.searchQuery}</p>
                 {source.lastScrapeError && <p className="text-xs text-red-500 truncate mt-0.5">{source.lastScrapeError}</p>}
               </div>
               <div className="flex items-center gap-3 shrink-0">

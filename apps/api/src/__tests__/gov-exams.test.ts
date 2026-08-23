@@ -295,11 +295,21 @@ describe("gov-sources admin", () => {
       .post("/api/gov-exams/admin/sources")
       .set("Authorization", `Bearer ${token}`)
       .send({
-        category: "ssc", contentType: "recruitment",
+        category: "ssc", contentType: "recruitment", fetchMode: "url",
         organizationId: "00000000-0000-0000-0000-000000000000",
         label: "SSC Notifications", url: "https://ssc.nic.in/notifications",
       });
     expect(res.status).toBe(404);
+  });
+
+  it("400s creating a search-mode source with no searchQuery", async () => {
+    const tenant = await seedSiteTenant();
+    const token = adminToken(tenant.id);
+    const res = await request(app)
+      .post("/api/gov-exams/admin/sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ category: "banking", contentType: "current_affair", fetchMode: "search", label: "Bank job openings" });
+    expect(res.status).toBe(400);
   });
 
   it("full create -> list -> update -> delete cycle", async () => {
@@ -311,7 +321,7 @@ describe("gov-sources admin", () => {
       .post("/api/gov-exams/admin/sources")
       .set("Authorization", `Bearer ${token}`)
       .send({
-        category: "ssc", contentType: "recruitment", organizationId: org.id,
+        category: "ssc", contentType: "recruitment", fetchMode: "url", organizationId: org.id,
         label: "SSC Notifications", url: "https://ssc.nic.in/notifications",
       });
     expect(create.status).toBe(201);
@@ -335,5 +345,18 @@ describe("gov-sources admin", () => {
 
     const afterDelete = await request(app).get("/api/gov-exams/admin/sources").set("Authorization", `Bearer ${token}`);
     expect(afterDelete.body).toHaveLength(0);
+  });
+
+  it("creates a search-mode source with no URL, and no organization required", async () => {
+    const tenant = await seedSiteTenant();
+    const token = adminToken(tenant.id);
+    const res = await request(app)
+      .post("/api/gov-exams/admin/sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ category: "banking", contentType: "current_affair", fetchMode: "search", label: "Bank job openings", searchQuery: "current and upcoming bank job openings with dates" });
+    expect(res.status).toBe(201);
+    expect(res.body.fetchMode).toBe("search");
+    expect(res.body.url).toBeNull();
+    expect(res.body.searchQuery).toBe("current and upcoming bank job openings with dates");
   });
 });
