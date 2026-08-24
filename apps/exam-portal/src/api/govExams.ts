@@ -41,6 +41,7 @@ export interface GovRecruitment {
   examDate: string | null;
   officialNotificationUrl: string | null;
   officialWebsiteUrl: string | null;
+  applyUrl: string | null;
   publishedAt: string | null;
   documents?: GovDocument[];
 }

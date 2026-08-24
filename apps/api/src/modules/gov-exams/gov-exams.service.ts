@@ -129,6 +129,7 @@ export interface RecruitmentInput {
   examDate?: Date;
   officialNotificationUrl?: string;
   officialWebsiteUrl?: string;
+  applyUrl?: string;
   source?: GovContentSource;
   sourceUrl?: string;
 }

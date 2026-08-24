@@ -90,8 +90,13 @@ export function JobDetailPage() {
       )}
 
       <div className="mt-4 flex flex-wrap gap-3">
+        {recruitment.applyUrl && (
+          <LinkButton href={recruitment.applyUrl}>
+            {t("applyNow")} <ExternalLink className="h-3.5 w-3.5" />
+          </LinkButton>
+        )}
         {recruitment.officialNotificationUrl && (
-          <LinkButton href={recruitment.officialNotificationUrl}>
+          <LinkButton href={recruitment.officialNotificationUrl} variant={recruitment.applyUrl ? "outline" : undefined}>
             {t("officialNotification")} <ExternalLink className="h-3.5 w-3.5" />
           </LinkButton>
         )}

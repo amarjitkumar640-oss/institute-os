@@ -85,6 +85,7 @@ export async function validateRecruitmentItem(
     applicationEndDate,
     examDate,
     officialNotificationUrl: item.officialNotificationUrl ?? undefined,
+    applyUrl: item.applyUrl ?? undefined,
   };
 
   return reasons.length > 0 ? { outcome: "draft", input, reasons } : { outcome: "published", input };

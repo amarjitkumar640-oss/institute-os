@@ -1007,6 +1007,11 @@ model GovRecruitment {
   examDate                DateTime?
   officialNotificationUrl String?
   officialWebsiteUrl      String?
+  // Where a candidate actually submits their application — distinct from
+  // officialNotificationUrl (the PDF/announcement) since many recruitments
+  // link those separately (e.g. a "notification.pdf" vs an "apply online"
+  // form on a different page).
+  applyUrl                String?
   status                  GovRecruitmentStatus @default(draft)
   source                  GovContentSource     @default(manual)
   sourceUrl               String?

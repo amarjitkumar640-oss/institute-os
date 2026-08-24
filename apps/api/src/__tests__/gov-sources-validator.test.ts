@@ -11,7 +11,7 @@ function recruitmentItem(overrides: Partial<RecruitmentExtractionItem> = {}): Re
   return {
     title: "SSC CGL 2026",
     organizationName: null, totalVacancies: null, qualification: null, ageMin: null, ageMax: null,
-    applicationStartDate: null, applicationEndDate: null, examDate: null, officialNotificationUrl: null,
+    applicationStartDate: null, applicationEndDate: null, examDate: null, officialNotificationUrl: null, applyUrl: null,
     ...overrides,
   };
 }

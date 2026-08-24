@@ -64,6 +64,7 @@ export interface GovRecruitment {
   examDate: string | null;
   officialNotificationUrl: string | null;
   officialWebsiteUrl: string | null;
+  applyUrl: string | null;
   status: GovRecruitmentStatus;
   source: GovContentSource;
   sourceUrl: string | null;
@@ -89,6 +90,7 @@ export interface GovRecruitmentInput {
   examDate?: string;
   officialNotificationUrl?: string;
   officialWebsiteUrl?: string;
+  applyUrl?: string;
 }
 
 export interface GovCurrentAffair {

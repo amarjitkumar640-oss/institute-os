@@ -61,6 +61,7 @@ const recruitmentSchema = z.object({
   examDate: z.string().optional(),
   officialNotificationUrl: z.string().url("Must be a valid URL").or(z.literal("")).optional(),
   officialWebsiteUrl: z.string().url("Must be a valid URL").or(z.literal("")).optional(),
+  applyUrl: z.string().url("Must be a valid URL").or(z.literal("")).optional(),
 });
 type RecruitmentFormValues = z.infer<typeof recruitmentSchema>;
 
@@ -94,11 +95,12 @@ function RecruitmentFormDialog({ open, onClose, existing }: { open: boolean; onC
       examDate: existing.examDate?.slice(0, 10) ?? "",
       officialNotificationUrl: existing.officialNotificationUrl ?? "",
       officialWebsiteUrl: existing.officialWebsiteUrl ?? "",
+      applyUrl: existing.applyUrl ?? "",
     } : {
       organizationId: "", title: "", slug: "", totalVacancies: "", qualification: "",
       ageMin: "", ageMax: "", categoryRelaxations: "", applicationFee: "",
       applicationStartDate: "", applicationEndDate: "", examDate: "",
-      officialNotificationUrl: "", officialWebsiteUrl: "",
+      officialNotificationUrl: "", officialWebsiteUrl: "", applyUrl: "",
     },
   });
   const organizationId = watch("organizationId");
@@ -121,6 +123,7 @@ function RecruitmentFormDialog({ open, onClose, existing }: { open: boolean; onC
         examDate: toDateOrUndefined(values.examDate),
         officialNotificationUrl: values.officialNotificationUrl || undefined,
         officialWebsiteUrl: values.officialWebsiteUrl || undefined,
+        applyUrl: values.applyUrl || undefined,
       };
       return existing ? updateRecruitment(existing.id, input) : createRecruitment(input);
     },
@@ -187,6 +190,9 @@ function RecruitmentFormDialog({ open, onClose, existing }: { open: boolean; onC
           </FormField>
           <FormField label="Official Website URL" error={errors.officialWebsiteUrl}>
             <Input {...register("officialWebsiteUrl")} placeholder="https://..." />
+          </FormField>
+          <FormField label="Apply URL" error={errors.applyUrl}>
+            <Input {...register("applyUrl")} placeholder="https://... (if different from the notification)" />
           </FormField>
 
           <DialogFooter>

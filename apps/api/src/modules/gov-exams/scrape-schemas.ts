@@ -41,6 +41,9 @@ export const recruitmentExtractionItemSchema = z.object({
   applicationEndDate: z.string().nullable(),
   examDate: z.string().nullable(),
   officialNotificationUrl: z.string().nullable(),
+  // Distinct from officialNotificationUrl — where a candidate actually
+  // applies, if the page links that separately from the notification PDF.
+  applyUrl: z.string().nullable(),
 });
 export type RecruitmentExtractionItem = z.infer<typeof recruitmentExtractionItemSchema>;
 

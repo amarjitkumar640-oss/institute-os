@@ -123,11 +123,31 @@ type SourceWithOrg = Prisma.GovSourceGetPayload<{ include: { organization: true 
 
 type FetchAndExtractResult<T> = { ok: true; items: T[]; sourceUrl: string } | { ok: false; error: string };
 
+const CATEGORY_LABEL: Record<GovOrgType, string> = { ssc: "SSC", banking: "banking sector", railway: "railway", other: "government" };
+
+// Wraps the admin's short free-text query with a standing frame (India,
+// category, an explicit open/upcoming-only filter, and the field checklist
+// we actually extract) so the admin doesn't need to spell all of that out
+// themselves every time — they just type e.g. "bank job openings" and this
+// fills in the rest.
+function buildRecruitmentSearchQuery(source: SourceWithOrg): string {
+  const category = CATEGORY_LABEL[source.category];
+  return (
+    `Find current and upcoming ${category} government job vacancies in India. ` +
+    "Only include openings that are currently accepting applications, or are announced but not yet open — " +
+    "exclude anything whose application deadline has already passed. " +
+    `Specifically: ${source.searchQuery}. ` +
+    "For each, report the organization, job title, number of vacancies, application start and end dates, " +
+    "exam date, required qualification, age limit, the official notification URL, and the direct " +
+    "application/apply URL if it's linked separately from the notification."
+  );
+}
+
 async function fetchAndExtractRecruitments(source: SourceWithOrg): Promise<FetchAndExtractResult<RecruitmentExtractionItem>> {
   if (source.fetchMode === "search") {
     if (!source.searchQuery) return { ok: false, error: "No search query configured" };
     const result = await webSearchExtract({
-      query: source.searchQuery,
+      query: buildRecruitmentSearchQuery(source),
       schema: recruitmentExtractionSchema,
       schemaName: "GovRecruitmentExtraction",
     });
