@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField } from "@/components/FormField";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -336,6 +337,17 @@ function SystemJobsSettings() {
       ),
     },
     {
+      id: "enabled",
+      header: "Enabled",
+      cell: ({ row }) => (
+        <Switch
+          checked={row.original.isEnabled}
+          onCheckedChange={(checked) => updateMutation.mutate({ key: row.original.key, payload: { isEnabled: checked } })}
+          disabled={updateMutation.isPending}
+        />
+      ),
+    },
+    {
       id: "interval",
       header: "Interval (min)",
       cell: ({ row }) => (
@@ -383,16 +395,24 @@ function SystemJobsSettings() {
     {
       id: "actions",
       header: "",
-      cell: ({ row }) => (
-        <Button
-          size="sm"
-          onClick={() => runMutation.mutate(row.original.key)}
-          disabled={runMutation.isPending || row.original.lastRun?.status === "running"}
-        >
-          <RefreshCw className={`mr-2 h-3.5 w-3.5 ${runMutation.isPending ? "animate-spin" : ""}`} />
-          Run Now
-        </Button>
-      ),
+      cell: ({ row }) => {
+        // runMutation is shared across every row (one useMutation, not one
+        // per job) — .isPending alone is true for ALL rows while ANY job is
+        // running. .variables is the argument the in-flight call was made
+        // with, so comparing it to this row's key scopes the spinner/disable
+        // to only the job actually running, not every "Run Now" button.
+        const isThisJobRunning = runMutation.isPending && runMutation.variables === row.original.key;
+        return (
+          <Button
+            size="sm"
+            onClick={() => runMutation.mutate(row.original.key)}
+            disabled={isThisJobRunning || row.original.lastRun?.status === "running"}
+          >
+            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isThisJobRunning ? "animate-spin" : ""}`} />
+            Run Now
+          </Button>
+        );
+      },
     },
   ];
 
