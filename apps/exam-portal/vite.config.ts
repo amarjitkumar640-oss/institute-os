@@ -19,6 +19,10 @@ export default defineConfig({
     // Distinct from apps/web's 3000 and apps/api's 4000 so both can run
     // side by side in local dev.
     port: 3100,
+    // See apps/web/vite.config.ts's identical comment — without this,
+    // Vite's default host binds IPv6-only on some machines, so 127.0.0.1
+    // times out even though [::1] works.
+    host: true,
     proxy: {
       "/api": {
         target: process.env.VITE_API_URL ?? "http://localhost:4000",
