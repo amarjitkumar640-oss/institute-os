@@ -499,6 +499,33 @@
   document.getElementById('year').textContent = new Date().getFullYear();
   const TENANT_SLUG = 'success-tutorial';
 
+  // In production, Caddy proxies /api/* to the API container on this same
+  // domain (see infra/Caddyfile), so a relative path is correct there. This
+  // is a plain static site with no build step and no local dev proxy, so a
+  // local preview (e.g. `npx serve apps/site/public`) has nothing to route
+  // /api/* to — point straight at the local API dev server instead so the
+  // ticker/vacancies/courses actually load while developing locally.
+  const API_BASE = ['localhost', '127.0.0.1'].includes(location.hostname) ? 'http://localhost:4000' : '';
+
+  // Same story for the exam portal (apps/exam-portal) — in production Caddy
+  // routes /exams/* on this same domain to that app's container (which is
+  // itself built with BASE_PATH=/exams/, so its router expects that prefix),
+  // so a plain "/exams/..." link is correct there. Locally it's a separate
+  // dev server (vite.config.ts, port 3100) started with no BASE_PATH, so
+  // its router is mounted at "/" and doesn't recognize an "/exams" prefix
+  // at all — the local link needs that prefix stripped, not just retargeted
+  // to the right port. Static "/exams..." links already in the markup get
+  // rewritten below; links built dynamically after a fetch (ticker, vacancy
+  // rows, current-affairs rows) go through this same helper at their own
+  // construction site.
+  const PORTAL_BASE = ['localhost', '127.0.0.1'].includes(location.hostname) ? 'http://localhost:3100' : '';
+  function toPortalHref(examsPath) {
+    return PORTAL_BASE ? PORTAL_BASE + examsPath.replace(/^\/exams/, '') : examsPath;
+  }
+  if (PORTAL_BASE) {
+    document.querySelectorAll('a[href^="/exams"]').forEach(a => { a.href = toPortalHref(a.getAttribute('href')); });
+  }
+
   // ── i18n ─────────────────────────────────────────────────────
   const translations = {
     en: {
@@ -636,7 +663,7 @@
   document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
   // ── Tenant branding (name/logo/colors) ─────────────────────────
-  fetch(`/api/tenants/slug/${TENANT_SLUG}/public`)
+  fetch(`${API_BASE}/api/tenants/slug/${TENANT_SLUG}/public`)
     .then(r => r.ok ? r.json() : null)
     .then(t => {
       if (!t) return;
@@ -673,7 +700,7 @@
       </div>
     `).join('');
   }
-  fetch(`/api/public/${TENANT_SLUG}/courses`)
+  fetch(`${API_BASE}/api/public/${TENANT_SLUG}/courses`)
     .then(r => r.json())
     .then(data => { coursesData = data; renderCourses(); })
     .catch(() => { coursesData = 'error'; renderCourses(); });
@@ -697,10 +724,10 @@
     const track = document.getElementById('tickerTrack');
     const items = [];
     if (Array.isArray(vacanciesData)) {
-      vacanciesData.slice(0, 3).forEach(v => items.push({ href: `/exams/jobs/${v.slug}`, icon: '🆕', text: `${v.organization.shortName}: ${v.title}` }));
+      vacanciesData.slice(0, 3).forEach(v => items.push({ href: toPortalHref(`/exams/jobs/${v.slug}`), icon: '🆕', text: `${v.organization.shortName}: ${v.title}` }));
     }
     if (Array.isArray(currentAffairsHomeData)) {
-      currentAffairsHomeData.slice(0, 3).forEach(ca => items.push({ href: `/exams/current-affairs/${ca.slug}`, icon: '📰', text: ca.title }));
+      currentAffairsHomeData.slice(0, 3).forEach(ca => items.push({ href: toPortalHref(`/exams/current-affairs/${ca.slug}`), icon: '📰', text: ca.title }));
     }
     const bothSettled = vacanciesData !== null && currentAffairsHomeData !== null;
     if (!items.length) {
@@ -731,7 +758,7 @@
     if (vacanciesData === 'error') { list.innerHTML = `<p class="empty-note" style="color:rgba(255,255,255,.7);">${t('vacanciesError')}</p>`; return; }
     if (!vacanciesData.length) { list.innerHTML = `<p class="empty-note" style="color:rgba(255,255,255,.7);">${t('vacanciesEmpty')}</p>`; return; }
     list.innerHTML = vacanciesData.map(v => `
-      <a class="vac-row" href="/exams/jobs/${v.slug}" style="display:flex;">
+      <a class="vac-row" href="${toPortalHref(`/exams/jobs/${v.slug}`)}" style="display:flex;">
         <div class="vac-row-top">
           <h4>${escapeHtml(v.title)}</h4>
           <span class="vac-pill">${escapeHtml(v.organization.shortName)}</span>
@@ -740,7 +767,7 @@
       </a>
     `).join('');
   }
-  fetch(`/api/gov-exams/recruitments?limit=3`)
+  fetch(`${API_BASE}/api/gov-exams/recruitments?limit=3`)
     .then(r => r.json())
     .then(data => { vacanciesData = data.data; renderVacancies(); renderTicker(); })
     .catch(() => { vacanciesData = 'error'; renderVacancies(); renderTicker(); });
@@ -752,7 +779,7 @@
     if (currentAffairsHomeData === 'error') { el.innerHTML = `<p class="empty-note">${t('currentAffairsError')}</p>`; return; }
     if (!currentAffairsHomeData.length) { el.innerHTML = `<p class="empty-note">${t('currentAffairsEmpty')}</p>`; return; }
     el.innerHTML = currentAffairsHomeData.map(ca => `
-      <a class="ca-row" href="/exams/current-affairs/${ca.slug}" style="display:flex;">
+      <a class="ca-row" href="${toPortalHref(`/exams/current-affairs/${ca.slug}`)}" style="display:flex;">
         <span class="ca-dot"></span>
         <div>
           <p>${escapeHtml(ca.title)}</p>
@@ -761,7 +788,7 @@
       </a>
     `).join('');
   }
-  fetch(`/api/gov-exams/current-affairs?limit=4`)
+  fetch(`${API_BASE}/api/gov-exams/current-affairs?limit=4`)
     .then(r => r.json())
     .then(data => { currentAffairsHomeData = data.data; renderCurrentAffairsHome(); renderTicker(); })
     .catch(() => { currentAffairsHomeData = 'error'; renderCurrentAffairsHome(); renderTicker(); });
@@ -818,7 +845,7 @@
   }
 
   function loadHighlights(type, onData, onError) {
-    fetch(`/api/site/highlights?type=${type}`)
+    fetch(`${API_BASE}/api/site/highlights?type=${type}`)
       .then(r => r.json())
       .then(items => { onData(items); })
       .catch(() => onError());

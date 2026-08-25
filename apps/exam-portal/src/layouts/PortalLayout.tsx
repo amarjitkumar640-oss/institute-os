@@ -9,6 +9,16 @@ import { useLang } from "@/i18n";
 // plus one clear way back, rather than duplicating the site's full nav here.
 const TENANT_SLUG = "success-tutorial";
 
+// In production this app is served at /exams/* on the same domain as
+// apps/site (see infra/Caddyfile), so a plain "/" correctly returns to the
+// marketing site's root. Locally this is a separate dev server (port 3100)
+// with nothing routing "/" back to apps/site's own origin — a bare "/"
+// here just reloads this app's own home page instead. Points at apps/site's
+// current local dev port (see how it's actually being served, e.g. `npx
+// serve apps/site/public -l 5000`); update if that port ever changes.
+const isLocalDev = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const mainSiteHref = isLocalDev ? "http://localhost:5000" : "/";
+
 interface TenantBranding {
   name: string;
   logoUrl: string | null;
@@ -42,7 +52,7 @@ export function PortalLayout() {
     <div className="min-h-screen flex flex-col bg-surface font-sans text-ink">
       <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-ink/[0.08]">
         <div className="max-w-[1320px] mx-auto px-6 py-3.5 flex items-center justify-between gap-5">
-          <a href="/" className="flex items-center gap-2 font-bold text-[18.5px] shrink-0">
+          <a href={mainSiteHref} className="flex items-center gap-2 font-bold text-[18.5px] shrink-0">
             {tenant?.logoUrl ? (
               <img src={tenant.logoUrl} alt={brandName} className="w-[34px] h-[34px] rounded-[11px] object-cover" />
             ) : (
@@ -89,7 +99,7 @@ export function PortalLayout() {
               </button>
             </div>
             <a
-              href="/"
+              href={mainSiteHref}
               className="hidden sm:inline-flex items-center gap-2 text-[13px] font-bold text-primary border-[1.5px] border-primary/25 bg-white px-4 py-2 rounded-xl hover:-translate-y-0.5 transition-transform"
             >
               {t("backToMainSite")}
