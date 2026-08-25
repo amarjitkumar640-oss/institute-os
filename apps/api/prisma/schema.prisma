@@ -939,3 +939,238 @@ model PermissionGrant {
   @@unique([tenantId, role, screenKey])
   @@map("permission_grants")
 }
+
+// ── Government Exam Intelligence ────────────────────────────────────────────
+// Global, not tenant-scoped (same reasoning as JobConfig/JobRun above) — the
+// same SSC/IBPS/RRB facts apply regardless of which institute is asking.
+// Admin write access is still restricted to SITE_TENANT_SLUG's own tenant
+// for now (see gov-exams-admin.routes.ts) — same single-tenant-by-convention
+// pattern SiteHighlight's content uses, despite this data being
+// schema-global rather than carrying a tenantId.
+
+enum GovOrgType {
+  ssc
+  banking
+  railway
+  other
+}
+
+model GovOrganization {
+  id              String     @id @default(uuid())
+  name            String
+  shortName       String     @unique
+  type            GovOrgType
+  logoUrl         String?
+  officialWebsite String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  recruitments GovRecruitment[]
+  sources      GovSource[]
+
+  @@map("gov_organizations")
+}
+
+enum GovRecruitmentStatus {
+  draft
+  published
+  archived
+}
+
+// "manual" = admin-entered, "scraped" = pending step 4's AI extraction
+// pipeline — scraped rows land as draft and need admin review before
+// publishing, same review-queue idea as any other draft.
+enum GovContentSource {
+  manual
+  scraped
+}
+
+model GovRecruitment {
+  id                      String   @id @default(uuid())
+  organizationId          String
+  organization            GovOrganization @relation(fields: [organizationId], references: [id])
+  title                   String
+  slug                    String   @unique
+  totalVacancies          Int?
+  qualification           String?
+  ageMin                  Int?
+  ageMax                  Int?
+  // e.g. { "obc": 3, "sc_st": 5 } — age relaxation (years) by category
+  categoryRelaxations     Json?
+  // e.g. { "general": 100, "sc_st": 0 }
+  applicationFee          Json?
+  // array of { name, vacancyCount, payScale } — collapsed from a separate
+  // table; revisit only if eligibility ever needs per-post granularity
+  posts                   Json?
+  applicationStartDate    DateTime?
+  applicationEndDate      DateTime?
+  examDate                DateTime?
+  officialNotificationUrl String?
+  officialWebsiteUrl      String?
+  // Where a candidate actually submits their application — distinct from
+  // officialNotificationUrl (the PDF/announcement) since many recruitments
+  // link those separately (e.g. a "notification.pdf" vs an "apply online"
+  // form on a different page).
+  applyUrl                String?
+  status                  GovRecruitmentStatus @default(draft)
+  source                  GovContentSource     @default(manual)
+  sourceUrl               String?
+  publishedAt             DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  // ── Rich fields (populated by the manual JSON import — see gov-exams/import —
+  // an admin pastes AI-Overview-style search output rather than relying on the
+  // scraper/native-search pipeline). All optional: recruitments created through
+  // the plain admin form or the scraper never populate these. ──────────────────
+  department           String?
+  advertisementNumber  String?
+  jobLocation          String?
+  localLanguageRequirement String?
+  requiredExperience   String?
+  payScale             String?
+  basicPay             String?
+  salaryRange          String?
+  otherBenefits        String?
+  ageAsOnDate          DateTime?
+  paymentLastDate      DateTime?
+  correctionLastDate   DateTime?
+  prelimsDate          DateTime?
+  mainsDate            DateTime?
+  admitCardDate        DateTime?
+  resultDate           DateTime?
+  interviewDate        DateTime?
+  verificationStatus   String?
+  lastVerifiedAt       DateTime?
+  summary              String? @db.Text
+  whoCanApply          String? @db.Text
+  howToApply           String? @db.Text
+  importantNote        String? @db.Text
+  // string[]
+  selectionProcess     Json?
+  // string[]
+  applicationProcess   Json?
+  // string[]
+  documentsRequired    Json?
+  // string[]
+  highlights           Json?
+  // { mode, stages: string[], subjects: string[], duration, negativeMarking }
+  examPattern          Json?
+  // Record<string, number> — vacancy breakdown by reservation category
+  postsByCategory      Json?
+  // Record<string, number> — vacancy breakdown by state
+  postsByState         Json?
+
+  documents GovDocument[]
+
+  @@index([status, organizationId])
+  @@index([status, applicationEndDate])
+  @@map("gov_recruitments")
+}
+
+// Unifies admit cards/results/answer keys/notifications/syllabus into one
+// table, distinguished by `type` — they're structurally identical (title +
+// release date + a document URL, linked to one recruitment).
+enum GovDocumentType {
+  admit_card
+  result
+  answer_key
+  notification
+  syllabus
+}
+
+model GovDocument {
+  id            String   @id @default(uuid())
+  recruitmentId String
+  recruitment   GovRecruitment @relation(fields: [recruitmentId], references: [id])
+  type          GovDocumentType
+  title         String
+  releaseDate   DateTime?
+  documentUrl   String?
+  source        GovContentSource @default(manual)
+  createdAt     DateTime @default(now())
+
+  @@index([recruitmentId, type])
+  @@map("gov_documents")
+}
+
+enum GovCurrentAffairCategory {
+  national
+  international
+  banking
+  economy
+  science
+  technology
+  defence
+  sports
+  awards
+  appointments
+  govt_schemes
+  environment
+}
+
+model GovCurrentAffair {
+  id            String   @id @default(uuid())
+  title         String
+  slug          String   @unique
+  category      GovCurrentAffairCategory
+  whatHappened  String
+  keyFacts      Json?    // string[]
+  whyImportant  String?
+  examRelevance Json?    // e.g. { ssc: "...", banking: "...", railway: "..." }
+  publishedDate DateTime
+  status        GovRecruitmentStatus @default(draft)
+  source        GovContentSource     @default(manual)
+  sourceUrl     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, category, publishedDate])
+  @@map("gov_current_affairs")
+}
+
+enum GovSourceContentType {
+  recruitment
+  current_affair
+}
+
+// "url" = Firecrawl-scrape one fixed page every sweep. "search" = ask the
+// AI Gateway's native web search (the provider searches and reads pages
+// on its own infrastructure — no page content ever touches this app) for
+// a synthesized, structured answer to searchQuery every sweep. "search"
+// is the better fit for staying current without curating exact URLs up
+// front, and naturally avoids the "one giant aggregator page" problem
+// url-mode sources can hit. Exactly one of url/searchQuery is set,
+// matching fetchMode — enforced at the service/validation layer, not the
+// DB, same convention as organizationId being conditionally meaningful by
+// contentType.
+enum GovSourceFetchMode {
+  url
+  search
+}
+
+// Admin-configurable content source, by exam category (step 4). recruitment
+// sources should set organizationId so scraped recruitments attach to the
+// right org automatically; current-affairs sources have no natural
+// organization (e.g. a general daily-current-affairs page) and can leave
+// it unset.
+model GovSource {
+  id               String     @id @default(uuid())
+  category         GovOrgType
+  contentType      GovSourceContentType
+  fetchMode        GovSourceFetchMode @default(url)
+  organizationId   String?
+  organization     GovOrganization? @relation(fields: [organizationId], references: [id])
+  label            String
+  url              String?
+  searchQuery      String?
+  enabled          Boolean    @default(true)
+  lastScrapedAt    DateTime?
+  lastScrapeStatus String? // "success" | "partial" | "error"
+  lastScrapeError  String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([category, enabled])
+  @@map("gov_sources")
+}

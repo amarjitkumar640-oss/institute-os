@@ -1,0 +1,369 @@
+import { apiClient } from "./client";
+
+export type GovOrgType = "ssc" | "banking" | "railway" | "other";
+export type GovRecruitmentStatus = "draft" | "published" | "archived";
+export type GovContentSource = "manual" | "scraped";
+export type GovDocumentType = "admit_card" | "result" | "answer_key" | "notification" | "syllabus";
+export type GovCurrentAffairCategory =
+  | "national" | "international" | "banking" | "economy" | "science" | "technology"
+  | "defence" | "sports" | "awards" | "appointments" | "govt_schemes" | "environment";
+
+export interface GovOrganization {
+  id: string;
+  name: string;
+  shortName: string;
+  type: GovOrgType;
+  logoUrl: string | null;
+  officialWebsite: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GovOrganizationInput {
+  name: string;
+  shortName: string;
+  type: GovOrgType;
+  logoUrl?: string;
+  officialWebsite?: string;
+}
+
+export interface GovDocument {
+  id: string;
+  recruitmentId: string;
+  type: GovDocumentType;
+  title: string;
+  releaseDate: string | null;
+  documentUrl: string | null;
+  source: GovContentSource;
+  createdAt: string;
+}
+
+export interface GovDocumentInput {
+  recruitmentId: string;
+  type: GovDocumentType;
+  title: string;
+  releaseDate?: string;
+  documentUrl?: string;
+}
+
+export interface GovRecruitment {
+  id: string;
+  organizationId: string;
+  organization: GovOrganization;
+  title: string;
+  slug: string;
+  totalVacancies: number | null;
+  qualification: string | null;
+  ageMin: number | null;
+  ageMax: number | null;
+  categoryRelaxations: Record<string, number> | null;
+  applicationFee: Record<string, number> | null;
+  posts: { name: string; vacancyCount?: number; payScale?: string }[] | null;
+  applicationStartDate: string | null;
+  applicationEndDate: string | null;
+  examDate: string | null;
+  officialNotificationUrl: string | null;
+  officialWebsiteUrl: string | null;
+  applyUrl: string | null;
+  status: GovRecruitmentStatus;
+  source: GovContentSource;
+  sourceUrl: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  documents?: GovDocument[];
+
+  // Rich fields — populated by the manual JSON import, left null otherwise.
+  department: string | null;
+  advertisementNumber: string | null;
+  jobLocation: string | null;
+  localLanguageRequirement: string | null;
+  requiredExperience: string | null;
+  payScale: string | null;
+  basicPay: string | null;
+  salaryRange: string | null;
+  otherBenefits: string | null;
+  ageAsOnDate: string | null;
+  paymentLastDate: string | null;
+  correctionLastDate: string | null;
+  prelimsDate: string | null;
+  mainsDate: string | null;
+  admitCardDate: string | null;
+  resultDate: string | null;
+  interviewDate: string | null;
+  verificationStatus: string | null;
+  lastVerifiedAt: string | null;
+  summary: string | null;
+  whoCanApply: string | null;
+  howToApply: string | null;
+  importantNote: string | null;
+  selectionProcess: string[] | null;
+  applicationProcess: string[] | null;
+  documentsRequired: string[] | null;
+  highlights: string[] | null;
+  examPattern: { mode?: string; stages?: string[]; subjects?: string[]; duration?: string; negativeMarking?: string } | null;
+  postsByCategory: Record<string, number> | null;
+  postsByState: Record<string, number> | null;
+}
+
+export interface GovRecruitmentInput {
+  organizationId: string;
+  title: string;
+  slug: string;
+  totalVacancies?: number;
+  qualification?: string;
+  ageMin?: number;
+  ageMax?: number;
+  categoryRelaxations?: Record<string, number>;
+  applicationFee?: Record<string, number>;
+  posts?: { name: string; vacancyCount?: number; payScale?: string }[];
+  applicationStartDate?: string;
+  applicationEndDate?: string;
+  examDate?: string;
+  officialNotificationUrl?: string;
+  officialWebsiteUrl?: string;
+  applyUrl?: string;
+}
+
+export interface GovCurrentAffair {
+  id: string;
+  title: string;
+  slug: string;
+  category: GovCurrentAffairCategory;
+  whatHappened: string;
+  keyFacts: string[] | null;
+  whyImportant: string | null;
+  examRelevance: Record<string, string> | null;
+  publishedDate: string;
+  status: GovRecruitmentStatus;
+  source: GovContentSource;
+  sourceUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GovCurrentAffairInput {
+  title: string;
+  slug: string;
+  category: GovCurrentAffairCategory;
+  whatHappened: string;
+  keyFacts?: string[];
+  whyImportant?: string;
+  examRelevance?: Record<string, string>;
+  publishedDate: string;
+  sourceUrl?: string;
+}
+
+export type GovSourceContentType = "recruitment" | "current_affair";
+export type GovSourceFetchMode = "url" | "search";
+
+export interface GovSource {
+  id: string;
+  category: GovOrgType;
+  contentType: GovSourceContentType;
+  fetchMode: GovSourceFetchMode;
+  organizationId: string | null;
+  organization: GovOrganization | null;
+  label: string;
+  url: string | null;
+  searchQuery: string | null;
+  enabled: boolean;
+  lastScrapedAt: string | null;
+  lastScrapeStatus: string | null;
+  lastScrapeError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GovSourceInput {
+  category: GovOrgType;
+  contentType: GovSourceContentType;
+  fetchMode: GovSourceFetchMode;
+  organizationId?: string;
+  label: string;
+  url?: string;
+  searchQuery?: string;
+  enabled?: boolean;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+const BASE = "/api/gov-exams/admin";
+
+// ── Organizations ────────────────────────────────────────────────────────────
+
+export async function listOrganizations(): Promise<GovOrganization[]> {
+  const { data } = await apiClient.get<GovOrganization[]>(`${BASE}/organizations`);
+  return data;
+}
+
+export async function createOrganization(input: GovOrganizationInput): Promise<GovOrganization> {
+  const { data } = await apiClient.post<GovOrganization>(`${BASE}/organizations`, input);
+  return data;
+}
+
+export async function updateOrganization(id: string, input: Partial<GovOrganizationInput>): Promise<GovOrganization> {
+  const { data } = await apiClient.patch<GovOrganization>(`${BASE}/organizations/${id}`, input);
+  return data;
+}
+
+export async function deleteOrganization(id: string): Promise<void> {
+  await apiClient.delete(`${BASE}/organizations/${id}`);
+}
+
+// ── Recruitments ─────────────────────────────────────────────────────────────
+
+export async function listRecruitments(params: {
+  status?: GovRecruitmentStatus;
+  organizationId?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<PaginatedResult<GovRecruitment>> {
+  const { data } = await apiClient.get<PaginatedResult<GovRecruitment>>(`${BASE}/recruitments`, {
+    params: { ...params, limit: params.limit ?? 100 },
+  });
+  return data;
+}
+
+export async function createRecruitment(input: GovRecruitmentInput): Promise<GovRecruitment> {
+  const { data } = await apiClient.post<GovRecruitment>(`${BASE}/recruitments`, input);
+  return data;
+}
+
+export async function updateRecruitment(id: string, input: Partial<GovRecruitmentInput>): Promise<GovRecruitment> {
+  const { data } = await apiClient.patch<GovRecruitment>(`${BASE}/recruitments/${id}`, input);
+  return data;
+}
+
+export async function setRecruitmentStatus(id: string, status: GovRecruitmentStatus): Promise<GovRecruitment> {
+  const { data } = await apiClient.patch<GovRecruitment>(`${BASE}/recruitments/${id}/status`, { status });
+  return data;
+}
+
+export async function deleteRecruitment(id: string): Promise<void> {
+  await apiClient.delete(`${BASE}/recruitments/${id}`);
+}
+
+export async function getRecruitment(id: string): Promise<GovRecruitment> {
+  const { data } = await apiClient.get<GovRecruitment>(`${BASE}/recruitments/${id}`);
+  return data;
+}
+
+// ── Documents ─────────────────────────────────────────────────────────────────
+
+export async function createDocument(input: GovDocumentInput): Promise<GovDocument> {
+  const { data } = await apiClient.post<GovDocument>(`${BASE}/documents`, input);
+  return data;
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  await apiClient.delete(`${BASE}/documents/${id}`);
+}
+
+// ── Current affairs ──────────────────────────────────────────────────────────
+
+export async function listCurrentAffairs(params: {
+  status?: GovRecruitmentStatus;
+  category?: GovCurrentAffairCategory;
+  page?: number;
+  limit?: number;
+} = {}): Promise<PaginatedResult<GovCurrentAffair>> {
+  const { data } = await apiClient.get<PaginatedResult<GovCurrentAffair>>(`${BASE}/current-affairs`, {
+    params: { ...params, limit: params.limit ?? 100 },
+  });
+  return data;
+}
+
+export async function createCurrentAffair(input: GovCurrentAffairInput): Promise<GovCurrentAffair> {
+  const { data } = await apiClient.post<GovCurrentAffair>(`${BASE}/current-affairs`, input);
+  return data;
+}
+
+export async function updateCurrentAffair(id: string, input: Partial<GovCurrentAffairInput>): Promise<GovCurrentAffair> {
+  const { data } = await apiClient.patch<GovCurrentAffair>(`${BASE}/current-affairs/${id}`, input);
+  return data;
+}
+
+export async function setCurrentAffairStatus(id: string, status: GovRecruitmentStatus): Promise<GovCurrentAffair> {
+  const { data } = await apiClient.patch<GovCurrentAffair>(`${BASE}/current-affairs/${id}/status`, { status });
+  return data;
+}
+
+export async function deleteCurrentAffair(id: string): Promise<void> {
+  await apiClient.delete(`${BASE}/current-affairs/${id}`);
+}
+
+// ── Sources (step 4 — automated scraping) ───────────────────────────────────
+
+const SOURCES_BASE = "/api/gov-exams/admin/sources";
+
+export async function listSources(): Promise<GovSource[]> {
+  const { data } = await apiClient.get<GovSource[]>(SOURCES_BASE);
+  return data;
+}
+
+export async function createSource(input: GovSourceInput): Promise<GovSource> {
+  const { data } = await apiClient.post<GovSource>(SOURCES_BASE, input);
+  return data;
+}
+
+export async function updateSource(id: string, input: Partial<GovSourceInput>): Promise<GovSource> {
+  const { data } = await apiClient.patch<GovSource>(`${SOURCES_BASE}/${id}`, input);
+  return data;
+}
+
+export async function deleteSource(id: string): Promise<void> {
+  await apiClient.delete(`${SOURCES_BASE}/${id}`);
+}
+
+// ── Manual JSON import ──────────────────────────────────────────────────────
+// An admin pastes an AI-Overview-style export (search results generated
+// externally, e.g. via ChatGPT) and this maps it onto GovRecruitment rows —
+// a third way to populate data alongside the plain form above and the
+// scraper, useful for testing/backfilling without the scraper's own
+// dependencies. Two-step: preview never writes to the DB, commit does.
+
+export type ImportPlanItem =
+  | { index: number; outcome: "unusable"; reason: string; title: string; organizationNameFromJson: string | null }
+  | {
+      index: number;
+      outcome: "draft" | "published";
+      reasons?: string[];
+      title: string;
+      organizationNameFromJson: string;
+      matchedOrganization: { id: string; name: string } | null;
+      willCreateOrganization: boolean;
+    };
+
+export interface ImportCommitResult {
+  created: number;
+  published: number;
+  skippedDuplicates: number;
+  unusable: number;
+  organizationsCreated: number;
+  items: {
+    index: number;
+    title: string;
+    outcome: "created_published" | "created_draft" | "skipped_duplicate" | "unusable";
+    reason?: string;
+    recruitmentId?: string;
+  }[];
+}
+
+const IMPORT_BASE = "/api/gov-exams/admin/import";
+
+export async function previewRecruitmentImport(category: GovOrgType, vacancies: unknown[]): Promise<{ items: ImportPlanItem[] }> {
+  const { data } = await apiClient.post<{ items: ImportPlanItem[] }>(`${IMPORT_BASE}/recruitments/preview`, { category, vacancies });
+  return data;
+}
+
+export async function commitRecruitmentImport(category: GovOrgType, vacancies: unknown[]): Promise<ImportCommitResult> {
+  const { data } = await apiClient.post<ImportCommitResult>(`${IMPORT_BASE}/recruitments/commit`, { category, vacancies });
+  return data;
+}

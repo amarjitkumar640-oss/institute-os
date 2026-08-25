@@ -4,6 +4,7 @@
   "workspaces": [
     "apps/api",
     "apps/web",
+    "apps/exam-portal",
     "packages/*"
   ]
 }

@@ -39,7 +39,8 @@
     "react-dom": "^18.3.1",
     "tsx": "^4.16.2",
     "twilio": "^6.1.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

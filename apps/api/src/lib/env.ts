@@ -34,4 +34,12 @@ export const env = cleanEnv(process.env, {
   // goes through the normal apps/web staff login (see site-admin.routes.ts,
   // apps/web/src/modules/site-content), not a separate credential.
   SITE_TENANT_SLUG: str({ default: "" }),
+
+  // Government Exam Intelligence — Step 4 automated scraping. Both
+  // optional; unset means that piece no-ops with a warning rather than
+  // crashing the server (same convention as SMTP/Twilio above) — the sweep
+  // job just records an error on the source and moves on.
+  AI_GATEWAY_URL: str({ default: "" }),
+  AI_GATEWAY_API_KEY: str({ default: "" }),
+  FIRECRAWL_API_KEY: str({ default: "" }),
 });
