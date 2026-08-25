@@ -44,6 +44,25 @@ export interface GovRecruitment {
   applyUrl: string | null;
   publishedAt: string | null;
   documents?: GovDocument[];
+
+  // Rich fields — populated only for recruitments added via the manual JSON
+  // import; null for anything entered through the plain admin form.
+  department: string | null;
+  jobLocation: string | null;
+  advertisementNumber: string | null;
+  payScale: string | null;
+  basicPay: string | null;
+  salaryRange: string | null;
+  otherBenefits: string | null;
+  summary: string | null;
+  whoCanApply: string | null;
+  howToApply: string | null;
+  importantNote: string | null;
+  selectionProcess: string[] | null;
+  applicationProcess: string[] | null;
+  highlights: string[] | null;
+  examPattern: { mode?: string; stages?: string[]; subjects?: string[]; duration?: string; negativeMarking?: string } | null;
+  postsByCategory: Record<string, number> | null;
 }
 
 export interface GovCurrentAffair {

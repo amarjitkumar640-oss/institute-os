@@ -4,11 +4,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Trash2, FileText, ClipboardList } from "lucide-react";
+import { Plus, Trash2, FileText, ClipboardList, Upload } from "lucide-react";
 import {
   listOrganizations, listRecruitments, createRecruitment, updateRecruitment,
   setRecruitmentStatus, deleteRecruitment, createDocument, deleteDocument,
-  type GovRecruitment, type GovRecruitmentStatus, type GovDocumentType,
+  previewRecruitmentImport, commitRecruitmentImport,
+  type GovRecruitment, type GovRecruitmentStatus, type GovDocumentType, type GovOrgType, type ImportPlanItem,
 } from "@/api/govExams";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -273,10 +274,156 @@ function DocumentsDialog({ open, onClose, recruitment }: { open: boolean; onClos
   );
 }
 
+const IMPORT_OUTCOME_VARIANT: Record<string, "warning" | "success" | "danger"> = {
+  published: "success", draft: "warning", unusable: "danger",
+};
+
+// Extracts the array to send from whatever the admin pasted — the whole
+// export file (with a top-level `vacancies` key) or just the array itself —
+// so they don't have to hand-edit the paste to strip a wrapper object.
+function extractVacancies(parsed: unknown): unknown[] | null {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as { vacancies?: unknown }).vacancies)) {
+    return (parsed as { vacancies: unknown[] }).vacancies;
+  }
+  return null;
+}
+
+function ImportJsonDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [category, setCategory] = useState<GovOrgType>("banking");
+  const [rawText, setRawText] = useState("");
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<ImportPlanItem[] | null>(null);
+  const [vacancies, setVacancies] = useState<unknown[] | null>(null);
+
+  const previewMutation = useMutation({
+    mutationFn: (items: unknown[]) => previewRecruitmentImport(category, items),
+    onSuccess: (res) => setPlan(res.items),
+    onError: (err: unknown) => toast({ variant: "destructive", title: extractError(err) }),
+  });
+
+  const commitMutation = useMutation({
+    mutationFn: (items: unknown[]) => commitRecruitmentImport(category, items),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["gov-recruitments"] });
+      qc.invalidateQueries({ queryKey: ["gov-organizations"] });
+      toast({
+        title: `Imported ${res.created} recruitment(s)`,
+        description: `${res.published} published, ${res.created - res.published} draft, ${res.skippedDuplicates} duplicate(s) skipped, ${res.unusable} unusable. ${res.organizationsCreated} new organization(s) created.`,
+      });
+      reset();
+      onClose();
+    },
+    onError: (err: unknown) => toast({ variant: "destructive", title: extractError(err) }),
+  });
+
+  function reset() {
+    setRawText(""); setParseError(null); setPlan(null); setVacancies(null);
+  }
+
+  function handlePreview() {
+    setParseError(null);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      setParseError("Not valid JSON — check for a stray trailing comma or unclosed bracket.");
+      return;
+    }
+    const items = extractVacancies(parsed);
+    if (!items || items.length === 0) {
+      setParseError("Couldn't find a non-empty array to import — expected the pasted JSON's top-level object to have a \"vacancies\" array, or to just be an array itself.");
+      return;
+    }
+    setVacancies(items);
+    previewMutation.mutate(items);
+  }
+
+  const importableCount = plan?.filter((p) => p.outcome !== "unusable").length ?? 0;
+
+  return (
+    <Dialog open={open} onOpenChange={() => { reset(); onClose(); }}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Import Recruitments from JSON</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Paste an AI-Overview-style search result (e.g. generated via ChatGPT) in the standard{" "}
+            <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">{"{ card, details, content }"}</code> vacancy shape.
+            Preview shows exactly what will be created before anything is saved.
+          </p>
+
+          <FormField label="Category">
+            <Select value={category} onValueChange={(v) => setCategory(v as GovOrgType)}>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ssc">SSC</SelectItem>
+                <SelectItem value="banking">Banking</SelectItem>
+                <SelectItem value="railway">Railway</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
+
+          <FormField label="Pasted JSON">
+            <Textarea
+              value={rawText}
+              onChange={(e) => { setRawText(e.target.value); setPlan(null); }}
+              rows={10}
+              placeholder='{"vacancies": [{"card": {...}, "details": {...}, "content": {...}}]}'
+              className="font-mono text-xs"
+            />
+            {parseError && <p className="text-xs text-red-600 mt-1">{parseError}</p>}
+          </FormField>
+
+          <Button variant="outline" onClick={handlePreview} disabled={!rawText.trim() || previewMutation.isPending}>
+            {previewMutation.isPending ? "Previewing…" : "Preview"}
+          </Button>
+
+          {plan && (
+            <div className="border rounded-lg divide-y">
+              {plan.map((item) => (
+                <div key={item.index} className="p-3 flex items-start gap-3">
+                  <Badge variant={IMPORT_OUTCOME_VARIANT[item.outcome]}>{item.outcome}</Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
+                    {item.outcome === "unusable" ? (
+                      <p className="text-xs text-red-600 mt-0.5">{item.reason}</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {item.willCreateOrganization
+                            ? `Will create new organization: ${item.organizationNameFromJson}`
+                            : `Organization: ${item.matchedOrganization?.name}`}
+                        </p>
+                        {item.reasons?.map((r, i) => <p key={i} className="text-xs text-amber-600">{r}</p>)}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onClose(); }}>Cancel</Button>
+          <Button
+            disabled={!plan || importableCount === 0 || commitMutation.isPending}
+            onClick={() => vacancies && commitMutation.mutate(vacancies)}
+          >
+            {commitMutation.isPending ? "Importing…" : `Import ${importableCount} item(s)`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function RecruitmentsTab() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<GovRecruitmentStatus | "all">("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState<GovRecruitment | null>(null);
   const [managingDocs, setManagingDocs] = useState<GovRecruitment | null>(null);
 
@@ -369,7 +516,10 @@ export function RecruitmentsTab() {
             <SelectItem value="archived">Archived</SelectItem>
           </SelectContent>
         </Select>
-        <Button onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> Add Recruitment</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import JSON</Button>
+          <Button onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> Add Recruitment</Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -381,6 +531,7 @@ export function RecruitmentsTab() {
       )}
 
       {showCreate && <RecruitmentFormDialog open={showCreate} onClose={() => setShowCreate(false)} />}
+      {showImport && <ImportJsonDialog open={showImport} onClose={() => setShowImport(false)} />}
       {editing && <RecruitmentFormDialog open={!!editing} onClose={() => setEditing(null)} existing={editing} />}
       {managingDocs && <DocumentsDialog open={!!managingDocs} onClose={() => setManagingDocs(null)} recruitment={managingDocs} />}
     </div>

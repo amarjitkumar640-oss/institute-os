@@ -14,7 +14,11 @@ import type { CurrentAffairExtractionItem, RecruitmentExtractionItem } from "./s
 const MIN_YEAR = 2020;
 const MAX_YEAR = 2035;
 
-function parseSaneDate(value: string | null | undefined): Date | null {
+// Exported for reuse by the manual JSON import (gov-exams-import.service.ts),
+// which has its own extra date fields (prelims/mains/admit card/etc.) beyond
+// what this file's own item shapes carry, but wants the exact same sanity
+// rules applied to all of them.
+export function parseSaneDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;

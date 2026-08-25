@@ -33,6 +33,11 @@ const translations = {
     infoAgeYearsSuffix: "years", infoApplicationStart: "Application Start", infoApplicationEnd: "Application End", infoExamDate: "Exam Date",
     ageRelaxation: "Age Relaxation", ageRelaxationYearsSuffix: "years",
     documentsHeading: "Documents", officialNotification: "Official Notification", officialWebsite: "Official Website", applyNow: "Apply Now",
+    infoDepartment: "Department", infoJobLocation: "Job Location", infoAdvertisementNumber: "Advertisement No.",
+    keyHighlights: "Key Highlights", salaryHeading: "Salary & Benefits", vacancyBreakdown: "Vacancy Breakdown",
+    selectionProcessHeading: "Selection Process", examPatternHeading: "Exam Pattern",
+    examPatternMode: "Mode", examPatternDuration: "Duration", examPatternNegativeMarking: "Negative Marking",
+    howToApplyHeading: "How to Apply", whoCanApplyHeading: "Who Can Apply", importantNoteHeading: "Important",
 
     currentAffairsTitle: "Current Affairs", currentAffairsSubtitle: "Daily updates relevant to SSC, Banking, Railway, and other competitive exams.",
     noCurrentAffairsFound: "No current affairs found",
@@ -84,6 +89,11 @@ const translations = {
     infoAgeYearsSuffix: "वर्ष", infoApplicationStart: "आवेदन प्रारंभ", infoApplicationEnd: "आवेदन समाप्ति", infoExamDate: "परीक्षा तिथि",
     ageRelaxation: "आयु में छूट", ageRelaxationYearsSuffix: "वर्ष",
     documentsHeading: "दस्तावेज़", officialNotification: "आधिकारिक अधिसूचना", officialWebsite: "आधिकारिक वेबसाइट", applyNow: "अभी आवेदन करें",
+    infoDepartment: "विभाग", infoJobLocation: "कार्य स्थान", infoAdvertisementNumber: "विज्ञापन संख्या",
+    keyHighlights: "मुख्य विशेषताएं", salaryHeading: "वेतन और लाभ", vacancyBreakdown: "पद विवरण",
+    selectionProcessHeading: "चयन प्रक्रिया", examPatternHeading: "परीक्षा पैटर्न",
+    examPatternMode: "मोड", examPatternDuration: "अवधि", examPatternNegativeMarking: "नकारात्मक अंकन",
+    howToApplyHeading: "आवेदन कैसे करें", whoCanApplyHeading: "कौन आवेदन कर सकता है", importantNoteHeading: "महत्वपूर्ण",
 
     currentAffairsTitle: "करेंट अफेयर्स", currentAffairsSubtitle: "एसएससी, बैंकिंग, रेलवे और अन्य प्रतियोगी परीक्षाओं से संबंधित दैनिक अपडेट।",
     noCurrentAffairsFound: "कोई करेंट अफेयर्स नहीं मिला",

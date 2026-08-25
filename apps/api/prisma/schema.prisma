@@ -1019,6 +1019,48 @@ model GovRecruitment {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
+  // ── Rich fields (populated by the manual JSON import — see gov-exams/import —
+  // an admin pastes AI-Overview-style search output rather than relying on the
+  // scraper/native-search pipeline). All optional: recruitments created through
+  // the plain admin form or the scraper never populate these. ──────────────────
+  department           String?
+  advertisementNumber  String?
+  jobLocation          String?
+  localLanguageRequirement String?
+  requiredExperience   String?
+  payScale             String?
+  basicPay             String?
+  salaryRange          String?
+  otherBenefits        String?
+  ageAsOnDate          DateTime?
+  paymentLastDate      DateTime?
+  correctionLastDate   DateTime?
+  prelimsDate          DateTime?
+  mainsDate            DateTime?
+  admitCardDate        DateTime?
+  resultDate           DateTime?
+  interviewDate        DateTime?
+  verificationStatus   String?
+  lastVerifiedAt       DateTime?
+  summary              String? @db.Text
+  whoCanApply          String? @db.Text
+  howToApply           String? @db.Text
+  importantNote        String? @db.Text
+  // string[]
+  selectionProcess     Json?
+  // string[]
+  applicationProcess   Json?
+  // string[]
+  documentsRequired    Json?
+  // string[]
+  highlights           Json?
+  // { mode, stages: string[], subjects: string[], duration, negativeMarking }
+  examPattern          Json?
+  // Record<string, number> — vacancy breakdown by reservation category
+  postsByCategory      Json?
+  // Record<string, number> — vacancy breakdown by state
+  postsByState         Json?
+
   documents GovDocument[]
 
   @@index([status, organizationId])

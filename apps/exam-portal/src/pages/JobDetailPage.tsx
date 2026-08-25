@@ -16,6 +16,39 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-4 bg-white rounded-3xl border border-ink/[0.06] p-5 shadow-card">
+      <h2 className="font-heading text-[15.5px] text-ink mb-3">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-1.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2 text-sm text-ink-soft">
+          <span className="text-ink/30">•</span> {item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function NumberedList({ items }: { items: string[] }) {
+  return (
+    <ol className="space-y-1.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2 text-sm text-ink-soft">
+          <span className="text-ink/40 font-semibold">{i + 1}.</span> {item}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function JobDetailPage() {
   const { t, lang } = useLang();
   const { slug } = useParams<{ slug: string }>();
@@ -40,9 +73,11 @@ export function JobDetailPage() {
     <div className="max-w-3xl mx-auto px-6 py-6">
       <Badge>{recruitment.organization.shortName}</Badge>
       <h1 className="mt-2.5 font-heading text-2xl text-ink">{recruitment.title}</h1>
+      {recruitment.summary && <p className="mt-2 text-sm text-ink-soft leading-relaxed">{recruitment.summary}</p>}
 
       <div className="mt-6 bg-white rounded-3xl border border-ink/[0.06] p-5 shadow-card">
         <InfoRow label={t("infoOrganization")} value={recruitment.organization.name} />
+        <InfoRow label={t("infoDepartment")} value={recruitment.department} />
         <InfoRow label={t("infoTotalVacancies")} value={recruitment.totalVacancies} />
         <InfoRow label={t("infoQualification")} value={recruitment.qualification} />
         <InfoRow
@@ -52,6 +87,8 @@ export function JobDetailPage() {
         <InfoRow label={t("infoApplicationStart")} value={formatDate(recruitment.applicationStartDate, lang)} />
         <InfoRow label={t("infoApplicationEnd")} value={formatDate(recruitment.applicationEndDate, lang)} />
         <InfoRow label={t("infoExamDate")} value={formatDate(recruitment.examDate, lang)} />
+        <InfoRow label={t("infoJobLocation")} value={recruitment.jobLocation} />
+        <InfoRow label={t("infoAdvertisementNumber")} value={recruitment.advertisementNumber} />
       </div>
 
       {recruitment.categoryRelaxations && Object.keys(recruitment.categoryRelaxations).length > 0 && (
@@ -62,6 +99,65 @@ export function JobDetailPage() {
               <Badge key={category}>{category.toUpperCase()}: +{years} {t("ageRelaxationYearsSuffix")}</Badge>
             ))}
           </div>
+        </div>
+      )}
+
+      {!!recruitment.highlights?.length && (
+        <Section title={t("keyHighlights")}>
+          <BulletList items={recruitment.highlights} />
+        </Section>
+      )}
+
+      {recruitment.postsByCategory && Object.keys(recruitment.postsByCategory).length > 0 && (
+        <Section title={t("vacancyBreakdown")}>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(recruitment.postsByCategory).map(([category, count]) => (
+              <Badge key={category}>{category.toUpperCase()}: {count}</Badge>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {(recruitment.payScale || recruitment.salaryRange || recruitment.basicPay || recruitment.otherBenefits) && (
+        <Section title={t("salaryHeading")}>
+          <InfoRow label="Pay Scale" value={recruitment.payScale} />
+          <InfoRow label="Basic Pay" value={recruitment.basicPay} />
+          <InfoRow label="Salary Range" value={recruitment.salaryRange} />
+          {recruitment.otherBenefits && <p className="text-sm text-ink-soft mt-2">{recruitment.otherBenefits}</p>}
+        </Section>
+      )}
+
+      {!!recruitment.selectionProcess?.length && (
+        <Section title={t("selectionProcessHeading")}>
+          <NumberedList items={recruitment.selectionProcess} />
+        </Section>
+      )}
+
+      {recruitment.examPattern && (recruitment.examPattern.mode || recruitment.examPattern.stages?.length || recruitment.examPattern.duration || recruitment.examPattern.negativeMarking) && (
+        <Section title={t("examPatternHeading")}>
+          <InfoRow label={t("examPatternMode")} value={recruitment.examPattern.mode} />
+          <InfoRow label={t("examPatternDuration")} value={recruitment.examPattern.duration} />
+          <InfoRow label={t("examPatternNegativeMarking")} value={recruitment.examPattern.negativeMarking} />
+          {!!recruitment.examPattern.stages?.length && <div className="mt-2"><BulletList items={recruitment.examPattern.stages} /></div>}
+        </Section>
+      )}
+
+      {!!recruitment.applicationProcess?.length && (
+        <Section title={t("howToApplyHeading")}>
+          <NumberedList items={recruitment.applicationProcess} />
+        </Section>
+      )}
+
+      {recruitment.whoCanApply && (
+        <Section title={t("whoCanApplyHeading")}>
+          <p className="text-sm text-ink-soft leading-relaxed">{recruitment.whoCanApply}</p>
+        </Section>
+      )}
+
+      {recruitment.importantNote && (
+        <div className="mt-4 bg-amber-50 border border-amber-200 rounded-3xl p-5">
+          <h2 className="font-heading text-[15.5px] text-amber-900 mb-1.5">{t("importantNoteHeading")}</h2>
+          <p className="text-sm text-amber-800 leading-relaxed">{recruitment.importantNote}</p>
         </div>
       )}
 

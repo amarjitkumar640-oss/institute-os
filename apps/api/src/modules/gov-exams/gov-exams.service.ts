@@ -132,6 +132,38 @@ export interface RecruitmentInput {
   applyUrl?: string;
   source?: GovContentSource;
   sourceUrl?: string;
+  // Rich fields — populated by the manual JSON import (see gov-exams/import.ts);
+  // left unset by the plain admin form and the scraper.
+  department?: string;
+  advertisementNumber?: string;
+  jobLocation?: string;
+  localLanguageRequirement?: string;
+  requiredExperience?: string;
+  payScale?: string;
+  basicPay?: string;
+  salaryRange?: string;
+  otherBenefits?: string;
+  ageAsOnDate?: Date;
+  paymentLastDate?: Date;
+  correctionLastDate?: Date;
+  prelimsDate?: Date;
+  mainsDate?: Date;
+  admitCardDate?: Date;
+  resultDate?: Date;
+  interviewDate?: Date;
+  verificationStatus?: string;
+  lastVerifiedAt?: Date;
+  summary?: string;
+  whoCanApply?: string;
+  howToApply?: string;
+  importantNote?: string;
+  selectionProcess?: string[];
+  applicationProcess?: string[];
+  documentsRequired?: string[];
+  highlights?: string[];
+  examPattern?: { mode?: string; stages?: string[]; subjects?: string[]; duration?: string; negativeMarking?: string };
+  postsByCategory?: Record<string, number>;
+  postsByState?: Record<string, number>;
 }
 
 export type CreateRecruitmentResult =
@@ -143,7 +175,19 @@ export async function createRecruitment(data: RecruitmentInput): Promise<CreateR
   if (clash) return { ok: false, conflict: true };
 
   const recruitment = await prisma.govRecruitment.create({
-    data: { ...data, categoryRelaxations: data.categoryRelaxations ?? undefined, applicationFee: data.applicationFee ?? undefined, posts: data.posts ?? undefined },
+    data: {
+      ...data,
+      categoryRelaxations: data.categoryRelaxations ?? undefined,
+      applicationFee: data.applicationFee ?? undefined,
+      posts: data.posts ?? undefined,
+      selectionProcess: data.selectionProcess ?? undefined,
+      applicationProcess: data.applicationProcess ?? undefined,
+      documentsRequired: data.documentsRequired ?? undefined,
+      highlights: data.highlights ?? undefined,
+      examPattern: data.examPattern ?? undefined,
+      postsByCategory: data.postsByCategory ?? undefined,
+      postsByState: data.postsByState ?? undefined,
+    },
     include: { organization: true },
   });
   return { ok: true, recruitment };

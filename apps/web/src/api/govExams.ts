@@ -72,6 +72,38 @@ export interface GovRecruitment {
   createdAt: string;
   updatedAt: string;
   documents?: GovDocument[];
+
+  // Rich fields — populated by the manual JSON import, left null otherwise.
+  department: string | null;
+  advertisementNumber: string | null;
+  jobLocation: string | null;
+  localLanguageRequirement: string | null;
+  requiredExperience: string | null;
+  payScale: string | null;
+  basicPay: string | null;
+  salaryRange: string | null;
+  otherBenefits: string | null;
+  ageAsOnDate: string | null;
+  paymentLastDate: string | null;
+  correctionLastDate: string | null;
+  prelimsDate: string | null;
+  mainsDate: string | null;
+  admitCardDate: string | null;
+  resultDate: string | null;
+  interviewDate: string | null;
+  verificationStatus: string | null;
+  lastVerifiedAt: string | null;
+  summary: string | null;
+  whoCanApply: string | null;
+  howToApply: string | null;
+  importantNote: string | null;
+  selectionProcess: string[] | null;
+  applicationProcess: string[] | null;
+  documentsRequired: string[] | null;
+  highlights: string[] | null;
+  examPattern: { mode?: string; stages?: string[]; subjects?: string[]; duration?: string; negativeMarking?: string } | null;
+  postsByCategory: Record<string, number> | null;
+  postsByState: Record<string, number> | null;
 }
 
 export interface GovRecruitmentInput {
@@ -288,4 +320,50 @@ export async function updateSource(id: string, input: Partial<GovSourceInput>): 
 
 export async function deleteSource(id: string): Promise<void> {
   await apiClient.delete(`${SOURCES_BASE}/${id}`);
+}
+
+// ── Manual JSON import ──────────────────────────────────────────────────────
+// An admin pastes an AI-Overview-style export (search results generated
+// externally, e.g. via ChatGPT) and this maps it onto GovRecruitment rows —
+// a third way to populate data alongside the plain form above and the
+// scraper, useful for testing/backfilling without the scraper's own
+// dependencies. Two-step: preview never writes to the DB, commit does.
+
+export type ImportPlanItem =
+  | { index: number; outcome: "unusable"; reason: string; title: string; organizationNameFromJson: string | null }
+  | {
+      index: number;
+      outcome: "draft" | "published";
+      reasons?: string[];
+      title: string;
+      organizationNameFromJson: string;
+      matchedOrganization: { id: string; name: string } | null;
+      willCreateOrganization: boolean;
+    };
+
+export interface ImportCommitResult {
+  created: number;
+  published: number;
+  skippedDuplicates: number;
+  unusable: number;
+  organizationsCreated: number;
+  items: {
+    index: number;
+    title: string;
+    outcome: "created_published" | "created_draft" | "skipped_duplicate" | "unusable";
+    reason?: string;
+    recruitmentId?: string;
+  }[];
+}
+
+const IMPORT_BASE = "/api/gov-exams/admin/import";
+
+export async function previewRecruitmentImport(category: GovOrgType, vacancies: unknown[]): Promise<{ items: ImportPlanItem[] }> {
+  const { data } = await apiClient.post<{ items: ImportPlanItem[] }>(`${IMPORT_BASE}/recruitments/preview`, { category, vacancies });
+  return data;
+}
+
+export async function commitRecruitmentImport(category: GovOrgType, vacancies: unknown[]): Promise<ImportCommitResult> {
+  const { data } = await apiClient.post<ImportCommitResult>(`${IMPORT_BASE}/recruitments/commit`, { category, vacancies });
+  return data;
 }
