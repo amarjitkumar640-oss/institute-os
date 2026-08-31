@@ -64,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
     module: "Finance",
     items: [
       { label: "Fees", to: "/fees", icon: DollarSign, screenKey: "fees" },
+      { label: "Sponsors", to: "/sponsors", icon: Landmark, screenKey: "sponsors" },
     ],
   },
   {

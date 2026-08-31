@@ -49,51 +49,41 @@ describe("mapToExtractionItem", () => {
 });
 
 describe("buildImportPlan", () => {
-  it("matches an existing organization by name instead of flagging a new one", async () => {
-    const org = await prisma.govOrganization.create({ data: { name: "Bank of Baroda", shortName: "BOB-TEST", type: "banking" } });
-    const plan = await buildImportPlan([rawItem()], "banking");
+  it("carries the dialog's selected category and the extracted organization straight onto the input", () => {
+    const plan = buildImportPlan([rawItem()], "banking");
     expect(plan).toHaveLength(1);
     const item = plan[0];
     if (item.outcome === "unusable") throw new Error("expected a usable outcome");
-    expect(item.matchedOrganization?.id).toBe(org.id);
-    expect(item.willCreateOrganization).toBe(false);
+    expect(item.recruitmentInput.category).toBe("banking");
+    expect(item.recruitmentInput.organization).toBe("Bank of Baroda");
   });
 
-  it("flags a new organization as unmatched when nothing resembles it", async () => {
-    const plan = await buildImportPlan([rawItem({ organization: "Some New Bank Nobody Has Registered" })], "banking");
-    const item = plan[0];
-    if (item.outcome === "unusable") throw new Error("expected a usable outcome");
-    expect(item.matchedOrganization).toBeNull();
-    expect(item.willCreateOrganization).toBe(true);
-  });
-
-  it("is unusable when the JSON carries no organization name at all", async () => {
+  it("is usable (organization left undefined) even when the JSON carries no organization name at all", () => {
     const item = rawItem();
     delete (item.card as Record<string, unknown>).organization;
     delete (item.details as Record<string, unknown>).organization;
-    const plan = await buildImportPlan([item], "banking");
+    const plan = buildImportPlan([item], "banking");
+    const planItem = plan[0];
+    expect(planItem.outcome).not.toBe("unusable");
+    if (planItem.outcome !== "unusable") expect(planItem.recruitmentInput.organization).toBeUndefined();
+  });
+
+  it("is unusable when the title is missing", () => {
+    const item = rawItem();
+    delete (item.details as Record<string, unknown>).recruitment_name;
+    delete (item.details as Record<string, unknown>).job_title;
+    delete (item.card as Record<string, unknown>).job_title;
+    const plan = buildImportPlan([item], "banking");
     expect(plan[0].outcome).toBe("unusable");
   });
 });
 
 describe("commitRecruitmentImport", () => {
-  it("creates one organization for a batch and reuses it across every item for the same org, instead of creating a duplicate per item", async () => {
-    const items = [
-      rawItem({ recruitmentName: "SBI Junior Associate — Regular" }),
-      rawItem({ recruitmentName: "SBI Junior Associate — Special Drive" }),
-      rawItem({ recruitmentName: "SBI Specialist Cadre Officer" }),
-    ].map((i) => {
-      (i.card as Record<string, unknown>).organization = "State Bank of India";
-      (i.details as Record<string, unknown>).organization = "State Bank of India";
-      return i;
-    });
-
-    const result = await commitRecruitmentImport(items, "banking");
-
-    expect(result.created).toBe(3);
-    expect(result.organizationsCreated).toBe(1);
-    const orgs = await prisma.govOrganization.findMany({ where: { name: "State Bank of India" } });
-    expect(orgs).toHaveLength(1);
+  it("creates a recruitment with the selected category and no organization matching/creation", async () => {
+    const result = await commitRecruitmentImport([rawItem()], "banking");
+    expect(result.created).toBe(1);
+    const recruitment = await prisma.govRecruitment.findFirstOrThrow({ where: { organization: "Bank of Baroda" } });
+    expect(recruitment.category).toBe("banking");
   });
 
   it("publishes when a valid applicationEndDate is present, and skips a slug clash as a duplicate", async () => {

@@ -30,10 +30,11 @@ export function legacyPermissionsForRole(roles: StaffRole[]): Record<string, str
 
 export async function resetDb() {
   await prisma.siteHighlight.deleteMany();
+  await prisma.govJobVacancyPromptTemplate.deleteMany();
+  await prisma.govCurrentAffairsPromptTemplate.deleteMany();
   await prisma.govSource.deleteMany();
   await prisma.govDocument.deleteMany();
   await prisma.govRecruitment.deleteMany();
-  await prisma.govOrganization.deleteMany();
   await prisma.govCurrentAffair.deleteMany();
   await prisma.paymentTransaction.deleteMany();
   await prisma.scheduleInstallment.deleteMany();
@@ -44,6 +45,11 @@ export async function resetDb() {
   await prisma.admissionApplication.deleteMany();
   await prisma.lead.deleteMany();
   await prisma.student.deleteMany();
+  await prisma.batchDiscountOffer.deleteMany();
+  await prisma.sponsorInvoice.deleteMany();
+  await prisma.sponsorPaymentMilestone.deleteMany();
+  await prisma.sponsorshipContract.deleteMany();
+  await prisma.sponsor.deleteMany();
   await prisma.batch.deleteMany();
   await prisma.course.deleteMany();
   await prisma.faculty.deleteMany();
@@ -51,6 +57,10 @@ export async function resetDb() {
   await prisma.jobRun.deleteMany();
   await prisma.jobConfig.deleteMany();
   await prisma.passwordResetToken.deleteMany();
+  await prisma.aiAssistantMessage.deleteMany();
+  await prisma.aiAssistantSession.deleteMany();
+  await prisma.aiAssistantCacheEntry.deleteMany();
+  await prisma.govExamsMeta.deleteMany();
   await prisma.staff.deleteMany();
   await prisma.subject.deleteMany();
 }

@@ -5,6 +5,7 @@ import { requireRole } from "../../middleware/role";
 import { validateBody } from "../../middleware/validate";
 import { getSiteTenant } from "../site/site.service";
 import { buildImportPlan, commitRecruitmentImport } from "./gov-exams-import.service";
+import { buildCurrentAffairImportPlan, commitCurrentAffairImport } from "./current-affairs-import.service";
 
 export const govExamsImportRouter = Router();
 
@@ -39,3 +40,28 @@ govExamsImportRouter.post("/recruitments/commit", validateBody(importRequestSche
   const result = await commitRecruitmentImport(req.body.vacancies, req.body.category);
   res.json(result);
 });
+
+// No category field — each item self-declares its own category in the
+// pasted JSON, matched per item against the live CurrentAffairCategory
+// table (see current-affairs-import.service.ts).
+const currentAffairImportRequestSchema = z.object({
+  items: z.array(z.record(z.string(), z.unknown())).min(1).max(50),
+});
+
+govExamsImportRouter.post(
+  "/current-affairs/preview",
+  validateBody(currentAffairImportRequestSchema),
+  async (req, res) => {
+    const items = await buildCurrentAffairImportPlan(req.body.items);
+    res.json({ items });
+  },
+);
+
+govExamsImportRouter.post(
+  "/current-affairs/commit",
+  validateBody(currentAffairImportRequestSchema),
+  async (req, res) => {
+    const result = await commitCurrentAffairImport(req.body.items);
+    res.json(result);
+  },
+);

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const staffRoleSchema = z.enum(["admin", "teacher", "frontdesk"]);
 export type StaffRole = z.infer<typeof staffRoleSchema>;
 
-export const batchStatusSchema = z.enum(["upcoming", "running", "completed"]);
+export const batchStatusSchema = z.enum(["upcoming", "running", "completed", "merged"]);
 export const enrollmentStatusSchema = z.enum(["active", "paused", "completed", "dropped"]);
 export const leadStatusSchema = z.enum(["new", "contacted", "visited", "converted", "lost"]);
 
@@ -50,6 +50,12 @@ export const createCourseSchema = z.object({
   examCategoryIds: z.array(z.string().uuid()).default([]),
   durationMonths: z.number().int().positive().max(60),
   defaultFee: z.number().nonnegative().max(10_000_000),
+  discountAmount: z.number().nonnegative().max(10_000_000).default(0),
+  discountReason: z.string().max(300).optional(),
+  // A course that's never billed to students at all (e.g. a dedicated CSR
+  // program course) — admission into any batch under it skips fee-schedule
+  // generation entirely.
+  isFree: z.boolean().default(false),
 });
 export type CreateCourseInput = z.infer<typeof createCourseSchema>;
 
@@ -69,6 +75,7 @@ export const createBatchSchema = z.object({
   capacity:  z.number().int().positive(),
   startDate: z.coerce.date(),
   endDate:   z.coerce.date(),
+  centerId:  z.string().uuid().optional(),
 });
 
 export const updateBatchSchema = z.object({
@@ -78,6 +85,14 @@ export const updateBatchSchema = z.object({
   endDate:   z.coerce.date().optional(),
   status:    batchStatusSchema.optional(),
 });
+
+// Every active enrollment in the source batch moves into the target batch
+// (see modules/batches/batch-merge.service.ts) — no course-match
+// requirement, no fee change, student's own courseId untouched.
+export const mergeBatchSchema = z.object({
+  toBatchId: z.string().uuid(),
+});
+export type MergeBatchInput = z.infer<typeof mergeBatchSchema>;
 
 export const createLeadSchema = z.object({
   name: z.string().min(1),
@@ -145,10 +160,10 @@ export const admitStudentSchema = z.object({
   fullName:           z.string().min(1).max(120),
   phone:              z.string().min(7).max(20),
   email:              z.string().email().nullable().optional(),
-  dob:                z.coerce.date().nullable().optional(),
-  address:            z.string().max(500).nullable().optional(),
-  aadhaar:            z.string().max(20).nullable().optional(),
-  gender:             z.enum(["male", "female"]).nullable().optional(),
+  dob:                z.coerce.date(),
+  address:            z.string().min(1).max(500),
+  aadhaar:            z.string().min(1).max(20),
+  gender:             z.enum(["male", "female"]),
   // Family
   fatherName:         z.string().max(120).nullable().optional(),
   motherName:         z.string().max(120).nullable().optional(),
@@ -168,6 +183,12 @@ export const admitStudentSchema = z.object({
   preferredTiming:    z.enum(["morning", "midday", "evening"]).nullable().optional(),
   paymentMode:        z.enum(["cash", "online"]).nullable().optional(),
   amountPaid:         z.number().nonnegative().nullable().optional(),
+  // Ad-hoc discount for THIS student only, set at admission time — takes
+  // priority over both the batch's "first N" offer and the course's
+  // standing discount when provided (an explicit staff override, not
+  // something that consumes a batch offer redemption slot).
+  discountAmount:     z.number().nonnegative().max(10_000_000).optional(),
+  discountReason:     z.string().max(300).optional(),
   // T&C acknowledgment — front desk confirms student was informed
   tcAcknowledged:     z.boolean().optional(),
   centerId:           z.string().uuid().optional(),
@@ -178,8 +199,18 @@ export const admitStudentSchema = z.object({
 export type AdmitStudentInput = z.infer<typeof admitStudentSchema>;
 
 export const updateStudentSchema = admitStudentSchema
-  .omit({ batchId: true, applicationId: true })
+  .omit({ batchId: true, applicationId: true, discountAmount: true, discountReason: true })
   .partial()
+  // dob/address/aadhaar/gender are required (non-nullable) on admitStudentSchema
+  // so a new admission can't skip them, but editing an existing student must
+  // still be able to explicitly clear a previously-set value — re-widen just
+  // these 4 back to nullable for the update path.
+  .extend({
+    dob:     z.coerce.date().nullable().optional(),
+    address: z.string().max(500).nullable().optional(),
+    aadhaar: z.string().max(20).nullable().optional(),
+    gender:  z.enum(["male", "female"]).nullable().optional(),
+  })
   .refine((d) => !d.fullName || d.fullName.length >= 1, { path: ["fullName"], message: "Name required" });
 export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 
@@ -187,6 +218,110 @@ export const createEnrollmentSchema = z.object({
   studentId: z.string().uuid(),
   batchId: z.string().uuid(),
 });
+
+// ─── Legacy student import (backfilling pre-system paper registers) ──────────
+// One student + their full historical payment trail (each an already-paid
+// installment, not a future due date) — see students/legacy-import.service.ts
+// for how each row turns into a ScheduleInstallment + PaymentTransaction pair.
+//
+// Deliberately lenient: this is hand-transcribed from photos of paper
+// registers, so almost nothing here is a hard requirement — only fullName,
+// phone, and a payment's own amount are things the import genuinely can't
+// proceed without. Everything else missing/malformed gets a sensible
+// fallback (see legacy-import.service.ts) instead of rejecting the batch —
+// that strictness belongs to the real Admit Student form (web/mobile/the
+// public apply URL), not this backfill tool.
+
+// A digit-heavy field (phone, pass year, Aadhaar, a register's own receipt
+// no.) transcribed by hand into JSON is just as likely to be typed as a
+// bare number as a quoted string — DB-wise these are all plain String
+// columns, so cast either shape to a string instead of rejecting a number.
+const numericString = (max: number) =>
+  z.union([z.string(), z.number()]).transform((v) => String(v).trim()).pipe(z.string().max(max));
+
+const paymentDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+// Accepts "paidAt" as an alias for "date" — an AI-extraction pipeline
+// transcribing straight from register photos is just as likely to use
+// PaymentTransaction's own column name (paidAt) as the friendlier "date"
+// this schema documents, and there's no reason to reject a whole payment
+// over which one it picked.
+export const legacyPaymentSchema = z.preprocess(
+  (raw) => {
+    if (raw && typeof raw === "object" && !("date" in raw) && "paidAt" in raw) {
+      const { paidAt, ...rest } = raw as Record<string, unknown>;
+      return { ...rest, date: paidAt };
+    }
+    return raw;
+  },
+  z.object({
+    // Required, deliberately — unlike the other relaxed fields, a wrong or
+    // silently-guessed payment date is a real error in a financial record,
+    // not a cosmetic gap. Better to reject this one payment with a clear
+    // "date: Required" than to guess "today" and quietly misdate it.
+    date:      z.string().regex(paymentDateRegex, "Must be YYYY-MM-DD"),
+    amount:    z.coerce.number().positive(),
+    // The register's own receipt number, if you have it — kept only as a
+    // reference note on the payment (see legacy-import.service.ts), never
+    // stored as the actual receiptNo. Every imported payment gets a real
+    // auto-generated one instead, the same generateReceiptNo() any payment
+    // recorded live through web/mobile gets — so this is optional, and
+    // never required to be unique.
+    receiptNo: numericString(50).nullable().optional(),
+  }),
+);
+export type LegacyPaymentInput = z.infer<typeof legacyPaymentSchema>;
+
+export const legacyStudentSchema = z.object({
+  // Required here, unlike Student.legacyId's own nullability at the DB
+  // level — a student created through the normal Admit Student form
+  // (mobile/web) never has one, but every row going through *this* backfill
+  // path is by definition an old paper-register student, so a missing
+  // legacyId here is a data-entry gap in the import file, not a valid state.
+  legacyId:      numericString(50).refine((v) => v.length > 0, "Required for a legacy-imported student"),
+  fullName:      z.string().min(1).max(120),
+  fatherName:    z.string().max(120).nullable().optional(),
+  motherName:    z.string().max(120).nullable().optional(),
+  gender:        z.enum(["male", "female"]).nullable().optional(),
+  address:       z.string().max(500).nullable().optional(),
+  qualification: z.enum(["class10", "class12", "graduation", "post_graduation"]).nullable().optional(),
+  passYear:      numericString(20).nullable().optional(),
+  board:         z.string().max(100).nullable().optional(),
+  email:         z.string().email().nullable().optional(),
+  aadhaar:       numericString(20).nullable().optional(),
+  phone:         numericString(20).pipe(z.string().min(7)),
+  guardianPhone: numericString(20).nullable().optional(),
+  // "Course Applied For" (Student.courseId) — same field the normal Admit
+  // Student form sets independently of the batch they're placed in.
+  // Defaults to the target batch's own course in the UI, but stays
+  // per-student and overridable for the rare case a student's original
+  // admission course doesn't match the batch they ended up in.
+  courseId:      z.string().uuid().nullable().optional(),
+  // Total course fee this student actually agreed to pay — defaults to the
+  // batch's course fee in the UI, but kept per-student and editable so an
+  // individual discount/negotiated rate can still be recorded accurately.
+  // Missing entirely → the service falls back to the resolved course's own
+  // defaultFee (the same number the UI would have pre-filled anyway), not
+  // to the sum of payments — a partly-paid student's total shouldn't
+  // default to "exactly what they've paid so far."
+  totalFee:      z.coerce.number().positive().nullable().optional(),
+  payments:      z.array(legacyPaymentSchema).default([]),
+});
+export type LegacyStudentInput = z.infer<typeof legacyStudentSchema>;
+
+// The envelope only validates its own shape (batchId/centerId, and that
+// `students` is a non-empty array of objects) — each student is validated
+// individually against legacyStudentSchema inside the route handler
+// instead of here, so one malformed row produces one clear, specific
+// per-row error rather than rejecting the whole batch with an
+// undifferentiated pile of "Required" (see students.routes.ts's
+// bulk-import-legacy handler).
+export const bulkImportLegacyStudentsSchema = z.object({
+  batchId:  z.string().uuid(),
+  centerId: z.string().uuid().optional(),
+  students: z.array(z.record(z.string(), z.unknown())).min(1).max(100),
+});
+export type BulkImportLegacyStudentsInput = z.infer<typeof bulkImportLegacyStudentsSchema>;
 
 // ─── Admission Applications (public self-service form) ────────────────────────
 
@@ -404,3 +539,61 @@ export const createAppReleaseSchema = z.object({
   changelog:   z.string().optional(),
 });
 export type CreateAppReleaseInput = z.infer<typeof createAppReleaseSchema>;
+
+// ── CSR sponsorship ────────────────────────────────────────────────────────────
+// A company sponsors one specific batch in full — see schema.prisma's
+// SponsorshipContract comment for the full model. A sponsored batch is always
+// fully sponsored (no mixing with self-paying students in the same batch).
+
+export const createSponsorSchema = z.object({
+  name:          z.string().min(1).max(200),
+  contactPerson: z.string().max(120).optional(),
+  phone:         z.string().max(20).optional(),
+  email:         z.string().email().optional(),
+  address:       z.string().max(500).optional(),
+  gstin:         z.string().max(20).optional(),
+  stateCode:     z.string().max(2).optional(),
+  notes:         z.string().max(1000).optional(),
+});
+export type CreateSponsorInput = z.infer<typeof createSponsorSchema>;
+
+export const updateSponsorSchema = createSponsorSchema.partial();
+export type UpdateSponsorInput = z.infer<typeof updateSponsorSchema>;
+
+export const createSponsorshipContractSchema = z.object({
+  sponsorId:              z.string().uuid(),
+  batchId:                z.string().uuid(),
+  contractedStudentCount: z.number().int().positive(),
+  totalContractAmount:    z.number().positive(),
+  // null/omitted = GST-exempt for this contract's invoices.
+  gstRate:                z.number().min(0).max(100).nullable().optional(),
+  startDate:              z.coerce.date(),
+  endDate:                z.coerce.date().nullable().optional(),
+  notes:                  z.string().max(1000).optional(),
+});
+export type CreateSponsorshipContractInput = z.infer<typeof createSponsorshipContractSchema>;
+
+export const updateSponsorshipContractSchema = z.object({
+  contractedStudentCount: z.number().int().positive().optional(),
+  totalContractAmount:    z.number().positive().optional(),
+  gstRate:                z.number().min(0).max(100).nullable().optional(),
+  startDate:              z.coerce.date().optional(),
+  endDate:                z.coerce.date().nullable().optional(),
+  status:                 z.enum(["active", "completed", "cancelled"]).optional(),
+  notes:                  z.string().max(1000).optional(),
+});
+export type UpdateSponsorshipContractInput = z.infer<typeof updateSponsorshipContractSchema>;
+
+export const createMilestoneSchema = z.object({
+  label:   z.string().min(1).max(120),
+  amount:  z.number().positive(),
+  dueDate: z.coerce.date().nullable().optional(),
+  notes:   z.string().max(500).optional(),
+});
+export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
+
+export const markMilestoneReceivedSchema = z.object({
+  receivedAmount: z.number().positive(),
+  receivedAt:     z.coerce.date().optional(),
+});
+export type MarkMilestoneReceivedInput = z.infer<typeof markMilestoneReceivedSchema>;

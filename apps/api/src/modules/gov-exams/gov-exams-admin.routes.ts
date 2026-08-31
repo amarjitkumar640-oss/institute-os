@@ -5,6 +5,7 @@ import { requireRole } from "../../middleware/role";
 import { validateBody, validateUuidParam } from "../../middleware/validate";
 import { getSiteTenant } from "../site/site.service";
 import * as govExams from "./gov-exams.service";
+import * as categories from "./current-affair-categories.service";
 
 export const govExamsAdminRouter = Router();
 
@@ -22,64 +23,14 @@ govExamsAdminRouter.use(async (req, res, next) => {
 
 const orgTypes = ["ssc", "banking", "railway", "other"] as const;
 const docTypes = ["admit_card", "result", "answer_key", "notification", "syllabus"] as const;
-const currentAffairCategories = [
-  "national", "international", "banking", "economy", "science", "technology",
-  "defence", "sports", "awards", "appointments", "govt_schemes", "environment",
-] as const;
+const categoryPriorities = ["primary", "secondary"] as const;
 const recruitmentStatuses = ["draft", "published", "archived"] as const;
 const contentSources = ["manual", "scraped"] as const;
-
-// ── Organizations ────────────────────────────────────────────────────────────
-
-govExamsAdminRouter.get("/organizations", async (_req, res) => {
-  res.json(await govExams.listOrganizations());
-});
-
-const createOrganizationSchema = z.object({
-  name: z.string().min(1).max(200),
-  shortName: z.string().min(1).max(50),
-  type: z.enum(orgTypes),
-  logoUrl: z.string().url().optional(),
-  officialWebsite: z.string().url().optional(),
-});
-
-govExamsAdminRouter.post("/organizations", validateBody(createOrganizationSchema), async (req, res) => {
-  const result = await govExams.createOrganization(req.body);
-  if (!result.ok) return res.status(409).json({ error: "An organization with this short name already exists" });
-  res.status(201).json(result.organization);
-});
-
-govExamsAdminRouter.patch(
-  "/organizations/:id",
-  validateUuidParam("id"),
-  validateBody(createOrganizationSchema.partial()),
-  async (req, res) => {
-    const result = await govExams.updateOrganization(req.params.id, req.body);
-    if (!result.ok) {
-      if ("notFound" in result) return res.status(404).json({ error: "Organization not found" });
-      return res.status(409).json({ error: "An organization with this short name already exists" });
-    }
-    res.json(result.organization);
-  },
-);
-
-govExamsAdminRouter.delete("/organizations/:id", validateUuidParam("id"), async (req, res) => {
-  const result = await govExams.deleteOrganization(req.params.id);
-  if (!result.ok) {
-    if ("notFound" in result) return res.status(404).json({ error: "Organization not found" });
-    if ("hasData" in result) {
-      return res.status(409).json({
-        error: `Cannot delete organization — it has ${result.recruitmentCount} associated recruitment(s).`,
-      });
-    }
-  }
-  res.status(204).send();
-});
 
 // ── Recruitments ─────────────────────────────────────────────────────────────
 
 const listRecruitmentsQuery = z.object({
-  organizationId: z.string().uuid().optional(),
+  category: z.enum(orgTypes).optional(),
   status: z.enum(recruitmentStatuses).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
@@ -105,7 +56,8 @@ const postSchema = z.object({
 });
 
 const recruitmentSchema = z.object({
-  organizationId: z.string().uuid(),
+  category: z.enum(orgTypes),
+  organization: z.string().max(200).optional(),
   title: z.string().min(1).max(300),
   slug: z.string().min(1).max(300).regex(/^[a-z0-9-]+$/, "slug must be lowercase-with-hyphens"),
   totalVacancies: z.number().int().nonnegative().optional(),
@@ -189,7 +141,7 @@ govExamsAdminRouter.delete("/documents/:id", validateUuidParam("id"), async (req
 // ── Current affairs ──────────────────────────────────────────────────────────
 
 const listCurrentAffairsQuery = z.object({
-  category: z.enum(currentAffairCategories).optional(),
+  categoryId: z.string().uuid().optional(),
   status: z.enum(recruitmentStatuses).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
@@ -211,7 +163,7 @@ govExamsAdminRouter.get("/current-affairs/:id", validateUuidParam("id"), async (
 const currentAffairSchema = z.object({
   title: z.string().min(1).max(300),
   slug: z.string().min(1).max(300).regex(/^[a-z0-9-]+$/, "slug must be lowercase-with-hyphens"),
-  category: z.enum(currentAffairCategories),
+  categoryId: z.string().uuid(),
   whatHappened: z.string().min(1),
   keyFacts: z.array(z.string()).optional(),
   whyImportant: z.string().optional(),
@@ -255,5 +207,67 @@ govExamsAdminRouter.patch(
 govExamsAdminRouter.delete("/current-affairs/:id", validateUuidParam("id"), async (req, res) => {
   const result = await govExams.deleteCurrentAffair(req.params.id);
   if (!result.ok) return res.status(404).json({ error: "Current affair not found" });
+  res.status(204).send();
+});
+
+// ── Current affair categories ────────────────────────────────────────────────
+
+govExamsAdminRouter.get("/current-affair-categories", async (_req, res) => {
+  res.json(await categories.listAllCategories());
+});
+
+const categorySchema = z.object({
+  key: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, "key must be lowercase-with-hyphens"),
+  labelEn: z.string().min(1).max(100),
+  labelHi: z.string().min(1).max(100),
+  shortLabelEn: z.string().min(1).max(50),
+  shortLabelHi: z.string().min(1).max(50),
+  priority: z.enum(categoryPriorities).optional(),
+  isVisible: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+govExamsAdminRouter.post("/current-affair-categories", validateBody(categorySchema), async (req, res) => {
+  const result = await categories.createCategory(req.body);
+  if (!result.ok) return res.status(409).json({ error: "A category with this key already exists" });
+  res.status(201).json(result.category);
+});
+
+govExamsAdminRouter.patch(
+  "/current-affair-categories/:id",
+  validateUuidParam("id"),
+  validateBody(categorySchema.partial()),
+  async (req, res) => {
+    const result = await categories.updateCategory(req.params.id, req.body);
+    if (!result.ok) {
+      if ("notFound" in result) return res.status(404).json({ error: "Category not found" });
+      return res.status(409).json({ error: "A category with this key already exists" });
+    }
+    res.json(result.category);
+  },
+);
+
+const reorderCategoriesSchema = z.object({ ids: z.array(z.string().uuid()).min(1) });
+
+govExamsAdminRouter.post(
+  "/current-affair-categories/reorder",
+  validateBody(reorderCategoriesSchema),
+  async (req, res) => {
+    const result = await categories.reorderCategories(req.body.ids);
+    if (!result.ok) return res.status(400).json({ error: "One or more category ids were not found" });
+    res.json(await categories.listAllCategories());
+  },
+);
+
+govExamsAdminRouter.delete("/current-affair-categories/:id", validateUuidParam("id"), async (req, res) => {
+  const result = await categories.deleteCategory(req.params.id);
+  if (!result.ok) {
+    if ("notFound" in result) return res.status(404).json({ error: "Category not found" });
+    if ("hasData" in result) {
+      return res.status(409).json({
+        error: `Cannot delete category — it has ${result.articleCount} associated current affair(s).`,
+      });
+    }
+  }
   res.status(204).send();
 });

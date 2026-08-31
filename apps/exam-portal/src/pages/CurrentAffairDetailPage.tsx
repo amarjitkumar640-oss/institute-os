@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { getCurrentAffair } from "@/api/govExams";
 import { Badge, EmptyState, Skeleton } from "@/components/ui";
 import { formatDate } from "@/lib/utils";
-import { useLang, currentAffairCategoryLabel } from "@/i18n";
+import { useLang } from "@/i18n";
 
 export function CurrentAffairDetailPage() {
   const { t, lang } = useLang();
@@ -23,7 +23,7 @@ export function CurrentAffairDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-6">
-      <Badge>{currentAffairCategoryLabel(t, ca.category)}</Badge>
+      <Badge>{lang === "hi" ? ca.category.labelHi : ca.category.labelEn}</Badge>
       <h1 className="mt-2.5 font-heading text-2xl text-ink">{ca.title}</h1>
       <p className="mt-1 text-xs text-ink-soft">{formatDate(ca.publishedDate, lang)}</p>
 

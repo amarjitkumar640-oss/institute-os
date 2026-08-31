@@ -6,7 +6,7 @@ import { z } from "zod";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Plus, Trash2, FileText, ClipboardList, Upload } from "lucide-react";
 import {
-  listOrganizations, listRecruitments, createRecruitment, updateRecruitment,
+  listRecruitments, createRecruitment, updateRecruitment,
   setRecruitmentStatus, deleteRecruitment, createDocument, deleteDocument,
   previewRecruitmentImport, commitRecruitmentImport,
   type GovRecruitment, type GovRecruitmentStatus, type GovDocumentType, type GovOrgType, type ImportPlanItem,
@@ -28,6 +28,8 @@ const STATUS_VARIANT: Record<GovRecruitmentStatus, "warning" | "success" | "defa
   draft: "warning", published: "success", archived: "default",
 };
 
+const ORG_TYPE_LABEL: Record<GovOrgType, string> = { ssc: "SSC", banking: "Banking", railway: "Railway", other: "Other" };
+
 const DOC_TYPE_LABEL: Record<GovDocumentType, string> = {
   admit_card: "Admit Card", result: "Result", answer_key: "Answer Key", notification: "Notification", syllabus: "Syllabus",
 };
@@ -48,7 +50,8 @@ const jsonObjectField = z
   .refine((v) => !v || (() => { try { const p = JSON.parse(v); return typeof p === "object" && p !== null && !Array.isArray(p); } catch { return false; } })(), "Must be valid JSON, e.g. {\"obc\": 3}");
 
 const recruitmentSchema = z.object({
-  organizationId: z.string().min(1, "Required"),
+  category: z.enum(["ssc", "banking", "railway", "other"]),
+  organization: z.string().max(200).optional(),
   title: z.string().min(1, "Required").max(300),
   slug: z.string().min(1, "Required").max(300).regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, hyphens only"),
   totalVacancies: z.string().optional(),
@@ -78,11 +81,11 @@ function toDateOrUndefined(v?: string): string | undefined {
 
 function RecruitmentFormDialog({ open, onClose, existing }: { open: boolean; onClose: () => void; existing?: GovRecruitment }) {
   const qc = useQueryClient();
-  const { data: organizations } = useQuery({ queryKey: ["gov-organizations"], queryFn: listOrganizations });
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<RecruitmentFormValues>({
     resolver: zodResolver(recruitmentSchema),
     defaultValues: existing ? {
-      organizationId: existing.organizationId,
+      category: existing.category,
+      organization: existing.organization ?? "",
       title: existing.title,
       slug: existing.slug,
       totalVacancies: existing.totalVacancies?.toString() ?? "",
@@ -98,19 +101,20 @@ function RecruitmentFormDialog({ open, onClose, existing }: { open: boolean; onC
       officialWebsiteUrl: existing.officialWebsiteUrl ?? "",
       applyUrl: existing.applyUrl ?? "",
     } : {
-      organizationId: "", title: "", slug: "", totalVacancies: "", qualification: "",
+      category: "ssc", organization: "", title: "", slug: "", totalVacancies: "", qualification: "",
       ageMin: "", ageMax: "", categoryRelaxations: "", applicationFee: "",
       applicationStartDate: "", applicationEndDate: "", examDate: "",
       officialNotificationUrl: "", officialWebsiteUrl: "", applyUrl: "",
     },
   });
-  const organizationId = watch("organizationId");
+  const category = watch("category");
   const slug = watch("slug");
 
   const mutation = useMutation({
     mutationFn: (values: RecruitmentFormValues) => {
       const input = {
-        organizationId: values.organizationId,
+        category: values.category,
+        organization: values.organization || undefined,
         title: values.title,
         slug: values.slug,
         totalVacancies: toNumberOrUndefined(values.totalVacancies),
@@ -141,14 +145,21 @@ function RecruitmentFormDialog({ open, onClose, existing }: { open: boolean; onC
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{existing ? "Edit" : "Add"} Recruitment</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
-          <FormField label="Organization" required error={errors.organizationId}>
-            <Select value={organizationId} onValueChange={(v) => setValue("organizationId", v)}>
-              <SelectTrigger><SelectValue placeholder="Select an organization" /></SelectTrigger>
-              <SelectContent>
-                {organizations?.map((org) => <SelectItem key={org.id} value={org.id}>{org.name} ({org.shortName})</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Category" required error={errors.category}>
+              <Select value={category} onValueChange={(v) => setValue("category", v as GovOrgType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(ORG_TYPE_LABEL) as GovOrgType[]).map((t) => (
+                    <SelectItem key={t} value={t}>{ORG_TYPE_LABEL[t]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Organization" error={errors.organization}>
+              <Input {...register("organization")} placeholder="e.g. State Bank of India" />
+            </FormField>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Title" required error={errors.title} className="col-span-2">
@@ -307,10 +318,9 @@ function ImportJsonDialog({ open, onClose }: { open: boolean; onClose: () => voi
     mutationFn: (items: unknown[]) => commitRecruitmentImport(category, items),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["gov-recruitments"] });
-      qc.invalidateQueries({ queryKey: ["gov-organizations"] });
       toast({
         title: `Imported ${res.created} recruitment(s)`,
-        description: `${res.published} published, ${res.created - res.published} draft, ${res.skippedDuplicates} duplicate(s) skipped, ${res.unusable} unusable. ${res.organizationsCreated} new organization(s) created.`,
+        description: `${res.published} published, ${res.created - res.published} draft, ${res.skippedDuplicates} duplicate(s) skipped, ${res.unusable} unusable.`,
       });
       reset();
       onClose();
@@ -391,11 +401,9 @@ function ImportJsonDialog({ open, onClose }: { open: boolean; onClose: () => voi
                       <p className="text-xs text-red-600 mt-0.5">{item.reason}</p>
                     ) : (
                       <>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {item.willCreateOrganization
-                            ? `Will create new organization: ${item.organizationNameFromJson}`
-                            : `Organization: ${item.matchedOrganization?.name}`}
-                        </p>
+                        {item.recruitmentInput.organization && (
+                          <p className="text-xs text-gray-500 mt-0.5">Organization: {item.recruitmentInput.organization}</p>
+                        )}
                         {item.reasons?.map((r, i) => <p key={i} className="text-xs text-amber-600">{r}</p>)}
                       </>
                     )}
@@ -450,7 +458,7 @@ export function RecruitmentsTab() {
       cell: ({ row }) => (
         <div>
           <p className="font-semibold text-gray-900 text-sm">{row.original.title}</p>
-          <p className="text-xs text-gray-400">{row.original.organization.shortName}</p>
+          <p className="text-xs text-gray-400">{row.original.organization ?? ORG_TYPE_LABEL[row.original.category]}</p>
         </div>
       ),
     },

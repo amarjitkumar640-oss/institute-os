@@ -7,6 +7,7 @@ export interface FeeSchedule {
   discountAmount: number;
   effectiveFee: number;
   creditBalance: number;
+  pendingAmount: number;
   status: "active" | "completed" | "overdue";
   createdAt: string;
   enrollment?: {
@@ -101,6 +102,35 @@ export async function getFeeSummary(): Promise<{
   overdueCount: number;
 }> {
   const { data } = await apiClient.get("/api/fees/summary");
+  return data;
+}
+
+export type CollectionPeriod = "today" | "week" | "month" | "year";
+
+export interface CollectionSummary {
+  collectedToday: number;
+  collectedThisWeek: number;
+  collectedThisMonth: number;
+  collectedThisYear: number;
+  totalPending: number;
+  overdueCount: number;
+}
+
+export interface BatchCollectionRow {
+  batchId: string;
+  batchName: string;
+  collectedAmount: number;
+  pendingAmount: number;
+  pendingStudentCount: number;
+}
+
+export async function getCollectionSummary(): Promise<CollectionSummary> {
+  const { data } = await apiClient.get("/api/fees/collection-summary");
+  return data;
+}
+
+export async function getCollectionByBatch(period: CollectionPeriod): Promise<{ period: CollectionPeriod; batches: BatchCollectionRow[] }> {
+  const { data } = await apiClient.get("/api/fees/collection-by-batch", { params: { period } });
   return data;
 }
 

@@ -12,7 +12,9 @@ import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/utils";
+import { CollectionTab } from "./CollectionTab";
 
 const STATUS_COLORS: Record<string, "default" | "success" | "danger" | "warning"> = {
   active: "info" as never,
@@ -110,6 +112,12 @@ export function FeesPage() {
         </div>
       </div>
       <div className="flex-1 p-7 space-y-5">
+        <Tabs defaultValue="schedules">
+          <TabsList>
+            <TabsTrigger value="schedules">Schedules</TabsTrigger>
+            <TabsTrigger value="collection">Collection</TabsTrigger>
+          </TabsList>
+          <TabsContent value="schedules" className="space-y-5">
         {summary && (
           <div className="grid grid-cols-3 gap-4">
             {[
@@ -171,6 +179,12 @@ export function FeesPage() {
         ) : (
           <DataTable columns={columns} data={schedules ?? []} />
         )}
+          </TabsContent>
+
+          <TabsContent value="collection">
+            <CollectionTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

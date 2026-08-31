@@ -10,29 +10,32 @@ import type { RecruitmentExtractionItem } from "./scrape-schemas";
 
 export type RawImportItem = Record<string, unknown>;
 
-function obj(source: RawImportItem | undefined, key: string): RawImportItem | undefined {
+// Exported for reuse by current-affairs-import-mapper.ts — same defensive
+// "external tool, drifting field set" reasoning applies there too, no
+// reason to duplicate these.
+export function obj(source: RawImportItem | undefined, key: string): RawImportItem | undefined {
   const v = source?.[key];
   return v && typeof v === "object" && !Array.isArray(v) ? (v as RawImportItem) : undefined;
 }
 
-function str(source: RawImportItem | undefined, key: string): string | null {
+export function str(source: RawImportItem | undefined, key: string): string | null {
   const v = source?.[key];
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-function num(source: RawImportItem | undefined, key: string): number | null {
+export function num(source: RawImportItem | undefined, key: string): number | null {
   const v = source?.[key];
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
-function strArray(source: RawImportItem | undefined, key: string): string[] | undefined {
+export function strArray(source: RawImportItem | undefined, key: string): string[] | undefined {
   const v = source?.[key];
   if (!Array.isArray(v)) return undefined;
   const items = v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
   return items.length > 0 ? items : undefined;
 }
 
-function numRecord(source: RawImportItem | undefined, key: string): Record<string, number> | undefined {
+export function numRecord(source: RawImportItem | undefined, key: string): Record<string, number> | undefined {
   const v = source?.[key];
   if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
   const out: Record<string, number> = {};

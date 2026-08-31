@@ -80,6 +80,11 @@ tenantsRouter.get("/me", requireAuth, async (req, res) => {
     },
     classReminderMinutes: tenant.classReminderMinutes,
     overdueGraceDays:     tenant.overdueGraceDays,
+    legalName:            tenant.legalName,
+    registeredAddress:    tenant.registeredAddress,
+    gstin:                tenant.gstin,
+    stateCode:            tenant.stateCode,
+    bankDetails:          tenant.bankDetails,
   });
 });
 
@@ -94,6 +99,12 @@ const settingsSchema = z.object({
   loginMethod:          z.enum(["phone", "email_username"]).optional(),
   classReminderMinutes: z.number().int().min(1).max(120).optional(),
   overdueGraceDays:     z.number().int().min(0).max(60).optional(),
+  // Legal/billing details, shown on generated sponsor invoices.
+  legalName:            z.string().max(200).nullable().optional(),
+  registeredAddress:    z.string().max(500).nullable().optional(),
+  gstin:                z.string().max(20).nullable().optional(),
+  stateCode:            z.string().max(2).nullable().optional(),
+  bankDetails:          z.string().max(500).nullable().optional(),
 });
 
 tenantsRouter.patch("/me/settings", requireAuth, requireRole("admin"), async (req, res) => {
@@ -112,6 +123,11 @@ tenantsRouter.patch("/me/settings", requireAuth, requireRole("admin"), async (re
       ...(parsed.data.loginMethod          !== undefined ? { loginMethod:          parsed.data.loginMethod          } : {}),
       ...(parsed.data.classReminderMinutes !== undefined ? { classReminderMinutes: parsed.data.classReminderMinutes } : {}),
       ...(parsed.data.overdueGraceDays     !== undefined ? { overdueGraceDays:     parsed.data.overdueGraceDays     } : {}),
+      ...(parsed.data.legalName            !== undefined ? { legalName:            parsed.data.legalName            } : {}),
+      ...(parsed.data.registeredAddress    !== undefined ? { registeredAddress:    parsed.data.registeredAddress    } : {}),
+      ...(parsed.data.gstin                !== undefined ? { gstin:                parsed.data.gstin                } : {}),
+      ...(parsed.data.stateCode            !== undefined ? { stateCode:            parsed.data.stateCode            } : {}),
+      ...(parsed.data.bankDetails          !== undefined ? { bankDetails:          parsed.data.bankDetails          } : {}),
     },
   });
 
@@ -125,6 +141,11 @@ tenantsRouter.patch("/me/settings", requireAuth, requireRole("admin"), async (re
     loginMethod:          tenant.loginMethod,
     classReminderMinutes: tenant.classReminderMinutes,
     overdueGraceDays:     tenant.overdueGraceDays,
+    legalName:            tenant.legalName,
+    registeredAddress:    tenant.registeredAddress,
+    gstin:                tenant.gstin,
+    stateCode:            tenant.stateCode,
+    bankDetails:          tenant.bankDetails,
   });
 });
 

@@ -41,9 +41,8 @@ const translations = {
 
     currentAffairsTitle: "Current Affairs", currentAffairsSubtitle: "Daily updates relevant to SSC, Banking, Railway, and other competitive exams.",
     noCurrentAffairsFound: "No current affairs found",
-    catNational: "National", catInternational: "International", catBanking: "Banking", catEconomy: "Economy", catScience: "Science",
-    catTechnology: "Technology", catDefence: "Defence", catSports: "Sports", catAwards: "Awards", catAppointments: "Appointments",
-    catGovtSchemes: "Govt. Schemes", catEnvironment: "Environment",
+    dateToday: "Today", dateYesterday: "Yesterday", jumpToDate: "Jump to date",
+    noCurrentAffairsForDate: "Nothing published for this date", noCurrentAffairsForDateDesc: "Try a different date, or a different category.",
 
     notFound: "Not found", notFoundDesc: "This article may have been removed or the link is incorrect.",
     whatHappened: "What happened?", keyFacts: "Key Facts", whyImportant: "Why is it important?", examRelevance: "Exam Relevance",
@@ -97,9 +96,8 @@ const translations = {
 
     currentAffairsTitle: "करेंट अफेयर्स", currentAffairsSubtitle: "एसएससी, बैंकिंग, रेलवे और अन्य प्रतियोगी परीक्षाओं से संबंधित दैनिक अपडेट।",
     noCurrentAffairsFound: "कोई करेंट अफेयर्स नहीं मिला",
-    catNational: "राष्ट्रीय", catInternational: "अंतरराष्ट्रीय", catBanking: "बैंकिंग", catEconomy: "अर्थव्यवस्था", catScience: "विज्ञान",
-    catTechnology: "प्रौद्योगिकी", catDefence: "रक्षा", catSports: "खेल", catAwards: "पुरस्कार", catAppointments: "नियुक्तियां",
-    catGovtSchemes: "सरकारी योजनाएं", catEnvironment: "पर्यावरण",
+    dateToday: "आज", dateYesterday: "कल", jumpToDate: "तिथि चुनें",
+    noCurrentAffairsForDate: "इस तिथि के लिए कुछ भी प्रकाशित नहीं हुआ", noCurrentAffairsForDateDesc: "कोई अलग तिथि या श्रेणी आज़माएं।",
 
     notFound: "नहीं मिला", notFoundDesc: "यह लेख हटाया जा चुका है या लिंक गलत है।",
     whatHappened: "क्या हुआ?", keyFacts: "मुख्य तथ्य", whyImportant: "यह महत्वपूर्ण क्यों है?", examRelevance: "परीक्षा प्रासंगिकता",
@@ -158,16 +156,4 @@ export function useLang() {
   const ctx = useContext(LangContext);
   if (!ctx) throw new Error("useLang must be used within LangProvider");
   return ctx;
-}
-
-const CATEGORY_KEY: Record<string, TranslationKey> = {
-  national: "catNational", international: "catInternational", banking: "catBanking", economy: "catEconomy",
-  science: "catScience", technology: "catTechnology", defence: "catDefence", sports: "catSports",
-  awards: "catAwards", appointments: "catAppointments", govt_schemes: "catGovtSchemes", environment: "catEnvironment",
-};
-
-/** Translates a GovCurrentAffairCategory enum value for display (falls back to a plain-text version for anything unmapped). */
-export function currentAffairCategoryLabel(t: (key: TranslationKey) => string, category: string): string {
-  const key = CATEGORY_KEY[category];
-  return key ? t(key) : category.replace("_", " ");
 }

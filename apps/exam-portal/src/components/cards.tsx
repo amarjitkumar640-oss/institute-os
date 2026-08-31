@@ -3,7 +3,7 @@ import { Calendar, Users } from "lucide-react";
 import type { GovRecruitment, GovCurrentAffair } from "@/api/govExams";
 import { Badge } from "./ui";
 import { formatDate } from "@/lib/utils";
-import { useLang, currentAffairCategoryLabel } from "@/i18n";
+import { useLang } from "@/i18n";
 
 export function RecruitmentCard({ recruitment }: { recruitment: GovRecruitment }) {
   const { t, lang } = useLang();
@@ -12,7 +12,7 @@ export function RecruitmentCard({ recruitment }: { recruitment: GovRecruitment }
       to={`/jobs/${recruitment.slug}`}
       className="block bg-white rounded-3xl border border-ink/[0.06] p-5 shadow-card hover:shadow-card-md hover:-translate-y-0.5 transition-all"
     >
-      <Badge>{recruitment.organization.shortName}</Badge>
+      {recruitment.organization && <Badge>{recruitment.organization}</Badge>}
       <h3 className="mt-2.5 font-heading text-[15.5px] text-ink">{recruitment.title}</h3>
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-ink-soft">
         {recruitment.totalVacancies != null && (
@@ -27,13 +27,13 @@ export function RecruitmentCard({ recruitment }: { recruitment: GovRecruitment }
 }
 
 export function CurrentAffairCard({ currentAffair }: { currentAffair: GovCurrentAffair }) {
-  const { t, lang } = useLang();
+  const { lang } = useLang();
   return (
     <Link
       to={`/current-affairs/${currentAffair.slug}`}
       className="block bg-white rounded-3xl border border-ink/[0.06] p-5 shadow-card hover:shadow-card-md hover:-translate-y-0.5 transition-all"
     >
-      <Badge>{currentAffairCategoryLabel(t, currentAffair.category)}</Badge>
+      <Badge>{lang === "hi" ? currentAffair.category.labelHi : currentAffair.category.labelEn}</Badge>
       <h3 className="mt-2.5 font-heading text-[15.5px] text-ink">{currentAffair.title}</h3>
       <p className="mt-1 text-sm text-ink-soft line-clamp-2">{currentAffair.whatHappened}</p>
       <p className="mt-2 text-xs text-ink-soft/70">{formatDate(currentAffair.publishedDate, lang)}</p>

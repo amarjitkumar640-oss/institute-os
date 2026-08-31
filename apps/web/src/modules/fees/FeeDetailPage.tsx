@@ -174,7 +174,7 @@ export function FeeDetailPage() {
       </div>
 
       <div className="flex-1 p-6 space-y-6">
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           <Card>
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Total Fee</p>
@@ -191,6 +191,14 @@ export function FeeDetailPage() {
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Effective Fee</p>
               <p className="text-xl font-bold mt-1">{formatCurrency(schedule.effectiveFee)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Pending</p>
+              <p className={`text-xl font-bold mt-1 ${schedule.pendingAmount > 0 ? "text-red-600" : "text-green-600"}`}>
+                {formatCurrency(schedule.pendingAmount)}
+              </p>
             </CardContent>
           </Card>
           <Card>

@@ -32,6 +32,22 @@ jobs:
         run: |
           echo "${{ secrets.QA_ENV_FILE }}" >> "$GITHUB_ENV"
           echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/institute_os_test" >> "$GITHUB_ENV"
+          # QA_ENV_FILE carries real SMTP/Twilio credentials (needed for the
+          # actual QA deployment to send real password-reset emails/SMS) —
+          # but this same file gets loaded here just for JWT/S3/DB config.
+          # Several tests (password-reset.test.ts) specifically exercise the
+          # "mail/SMS provider isn't configured" path, which only holds
+          # locally (.env.test has no SMTP/Twilio vars at all); left as-is,
+          # real QA credentials leak into the test run and those assertions
+          # fail. Blanked out here so the test job always runs unconfigured,
+          # regardless of what QA_ENV_FILE happens to contain.
+          echo "SMTP_HOST=" >> "$GITHUB_ENV"
+          echo "SMTP_USER=" >> "$GITHUB_ENV"
+          echo "SMTP_PASS=" >> "$GITHUB_ENV"
+          echo "SMTP_FROM=" >> "$GITHUB_ENV"
+          echo "TWILIO_ACCOUNT_SID=" >> "$GITHUB_ENV"
+          echo "TWILIO_AUTH_TOKEN=" >> "$GITHUB_ENV"
+          echo "TWILIO_FROM_NUMBER=" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - run: npm run build -w packages/shared

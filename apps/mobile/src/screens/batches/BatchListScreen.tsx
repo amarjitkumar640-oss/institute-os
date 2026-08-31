@@ -38,6 +38,7 @@ const STATUS_META: Record<BatchStatus, { label: string; color: string; bg: strin
   running: { label: "Running", color: C.green, bg: C.greenBg, dot: C.green },
   upcoming: { label: "Upcoming", color: C.blue, bg: C.blue + "18", dot: C.blue },
   completed: { label: "Completed", color: C.muted, bg: C.inputBg, dot: C.placeholder },
+  merged: { label: "Merged", color: C.orange, bg: C.orangeBg, dot: C.orange },
 };
 
 const COURSE_COLOR: Record<string, string> = {

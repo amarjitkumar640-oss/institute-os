@@ -32,6 +32,19 @@ jobs:
         run: |
           echo "${{ secrets.PROD_ENV_FILE }}" >> "$GITHUB_ENV"
           echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/institute_os_test" >> "$GITHUB_ENV"
+          # Same reasoning as deploy-quality.yml — PROD_ENV_FILE carries real
+          # SMTP/Twilio credentials for the actual deployment; several tests
+          # (password-reset.test.ts) specifically exercise the "provider
+          # isn't configured" path, which only holds when these are unset.
+          # Blanked out here so the test job runs unconfigured regardless of
+          # what PROD_ENV_FILE contains.
+          echo "SMTP_HOST=" >> "$GITHUB_ENV"
+          echo "SMTP_USER=" >> "$GITHUB_ENV"
+          echo "SMTP_PASS=" >> "$GITHUB_ENV"
+          echo "SMTP_FROM=" >> "$GITHUB_ENV"
+          echo "TWILIO_ACCOUNT_SID=" >> "$GITHUB_ENV"
+          echo "TWILIO_AUTH_TOKEN=" >> "$GITHUB_ENV"
+          echo "TWILIO_FROM_NUMBER=" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - run: npm run build -w packages/shared

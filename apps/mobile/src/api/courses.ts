@@ -7,6 +7,9 @@ export interface CreateCoursePayload {
   examCategoryIds?: string[];
   durationMonths: number;
   defaultFee: number;
+  discountAmount?: number;
+  discountReason?: string;
+  isFree?: boolean;
 }
 
 export interface CourseItem {
@@ -15,6 +18,9 @@ export interface CourseItem {
   examCategories: ExamCategoryItem[];
   durationMonths: number;
   defaultFee: number;
+  discountAmount: number;
+  discountReason: string | null;
+  isFree: boolean;
   batchCount: number;
   activeBatches: number;
 }
@@ -30,7 +36,13 @@ export interface CreateCourseConflict {
   message: string;
 }
 
-export type CreateCourseResponse = CreateCourseResult | CreateCourseConflict;
+export interface CreateCourseDiscountExceedsFee {
+  ok: false;
+  discountExceedsFee: true;
+  message: string;
+}
+
+export type CreateCourseResponse = CreateCourseResult | CreateCourseConflict | CreateCourseDiscountExceedsFee;
 
 export async function createCourse(
   payload: CreateCoursePayload
@@ -47,6 +59,13 @@ export async function createCourse(
         message:
           axiosErr.response.data?.error ??
           "A course with this name already exists for the selected exam category.",
+      };
+    }
+    if (axiosErr.response?.status === 422) {
+      return {
+        ok: false,
+        discountExceedsFee: true,
+        message: axiosErr.response.data?.error ?? "Discount cannot exceed the default fee.",
       };
     }
     throw err;
@@ -90,12 +109,16 @@ export interface UpdateCoursePayload {
   examCategoryIds?: string[];
   durationMonths?: number;
   defaultFee?: number;
+  discountAmount?: number;
+  discountReason?: string;
+  isFree?: boolean;
 }
 
 export type UpdateCourseResponse =
   | { ok: true; course: CourseItem }
   | { ok: false; conflict: true; message: string }
-  | { ok: false; notFound: true };
+  | { ok: false; notFound: true }
+  | { ok: false; discountExceedsFee: true; message: string };
 
 export async function updateCourse(
   id: string,
@@ -117,6 +140,13 @@ export async function updateCourse(
     }
     if (axiosErr.response?.status === 404) {
       return { ok: false, notFound: true };
+    }
+    if (axiosErr.response?.status === 422) {
+      return {
+        ok: false,
+        discountExceedsFee: true,
+        message: axiosErr.response.data?.error ?? "Discount cannot exceed the default fee.",
+      };
     }
     throw err;
   }

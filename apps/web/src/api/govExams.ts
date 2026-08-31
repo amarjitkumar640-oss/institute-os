@@ -1,30 +1,36 @@
 import { apiClient } from "./client";
+import type { ResponseBlock } from "@/components/ai/types";
 
 export type GovOrgType = "ssc" | "banking" | "railway" | "other";
 export type GovRecruitmentStatus = "draft" | "published" | "archived";
 export type GovContentSource = "manual" | "scraped";
 export type GovDocumentType = "admit_card" | "result" | "answer_key" | "notification" | "syllabus";
-export type GovCurrentAffairCategory =
-  | "national" | "international" | "banking" | "economy" | "science" | "technology"
-  | "defence" | "sports" | "awards" | "appointments" | "govt_schemes" | "environment";
+export type CurrentAffairCategoryPriority = "primary" | "secondary";
 
-export interface GovOrganization {
+export interface CurrentAffairCategory {
   id: string;
-  name: string;
-  shortName: string;
-  type: GovOrgType;
-  logoUrl: string | null;
-  officialWebsite: string | null;
+  key: string;
+  labelEn: string;
+  labelHi: string;
+  shortLabelEn: string;
+  shortLabelHi: string;
+  priority: CurrentAffairCategoryPriority;
+  sortOrder: number;
+  isVisible: boolean;
+  isDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface GovOrganizationInput {
-  name: string;
-  shortName: string;
-  type: GovOrgType;
-  logoUrl?: string;
-  officialWebsite?: string;
+export interface CurrentAffairCategoryInput {
+  key: string;
+  labelEn: string;
+  labelHi: string;
+  shortLabelEn: string;
+  shortLabelHi: string;
+  priority?: CurrentAffairCategoryPriority;
+  isVisible?: boolean;
+  isDefault?: boolean;
 }
 
 export interface GovDocument {
@@ -48,8 +54,8 @@ export interface GovDocumentInput {
 
 export interface GovRecruitment {
   id: string;
-  organizationId: string;
-  organization: GovOrganization;
+  category: GovOrgType;
+  organization: string | null;
   title: string;
   slug: string;
   totalVacancies: number | null;
@@ -107,7 +113,8 @@ export interface GovRecruitment {
 }
 
 export interface GovRecruitmentInput {
-  organizationId: string;
+  category: GovOrgType;
+  organization?: string;
   title: string;
   slug: string;
   totalVacancies?: number;
@@ -129,7 +136,8 @@ export interface GovCurrentAffair {
   id: string;
   title: string;
   slug: string;
-  category: GovCurrentAffairCategory;
+  categoryId: string;
+  category: CurrentAffairCategory;
   whatHappened: string;
   keyFacts: string[] | null;
   whyImportant: string | null;
@@ -145,7 +153,7 @@ export interface GovCurrentAffair {
 export interface GovCurrentAffairInput {
   title: string;
   slug: string;
-  category: GovCurrentAffairCategory;
+  categoryId: string;
   whatHappened: string;
   keyFacts?: string[];
   whyImportant?: string;
@@ -155,15 +163,36 @@ export interface GovCurrentAffairInput {
 }
 
 export type GovSourceContentType = "recruitment" | "current_affair";
-export type GovSourceFetchMode = "url" | "search";
+// "search" is deprecated — replaced by the per-category prompt-template
+// system (see GovJobVacancyPromptTemplate / GovCurrentAffairsPromptTemplate
+// below). No existing GovSource rows use it.
+export type GovSourceFetchMode = "url";
 
-export interface GovSource {
+// Independent per-row scheduling — see ScheduleFields.tsx. "hourly" needs
+// no further fields; daily/weekly/monthly need scheduleTimeOfDay (entered/
+// displayed as IST); weekly also needs scheduleDayOfWeek; monthly also
+// needs scheduleDayOfMonth.
+export type GovScheduleFrequency = "hourly" | "daily" | "weekly" | "monthly";
+
+export interface GovScheduleFields {
+  scheduleFrequency: GovScheduleFrequency;
+  scheduleTimeOfDay: string | null;
+  scheduleDayOfWeek: number | null;
+  scheduleDayOfMonth: number | null;
+}
+
+export interface GovScheduleFieldsInput {
+  scheduleFrequency?: GovScheduleFrequency;
+  scheduleTimeOfDay?: string;
+  scheduleDayOfWeek?: number;
+  scheduleDayOfMonth?: number;
+}
+
+export interface GovSource extends GovScheduleFields {
   id: string;
   category: GovOrgType;
   contentType: GovSourceContentType;
   fetchMode: GovSourceFetchMode;
-  organizationId: string | null;
-  organization: GovOrganization | null;
   label: string;
   url: string | null;
   searchQuery: string | null;
@@ -175,11 +204,10 @@ export interface GovSource {
   updatedAt: string;
 }
 
-export interface GovSourceInput {
+export interface GovSourceInput extends GovScheduleFieldsInput {
   category: GovOrgType;
   contentType: GovSourceContentType;
   fetchMode: GovSourceFetchMode;
-  organizationId?: string;
   label: string;
   url?: string;
   searchQuery?: string;
@@ -196,32 +224,11 @@ export interface PaginatedResult<T> {
 
 const BASE = "/api/gov-exams/admin";
 
-// ── Organizations ────────────────────────────────────────────────────────────
-
-export async function listOrganizations(): Promise<GovOrganization[]> {
-  const { data } = await apiClient.get<GovOrganization[]>(`${BASE}/organizations`);
-  return data;
-}
-
-export async function createOrganization(input: GovOrganizationInput): Promise<GovOrganization> {
-  const { data } = await apiClient.post<GovOrganization>(`${BASE}/organizations`, input);
-  return data;
-}
-
-export async function updateOrganization(id: string, input: Partial<GovOrganizationInput>): Promise<GovOrganization> {
-  const { data } = await apiClient.patch<GovOrganization>(`${BASE}/organizations/${id}`, input);
-  return data;
-}
-
-export async function deleteOrganization(id: string): Promise<void> {
-  await apiClient.delete(`${BASE}/organizations/${id}`);
-}
-
 // ── Recruitments ─────────────────────────────────────────────────────────────
 
 export async function listRecruitments(params: {
   status?: GovRecruitmentStatus;
-  organizationId?: string;
+  category?: GovOrgType;
   page?: number;
   limit?: number;
 } = {}): Promise<PaginatedResult<GovRecruitment>> {
@@ -270,7 +277,7 @@ export async function deleteDocument(id: string): Promise<void> {
 
 export async function listCurrentAffairs(params: {
   status?: GovRecruitmentStatus;
-  category?: GovCurrentAffairCategory;
+  categoryId?: string;
   page?: number;
   limit?: number;
 } = {}): Promise<PaginatedResult<GovCurrentAffair>> {
@@ -299,6 +306,35 @@ export async function deleteCurrentAffair(id: string): Promise<void> {
   await apiClient.delete(`${BASE}/current-affairs/${id}`);
 }
 
+// ── Current affair categories ────────────────────────────────────────────────
+
+export async function listCurrentAffairCategories(): Promise<CurrentAffairCategory[]> {
+  const { data } = await apiClient.get<CurrentAffairCategory[]>(`${BASE}/current-affair-categories`);
+  return data;
+}
+
+export async function createCurrentAffairCategory(input: CurrentAffairCategoryInput): Promise<CurrentAffairCategory> {
+  const { data } = await apiClient.post<CurrentAffairCategory>(`${BASE}/current-affair-categories`, input);
+  return data;
+}
+
+export async function updateCurrentAffairCategory(
+  id: string,
+  input: Partial<CurrentAffairCategoryInput>,
+): Promise<CurrentAffairCategory> {
+  const { data } = await apiClient.patch<CurrentAffairCategory>(`${BASE}/current-affair-categories/${id}`, input);
+  return data;
+}
+
+export async function reorderCurrentAffairCategories(ids: string[]): Promise<CurrentAffairCategory[]> {
+  const { data } = await apiClient.post<CurrentAffairCategory[]>(`${BASE}/current-affair-categories/reorder`, { ids });
+  return data;
+}
+
+export async function deleteCurrentAffairCategory(id: string): Promise<void> {
+  await apiClient.delete(`${BASE}/current-affair-categories/${id}`);
+}
+
 // ── Sources (step 4 — automated scraping) ───────────────────────────────────
 
 const SOURCES_BASE = "/api/gov-exams/admin/sources";
@@ -322,6 +358,11 @@ export async function deleteSource(id: string): Promise<void> {
   await apiClient.delete(`${SOURCES_BASE}/${id}`);
 }
 
+export async function runSourceNow(id: string): Promise<GovRunResult> {
+  const { data } = await apiClient.post<GovRunResult>(`${SOURCES_BASE}/${id}/run`);
+  return data;
+}
+
 // ── Manual JSON import ──────────────────────────────────────────────────────
 // An admin pastes an AI-Overview-style export (search results generated
 // externally, e.g. via ChatGPT) and this maps it onto GovRecruitment rows —
@@ -330,15 +371,13 @@ export async function deleteSource(id: string): Promise<void> {
 // dependencies. Two-step: preview never writes to the DB, commit does.
 
 export type ImportPlanItem =
-  | { index: number; outcome: "unusable"; reason: string; title: string; organizationNameFromJson: string | null }
+  | { index: number; outcome: "unusable"; reason: string; title: string }
   | {
       index: number;
       outcome: "draft" | "published";
       reasons?: string[];
       title: string;
-      organizationNameFromJson: string;
-      matchedOrganization: { id: string; name: string } | null;
-      willCreateOrganization: boolean;
+      recruitmentInput: { organization?: string };
     };
 
 export interface ImportCommitResult {
@@ -346,7 +385,6 @@ export interface ImportCommitResult {
   published: number;
   skippedDuplicates: number;
   unusable: number;
-  organizationsCreated: number;
   items: {
     index: number;
     title: string;
@@ -365,5 +403,201 @@ export async function previewRecruitmentImport(category: GovOrgType, vacancies: 
 
 export async function commitRecruitmentImport(category: GovOrgType, vacancies: unknown[]): Promise<ImportCommitResult> {
   const { data } = await apiClient.post<ImportCommitResult>(`${IMPORT_BASE}/recruitments/commit`, { category, vacancies });
+  return data;
+}
+
+// ── Current affairs JSON import ──────────────────────────────────────────────
+// No category param — each pasted item self-declares its own category
+// (see CurrentAffairsPrompt shape); matched per item server-side.
+
+export type CurrentAffairImportPlanItem =
+  | { index: number; outcome: "unusable"; reason: string; title: string }
+  | {
+      index: number;
+      outcome: "draft" | "published";
+      reasons?: string[];
+      title: string;
+      matchedCategoryKey: string | null;
+    };
+
+export interface CurrentAffairImportCommitResult {
+  created: number;
+  published: number;
+  skippedDuplicates: number;
+  unusable: number;
+  items: {
+    index: number;
+    title: string;
+    outcome: "created_published" | "created_draft" | "skipped_duplicate" | "unusable";
+    reason?: string;
+    currentAffairId?: string;
+  }[];
+}
+
+export async function previewCurrentAffairImport(items: unknown[]): Promise<{ items: CurrentAffairImportPlanItem[] }> {
+  const { data } = await apiClient.post<{ items: CurrentAffairImportPlanItem[] }>(`${IMPORT_BASE}/current-affairs/preview`, { items });
+  return data;
+}
+
+export async function commitCurrentAffairImport(items: unknown[]): Promise<CurrentAffairImportCommitResult> {
+  const { data } = await apiClient.post<CurrentAffairImportCommitResult>(`${IMPORT_BASE}/current-affairs/commit`, { items });
+  return data;
+}
+
+// ── Search prompt templates (replaces GovSource's "search" fetchMode) ───────
+// One admin-written prompt per job-vacancy category, plus one shared
+// current-affairs prompt — passed to the AI Gateway's native web search
+// as-is every sweep. See gov-search-prompts.service.ts.
+
+export interface GovPromptTemplate extends GovScheduleFields {
+  prompt: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+  lastRunStatus: string | null;
+  lastRunError: string | null;
+  updatedAt: string;
+}
+
+export interface GovJobVacancyPromptTemplate extends GovPromptTemplate {
+  category: GovOrgType;
+}
+
+export interface GovCurrentAffairsPromptTemplate extends GovPromptTemplate {
+  id: string;
+}
+
+export interface GovPromptTemplateInput extends GovScheduleFieldsInput {
+  prompt: string;
+  enabled?: boolean;
+}
+
+/** Result of a completed (not skipped) run — same shape whether triggered by the scheduler or Run Now. */
+export interface GovRunResult {
+  status: "success" | "partial" | "error";
+  error?: string;
+  created: number;
+  published: number;
+  skippedDuplicates: number;
+  unusable: number;
+}
+
+const SEARCH_PROMPTS_BASE = "/api/gov-exams/admin/search-prompts";
+
+export async function listJobVacancyPromptTemplates(): Promise<GovJobVacancyPromptTemplate[]> {
+  const { data } = await apiClient.get<GovJobVacancyPromptTemplate[]>(`${SEARCH_PROMPTS_BASE}/job-vacancy-prompts`);
+  return data;
+}
+
+export async function saveJobVacancyPromptTemplate(
+  category: GovOrgType,
+  input: GovPromptTemplateInput,
+): Promise<GovJobVacancyPromptTemplate> {
+  const { data } = await apiClient.put<GovJobVacancyPromptTemplate>(
+    `${SEARCH_PROMPTS_BASE}/job-vacancy-prompts/${category}`,
+    input,
+  );
+  return data;
+}
+
+export async function deleteJobVacancyPromptTemplate(category: GovOrgType): Promise<void> {
+  await apiClient.delete(`${SEARCH_PROMPTS_BASE}/job-vacancy-prompts/${category}`);
+}
+
+export async function runJobVacancyPromptTemplateNow(category: GovOrgType): Promise<GovRunResult> {
+  const { data } = await apiClient.post<GovRunResult>(`${SEARCH_PROMPTS_BASE}/job-vacancy-prompts/${category}/run`);
+  return data;
+}
+
+export async function getCurrentAffairsPromptTemplate(): Promise<GovCurrentAffairsPromptTemplate | null> {
+  try {
+    const { data } = await apiClient.get<GovCurrentAffairsPromptTemplate>(`${SEARCH_PROMPTS_BASE}/current-affairs-prompt`);
+    return data;
+  } catch (err) {
+    if ((err as { response?: { status?: number } })?.response?.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function saveCurrentAffairsPromptTemplate(
+  input: GovPromptTemplateInput,
+): Promise<GovCurrentAffairsPromptTemplate> {
+  const { data } = await apiClient.put<GovCurrentAffairsPromptTemplate>(
+    `${SEARCH_PROMPTS_BASE}/current-affairs-prompt`,
+    input,
+  );
+  return data;
+}
+
+export async function deleteCurrentAffairsPromptTemplate(): Promise<void> {
+  await apiClient.delete(`${SEARCH_PROMPTS_BASE}/current-affairs-prompt`);
+}
+
+export async function runCurrentAffairsPromptTemplateNow(): Promise<GovRunResult> {
+  const { data } = await apiClient.post<GovRunResult>(`${SEARCH_PROMPTS_BASE}/current-affairs-prompt/run`);
+  return data;
+}
+
+const ASSISTANT_BASE = "/api/gov-exams/admin/assistant";
+
+export interface AssistantSession {
+  id: string;
+  title: string | null;
+  lastMessageAt: string | null;
+  createdAt: string;
+}
+
+export interface AssistantMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  contentBlocks: ResponseBlock[] | null;
+  mechanism: "planned" | "reactive" | null;
+  toolCalls: { toolName: string; status: string }[] | null;
+  createdAt: string;
+  // Assistant-row-only — null for user rows, and for assistant rows served
+  // from cache (no new AI call was made) or written before this existed.
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  estimatedCostUsd: number | null;
+}
+
+export interface AssistantSessionDetail {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  messages: AssistantMessage[];
+}
+
+export interface AssistantAskResult {
+  answer: string;
+  blocks: ResponseBlock[];
+  mechanism: "planned" | "reactive";
+  toolCalls: { toolName: string; status: string }[];
+  cached: boolean;
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number; estimatedCostUsd: number };
+}
+
+export async function listAssistantSessions(): Promise<{ sessions: AssistantSession[] }> {
+  const { data } = await apiClient.get<{ sessions: AssistantSession[] }>(`${ASSISTANT_BASE}/sessions`);
+  return data;
+}
+
+export async function createAssistantSession(): Promise<AssistantSession> {
+  const { data } = await apiClient.post<AssistantSession>(`${ASSISTANT_BASE}/sessions`, {});
+  return data;
+}
+
+export async function getAssistantSession(sessionId: string): Promise<AssistantSessionDetail> {
+  const { data } = await apiClient.get<AssistantSessionDetail>(`${ASSISTANT_BASE}/sessions/${sessionId}`);
+  return data;
+}
+
+export async function deleteAssistantSession(sessionId: string): Promise<void> {
+  await apiClient.delete(`${ASSISTANT_BASE}/sessions/${sessionId}`);
+}
+
+export async function askInSession(sessionId: string, question: string): Promise<AssistantAskResult> {
+  const { data } = await apiClient.post<AssistantAskResult>(`${ASSISTANT_BASE}/sessions/${sessionId}/messages`, { question });
   return data;
 }

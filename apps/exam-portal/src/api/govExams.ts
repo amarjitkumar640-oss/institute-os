@@ -2,17 +2,18 @@ import { apiClient } from "./client";
 
 export type GovOrgType = "ssc" | "banking" | "railway" | "other";
 export type GovDocumentType = "admit_card" | "result" | "answer_key" | "notification" | "syllabus";
-export type GovCurrentAffairCategory =
-  | "national" | "international" | "banking" | "economy" | "science" | "technology"
-  | "defence" | "sports" | "awards" | "appointments" | "govt_schemes" | "environment";
 
-export interface GovOrganization {
+export interface CurrentAffairCategory {
   id: string;
-  name: string;
-  shortName: string;
-  type: GovOrgType;
-  logoUrl: string | null;
-  officialWebsite: string | null;
+  key: string;
+  labelEn: string;
+  labelHi: string;
+  shortLabelEn: string;
+  shortLabelHi: string;
+  priority: "primary" | "secondary";
+  sortOrder: number;
+  isVisible: boolean;
+  isDefault: boolean;
 }
 
 export interface GovDocument {
@@ -25,8 +26,8 @@ export interface GovDocument {
 
 export interface GovRecruitment {
   id: string;
-  organizationId: string;
-  organization: GovOrganization;
+  category: GovOrgType;
+  organization: string | null;
   title: string;
   slug: string;
   totalVacancies: number | null;
@@ -69,7 +70,7 @@ export interface GovCurrentAffair {
   id: string;
   title: string;
   slug: string;
-  category: GovCurrentAffairCategory;
+  category: CurrentAffairCategory;
   whatHappened: string;
   keyFacts: string[] | null;
   whyImportant: string | null;
@@ -93,12 +94,7 @@ export interface EligibilityCheckInput {
 
 const BASE = "/api/gov-exams";
 
-export async function listOrganizations(): Promise<GovOrganization[]> {
-  const { data } = await apiClient.get<GovOrganization[]>(`${BASE}/organizations`);
-  return data;
-}
-
-export async function listRecruitments(params: { organizationId?: string; page?: number; limit?: number } = {}): Promise<PaginatedResult<GovRecruitment>> {
+export async function listRecruitments(params: { category?: GovOrgType; page?: number; limit?: number } = {}): Promise<PaginatedResult<GovRecruitment>> {
   const { data } = await apiClient.get<PaginatedResult<GovRecruitment>>(`${BASE}/recruitments`, { params });
   return data;
 }
@@ -108,13 +104,24 @@ export async function getRecruitment(slug: string): Promise<GovRecruitment> {
   return data;
 }
 
-export async function listCurrentAffairs(params: { category?: GovCurrentAffairCategory; page?: number; limit?: number } = {}): Promise<PaginatedResult<GovCurrentAffair>> {
+export async function listCurrentAffairs(params: { category?: string; date?: string; page?: number; limit?: number } = {}): Promise<PaginatedResult<GovCurrentAffair>> {
   const { data } = await apiClient.get<PaginatedResult<GovCurrentAffair>>(`${BASE}/current-affairs`, { params });
+  return data;
+}
+
+/** Calendar days (YYYY-MM-DD) that have published current affairs, most recent first — powers the date strip. */
+export async function listCurrentAffairDates(params: { category?: string; limit?: number } = {}): Promise<string[]> {
+  const { data } = await apiClient.get<string[]>(`${BASE}/current-affairs/dates`, { params });
   return data;
 }
 
 export async function getCurrentAffair(slug: string): Promise<GovCurrentAffair> {
   const { data } = await apiClient.get<GovCurrentAffair>(`${BASE}/current-affairs/${slug}`);
+  return data;
+}
+
+export async function listCurrentAffairCategories(): Promise<CurrentAffairCategory[]> {
+  const { data } = await apiClient.get<CurrentAffairCategory[]>(`${BASE}/current-affair-categories`);
   return data;
 }
 

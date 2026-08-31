@@ -21,14 +21,13 @@ export function JobsPage() {
 
   const { data, isLoading } = useQuery({ queryKey: ["recruitments", "all"], queryFn: () => listRecruitments({}) });
 
-  // The public API filters by organizationId, not organization type — with
-  // a small number of recruitments, filtering the already-fetched list
-  // client-side is simpler than adding a type filter to the backend for a
-  // feature this size. Revisit if the list grows large enough to matter.
+  // With a small number of recruitments, filtering the already-fetched list
+  // client-side is simpler than adding a category param to this request.
+  // Revisit if the list grows large enough to matter.
   const filtered = useMemo(() => {
     if (!data) return [];
     if (!activeType) return data.data;
-    return data.data.filter((r) => r.organization.type === activeType);
+    return data.data.filter((r) => r.category === activeType);
   }, [data, activeType]);
 
   return (

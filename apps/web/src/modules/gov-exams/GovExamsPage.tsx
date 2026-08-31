@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OrganizationsTab } from "./OrganizationsTab";
 import { RecruitmentsTab } from "./RecruitmentsTab";
 import { CurrentAffairsTab } from "./CurrentAffairsTab";
+import { CurrentAffairCategoriesTab } from "./CurrentAffairCategoriesTab";
 import { SourcesTab } from "./SourcesTab";
+import { SearchPromptsTab } from "./SearchPromptsTab";
+import { AiAssistantTab } from "./AiAssistantTab";
 
-type GovExamsTab = "recruitments" | "current-affairs" | "organizations" | "sources";
+type GovExamsTab = "recruitments" | "current-affairs" | "categories" | "sources" | "search-prompts" | "assistant";
 
 export function GovExamsPage() {
   const [tab, setTab] = useState<GovExamsTab>("recruitments");
@@ -24,15 +26,19 @@ export function GovExamsPage() {
           <TabsList>
             <TabsTrigger value="recruitments">Recruitments</TabsTrigger>
             <TabsTrigger value="current-affairs">Current Affairs</TabsTrigger>
-            <TabsTrigger value="organizations">Organizations</TabsTrigger>
+            <TabsTrigger value="categories">Categories</TabsTrigger>
             <TabsTrigger value="sources">Sources</TabsTrigger>
+            <TabsTrigger value="search-prompts">Search Prompts</TabsTrigger>
+            <TabsTrigger value="assistant">AI Assistant</TabsTrigger>
           </TabsList>
         </Tabs>
 
         {tab === "recruitments" && <RecruitmentsTab />}
         {tab === "current-affairs" && <CurrentAffairsTab />}
-        {tab === "organizations" && <OrganizationsTab />}
+        {tab === "categories" && <CurrentAffairCategoriesTab />}
         {tab === "sources" && <SourcesTab />}
+        {tab === "search-prompts" && <SearchPromptsTab />}
+        {tab === "assistant" && <AiAssistantTab />}
       </div>
     </div>
   );

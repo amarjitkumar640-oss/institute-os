@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal,
-  KeyboardAvoidingView, Platform, RefreshControl,
+  KeyboardAvoidingView, Platform, RefreshControl, Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,14 +9,15 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { usePermission } from "../../hooks/usePermission";
 import { useAlert } from "../../context/AlertContext";
+import { useKeyboardScrollIntoView } from "../../hooks/useKeyboardScrollIntoView";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
-import { SHEET_HEIGHT } from "../../components/ui/BottomSheet";
+import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
 import { T } from "../../components/ui/typography";
 import {
-  getScheduleDetail, recordPayment,
+  getScheduleDetail, recordPayment, applyDiscount,
   installmentOutstanding, scheduleTotalPaid, scheduleTotalOutstanding,
   type StudentFeeSchedule, type ScheduleInstallment, type TxnMode,
 } from "../../api/fees";
@@ -74,6 +75,8 @@ const MODE_LABEL: Record<string, string> = {
   cash: "Cash", upi: "UPI", card: "Card", bank_transfer: "Bank Transfer", cheque: "Cheque",
 };
 
+const SCREEN_H = Dimensions.get("window").height;
+
 // ── Wave ──────────────────────────────────────────────────────────────────────
 
 // ── Record Payment Modal ──────────────────────────────────────────────────────
@@ -101,6 +104,9 @@ function RecordPaymentModal({
   const [upiRef,  setUpiRef]  = useState("");
   const [cheqNo,  setCheqNo]  = useState("");
   const [saving,  setSaving]  = useState(false);
+
+  const { scrollRef, recordFieldY, scrollFieldIntoView, onScrollViewLayout, onScroll } =
+    useKeyboardScrollIntoView({ sheetHeight: SCREEN_H * 0.65 });
 
   const isGeneral = !targetInstallment;
 
@@ -194,7 +200,17 @@ function RecordPaymentModal({
 
           <View style={pm.divider} />
 
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexShrink: 1 }}
+            onLayout={onScrollViewLayout}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
           {/* Amount field */}
+          <View onLayout={recordFieldY("amount")}>
           <Text style={pm.label}>Amount</Text>
           <View style={pm.amtField}>
             <Text style={pm.amtPrefix}>₹</Text>
@@ -202,6 +218,7 @@ function RecordPaymentModal({
               style={pm.amtInput}
               value={amount}
               onChangeText={setAmount}
+              onFocus={() => scrollFieldIntoView("amount")}
               keyboardType="numeric"
               placeholder="0"
               placeholderTextColor={C.placeholder}
@@ -220,6 +237,7 @@ function RecordPaymentModal({
                 </TouchableOpacity>
               ) : null;
             })()}
+          </View>
           </View>
 
           {/* Live allocation preview (general payments only) */}
@@ -268,39 +286,46 @@ function RecordPaymentModal({
           </ScrollView>
 
           {mode === "upi" && (
-            <>
+            <View onLayout={recordFieldY("upiRef")}>
               <Text style={pm.label}>UPI Reference <Text style={pm.optional}>(optional)</Text></Text>
               <TextInput
                 style={pm.textField}
                 value={upiRef}
                 onChangeText={setUpiRef}
+                onFocus={() => scrollFieldIntoView("upiRef")}
                 placeholder="e.g. 123456789012"
                 placeholderTextColor={C.placeholder}
               />
-            </>
+            </View>
           )}
           {mode === "cheque" && (
-            <>
+            <View onLayout={recordFieldY("cheqNo")}>
               <Text style={pm.label}>Cheque No. <Text style={pm.optional}>(optional)</Text></Text>
               <TextInput
                 style={pm.textField}
                 value={cheqNo}
                 onChangeText={setCheqNo}
+                onFocus={() => scrollFieldIntoView("cheqNo")}
                 placeholder="e.g. 000123"
                 placeholderTextColor={C.placeholder}
               />
-            </>
+            </View>
           )}
 
+          <View onLayout={recordFieldY("notes")}>
           <Text style={pm.label}>Notes <Text style={pm.optional}>(optional)</Text></Text>
           <TextInput
             style={[pm.textField, { minHeight: ms(64), textAlignVertical: "top" }]}
             value={notes}
             onChangeText={setNotes}
+            onFocus={() => scrollFieldIntoView("notes")}
             placeholder="e.g. Cash collected at counter"
             placeholderTextColor={C.placeholder}
             multiline
           />
+          </View>
+          <View style={{ height: ms(12) }} />
+          </ScrollView>
 
           <TouchableOpacity
             style={[pm.submitBtn, { backgroundColor: colors.primary }, saving && { opacity: 0.65 }]}
@@ -320,6 +345,111 @@ function RecordPaymentModal({
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+// ── Apply Discount Sheet ─────────────────────────────────────────────────────
+
+function ApplyDiscountSheet({
+  visible,
+  schedule,
+  onClose,
+  onDone,
+}: {
+  visible:  boolean;
+  schedule: StudentFeeSchedule | null;
+  onClose:  () => void;
+  onDone:   () => void;
+}) {
+  const { showAlert } = useAlert();
+  const colors = useThemeColors();
+  const ds = useThemedStyles(makeDsStyles);
+
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setAmount(schedule?.discountAmount ? String(Number(schedule.discountAmount)) : "");
+    setReason(schedule?.discountReason ?? "");
+  }, [visible, schedule]);
+
+  async function submit() {
+    if (!schedule) return;
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt < 0) {
+      showAlert("Invalid amount", "Please enter a valid discount amount.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      await applyDiscount(schedule.id, { discountAmount: amt, discountReason: reason.trim() || undefined });
+      onDone();
+      showAlert("Discount Applied", `${fmtAmountFull(amt)} discount applied successfully.`, "success" as any);
+    } catch {
+      showAlert("Error", "Could not apply discount. Please try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <BottomSheet visible={visible} onClose={onClose} maxHeight={SHEET_HEIGHT.short}>
+      <View style={ds.sheet}>
+        <View style={ds.head}>
+          <View style={ds.headIcon}>
+            <Ionicons name="pricetag-outline" size={ms(20)} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={ds.headTitle}>Apply Discount</Text>
+            <Text style={ds.headSub} numberOfLines={1}>Reduces the total fee for this student</Text>
+          </View>
+          <TouchableOpacity style={ds.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={ms(18)} color={C.muted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={ds.divider} />
+
+        <Text style={ds.label}>Discount Amount</Text>
+        <View style={ds.amtField}>
+          <Text style={ds.amtPrefix}>₹</Text>
+          <TextInput
+            style={ds.amtInput}
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
+            placeholder="0"
+            placeholderTextColor={C.placeholder}
+          />
+        </View>
+
+        <Text style={ds.label}>Reason <Text style={ds.optional}>(optional)</Text></Text>
+        <TextInput
+          style={ds.textField}
+          value={reason}
+          onChangeText={setReason}
+          placeholder="e.g. Sibling discount"
+          placeholderTextColor={C.placeholder}
+        />
+
+        <TouchableOpacity
+          style={[ds.submitBtn, { backgroundColor: colors.primary }, saving && { opacity: 0.65 }]}
+          onPress={submit}
+          disabled={saving}
+          activeOpacity={0.88}
+        >
+          {saving
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <>
+                <Ionicons name="checkmark-circle-outline" size={ms(18)} color="#fff" />
+                <Text style={ds.submitT}>Apply Discount</Text>
+              </>
+          }
+        </TouchableOpacity>
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -396,6 +526,7 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
   const [error,             setError]             = useState<string | null>(null);
   const [payModalVisible,   setPayModalVisible]   = useState(false);
   const [targetInstallment, setTargetInstallment] = useState<ScheduleInstallment | null>(null);
+  const [discountVisible,   setDiscountVisible]   = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) { setLoading(true); setError(null); }
@@ -423,6 +554,11 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
     load(true);
   }
 
+  function handleDiscountDone() {
+    setDiscountVisible(false);
+    load(true);
+  }
+
   // Derived summary numbers
   const totalFee    = Number(schedule?.effectiveFee ?? 0);
   const totalPaid   = schedule ? scheduleTotalPaid(schedule) : 0;
@@ -433,7 +569,9 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
   const student = schedule?.enrollment?.student;
   const batch   = schedule?.enrollment?.batch;
 
-  const canRecord = usePermission("fees").canWrite;
+  const feesPermission = usePermission("fees");
+  const canRecord = feesPermission.canWrite;
+  const canDiscount = feesPermission.canEdit;
 
   // Separate pending/partial/overdue from done
   const pendingInst  = (schedule?.installments ?? []).filter((i) => i.status !== "paid" && i.status !== "waived");
@@ -447,12 +585,21 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
       <ScreenHeader
         title="Payment Schedule"
         onBack={() => navigation.goBack()}
-        right={canRecord && schedule
+        right={schedule && (canRecord || canDiscount)
           ? (
-              <TouchableOpacity style={sc.payFab} onPress={() => openPayModal(null)} activeOpacity={0.85}>
-                <Ionicons name="add" size={ms(14)} color={colors.primary} />
-                <Text style={[sc.payFabT, { color: colors.primary }]}>Record</Text>
-              </TouchableOpacity>
+              <View style={sc.headerActions}>
+                {canDiscount && (
+                  <TouchableOpacity style={sc.discountFab} onPress={() => setDiscountVisible(true)} activeOpacity={0.85}>
+                    <Ionicons name="pricetag-outline" size={ms(14)} color={C.muted} />
+                  </TouchableOpacity>
+                )}
+                {canRecord && (
+                  <TouchableOpacity style={sc.payFab} onPress={() => openPayModal(null)} activeOpacity={0.85}>
+                    <Ionicons name="add" size={ms(14)} color={colors.primary} />
+                    <Text style={[sc.payFabT, { color: colors.primary }]}>Record</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )
           : undefined
         }
@@ -651,6 +798,14 @@ export function FeeScheduleDetailScreen({ route, navigation }: Props) {
         onClose={() => setPayModalVisible(false)}
         onDone={handlePayDone}
       />
+
+      {/* Apply discount sheet */}
+      <ApplyDiscountSheet
+        visible={discountVisible}
+        schedule={schedule}
+        onClose={() => setDiscountVisible(false)}
+        onDone={handleDiscountDone}
+      />
     </SafeAreaView>
   );
 }
@@ -703,7 +858,18 @@ const makeScStyles = (colors: ThemeColors) => StyleSheet.create({
   safe:   { flex: 1, backgroundColor: colors.screenBg },
   body:   { flex: 1, backgroundColor: colors.screenBg },
 
-  // ── Record button in header ──
+  // ── Header actions (discount + record) ──
+  headerActions: { flexDirection: "row", alignItems: "center", gap: ms(8) },
+  discountFab: {
+    width:           ms(30),
+    height:          ms(30),
+    borderRadius:     ms(20),
+    justifyContent:  "center",
+    alignItems:      "center",
+    backgroundColor: C.inputBg,
+    borderWidth:     1,
+    borderColor:     C.border,
+  },
   payFab: {
     flexDirection:     "row",
     alignItems:        "center",
@@ -979,6 +1145,69 @@ const makePmStyles = (colors: ThemeColors) => StyleSheet.create({
   allocDot:    { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: C.blue, flexShrink: 0 },
   allocLabel:  { flex: 1, ...T.caption, color: C.text },
   allocAmt:    { ...T.chipText, color: C.blue },
+
+  submitBtn: {
+    flexDirection:   "row",
+    alignItems:      "center",
+    justifyContent:  "center",
+    gap:             ms(8),
+    borderRadius:    ms(14),
+    paddingVertical: ms(15),
+    marginBottom:    ms(8),
+  },
+  submitT: { ...T.buttonText, color: "#fff" },
+});
+
+const makeDsStyles = (colors: ThemeColors) => StyleSheet.create({
+  sheet: { paddingHorizontal: ms(20), paddingTop: ms(20), paddingBottom: ms(8) },
+  head: { flexDirection: "row", alignItems: "center", gap: ms(12), marginBottom: ms(14) },
+  headIcon: {
+    width:           ms(42),
+    height:          ms(42),
+    borderRadius:    ms(13),
+    backgroundColor: colors.primary + "12",
+    justifyContent:  "center",
+    alignItems:      "center",
+    flexShrink:      0,
+  },
+  headTitle: { ...T.cardTitle, color: C.text },
+  headSub:   { ...T.caption, color: C.muted, marginTop: ms(2) },
+  closeBtn: {
+    width:           ms(32),
+    height:          ms(32),
+    borderRadius:    ms(10),
+    backgroundColor: C.inputBg,
+    borderWidth:     1,
+    borderColor:     C.border,
+    justifyContent:  "center",
+    alignItems:      "center",
+    flexShrink:      0,
+  },
+  divider: { height: 1, backgroundColor: C.border, marginBottom: ms(16) },
+
+  label:    { ...T.sectionHeading, color: C.muted, marginBottom: ms(8) },
+  optional: { fontFamily: "Inter_400Regular", fontWeight: "400", textTransform: "none" },
+
+  amtField: {
+    flexDirection:     "row",
+    alignItems:        "center",
+    backgroundColor:   C.inputBg,
+    borderRadius:      ms(12),
+    paddingHorizontal: ms(14),
+    marginBottom:      ms(16),
+    gap:               ms(6),
+  },
+  amtPrefix: { ...T.displayMedium, color: C.text },
+  amtInput:  { flex: 1, ...T.displayMedium, color: C.text, padding: ms(12), includeFontPadding: false },
+
+  textField: {
+    backgroundColor: C.inputBg,
+    borderRadius:    ms(12),
+    padding:         ms(12),
+    ...T.body,
+    color:           C.text,
+    marginBottom:    ms(20),
+  },
 
   submitBtn: {
     flexDirection:   "row",

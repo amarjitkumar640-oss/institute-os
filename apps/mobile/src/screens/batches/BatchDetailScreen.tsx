@@ -2,14 +2,14 @@ import React, { useCallback, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, TextInput, Linking,
 } from "react-native";
-import { BottomSheet } from "../../components/ui/BottomSheet";
+import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { listStudents, type StudentItem } from "../../api/students";
-import { listBatches, type BatchItem, type BatchStatus } from "../../api/batches";
+import { listBatches, mergeBatch, type BatchItem, type BatchStatus } from "../../api/batches";
 import { enrollStudent, dropEnrollment, transferEnrollment } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { C } from "../../theme";
@@ -29,6 +29,7 @@ const STATUS_META: Record<BatchStatus, { label: string; color: string; bg: strin
   running:   { label: "Running",   color: C.green,   bg: C.green   + "18" },
   upcoming:  { label: "Upcoming",  color: C.blue,    bg: C.blue    + "18" },
   completed: { label: "Completed", color: C.muted,   bg: C.muted   + "18" },
+  merged:    { label: "Merged",    color: C.orange,  bg: C.orange  + "18" },
 };
 
 const CP_COLOR: Record<string, string> = {
@@ -376,6 +377,146 @@ function MoveBatchModal({ visible, student, fromBatch, onClose, onMoved }: {
   );
 }
 
+// ── Merge Batch Modal ────────────────────────────────────────────────────────
+// Moves every active student out of `fromBatch` and into the picked target —
+// see batch-merge.service.ts on the API side. No course-match requirement
+// (a student's own course record and fee stay exactly as they were), so the
+// picker isn't filtered by course, only by center (same physical-attendance
+// reasoning as MoveBatchModal above).
+
+function MergeBatchModal({ visible, fromBatch, onClose, onMerged }: {
+  visible:   boolean;
+  fromBatch: BatchItem;
+  onClose:   () => void;
+  onMerged:  () => void;
+}) {
+  const colors = useThemeColors();
+  const am = useThemedStyles(makeAmStyles);
+  const { showAlert, showConfirm } = useAlert();
+  const [batches, setBatches]     = useState<BatchItem[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState("");
+  const [merging, setMerging]     = useState(false);
+
+  React.useEffect(() => {
+    if (!visible) return;
+    setSearch("");
+    setLoading(true);
+    listBatches().then(setBatches).catch(() => {}).finally(() => setLoading(false));
+  }, [visible]);
+
+  const filtered = useMemo(() => {
+    const others = batches.filter((b) =>
+      b.id !== fromBatch.id && b.status !== "merged" && (!fromBatch.centerId || b.centerId === fromBatch.centerId)
+    );
+    const q = search.trim().toLowerCase();
+    if (!q) return others;
+    return others.filter((b) => b.name.toLowerCase().includes(q) || b.course.name.toLowerCase().includes(q));
+  }, [batches, search, fromBatch]);
+
+  function confirmMerge(target: BatchItem) {
+    showConfirm(
+      `Merge Into ${target.name}?`,
+      `All ${fromBatch.enrolledCount} active student(s) in ${fromBatch.name} — with their full fee/payment history — will move into ${target.name}. ${fromBatch.name} will be marked merged and can't be reused.`,
+      () => doMerge(target),
+      { confirmLabel: "Merge", destructive: true },
+    );
+  }
+
+  async function doMerge(target: BatchItem) {
+    setMerging(true);
+    const res = await mergeBatch(fromBatch.id, target.id);
+    setMerging(false);
+    if (!res.ok) {
+      showAlert("Could Not Merge", res.error, "error");
+      return;
+    }
+    onMerged();
+    onClose();
+    const skipped = res.data.skipped;
+    if (skipped.length > 0) {
+      showAlert(
+        "Merge Completed With Skips",
+        `${res.data.mergedCount} student(s) moved into ${target.name}. ${skipped.length} need manual handling:\n\n` +
+          skipped.map((s) => `• ${s.fullName} — ${s.reason}`).join("\n"),
+        "warning",
+      );
+    } else {
+      showAlert("Merge Complete", `${res.data.mergedCount} student(s) moved into ${target.name}.`, "success");
+    }
+  }
+
+  return (
+    <BottomSheet visible={visible} onClose={onClose} maxHeight={SHEET_HEIGHT.tall}>
+      <View style={am.sheetPad}>
+        <View style={am.handle} />
+
+        <View style={am.header}>
+          <Text style={am.title} numberOfLines={1}>Merge {fromBatch.name}</Text>
+          <TouchableOpacity style={am.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={ms(18)} color={C.muted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={am.searchRow}>
+          <Ionicons name="search-outline" size={ms(15)} color={C.muted} />
+          <TextInput
+            style={am.searchInput}
+            placeholder="Search target batches…"
+            placeholderTextColor={C.placeholder}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+          />
+          {!!search && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={ms(15)} color={C.placeholder} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {loading ? (
+          <View style={am.loaderWrap}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={am.loaderT}>Loading batches…</Text>
+          </View>
+        ) : (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: ms(8) }}>
+            {filtered.length === 0 ? (
+              <View style={am.emptyWrap}>
+                <Ionicons name="git-merge-outline" size={ms(36)} color={C.border} />
+                <Text style={am.emptyT}>No other batches available to merge into</Text>
+              </View>
+            ) : filtered.map((b) => {
+              const status = STATUS_META[b.status];
+              return (
+                <TouchableOpacity
+                  key={b.id}
+                  style={[am.row, merging && { opacity: 0.5 }]}
+                  onPress={() => confirmMerge(b)}
+                  disabled={merging}
+                  activeOpacity={0.75}
+                >
+                  <View style={[am.avatar, { backgroundColor: status.color + "22" }]}>
+                    <Ionicons name="albums-outline" size={ms(16)} color={status.color} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={am.studentName} numberOfLines={1}>{b.name}</Text>
+                    <Text style={am.studentSub} numberOfLines={1}>{b.course.name} · {b.enrolledCount}/{b.capacity} seats</Text>
+                  </View>
+                  <View style={am.addBtn}>
+                    <Ionicons name="git-merge-outline" size={ms(16)} color={colors.primary} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
+    </BottomSheet>
+  );
+}
+
 // ── Student Row ───────────────────────────────────────────────────────────────
 
 function StudentRow({ student, index, onMove, onRemove, busy, canCall }: {
@@ -471,6 +612,7 @@ export function BatchDetailScreen({ navigation, route }: Props) {
   const [showAdd, setShowAdd]       = useState(false);
   const [actionId, setActionId]     = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState<StudentItem | null>(null);
+  const [showMerge, setShowMerge]   = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -525,6 +667,17 @@ export function BatchDetailScreen({ navigation, route }: Props) {
         onBack={() => navigation.goBack()}
         rightIcon={canEdit ? "pencil-outline" : undefined}
         onRight={canEdit ? () => navigation.navigate("EditBatch", { batch }) : undefined}
+        right={
+          canEdit && batch.status !== "merged" && batch.enrolledCount > 0 ? (
+            <TouchableOpacity
+              style={s.headerMergeBtn}
+              onPress={() => setShowMerge(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="git-merge-outline" size={ms(20)} color={colors.headerText} />
+            </TouchableOpacity>
+          ) : undefined
+        }
       />
 
       <ScrollView
@@ -607,6 +760,38 @@ export function BatchDetailScreen({ navigation, route }: Props) {
           <Ionicons name="chevron-forward" size={ms(16)} color={C.border} />
         </TouchableOpacity>
 
+        {/* ── Discount Offers shortcut ── */}
+        <TouchableOpacity
+          style={s.navCard}
+          onPress={() => navigation.navigate("BatchOffers", { batchId: batch.id, batchName: batch.name })}
+          activeOpacity={0.78}
+        >
+          <View style={[s.navIcon, { backgroundColor: colors.primary + "12" }]}>
+            <Ionicons name="pricetag-outline" size={ms(18)} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.navTitle}>Discount Offers</Text>
+            <Text style={s.navSub}>Give the first N students an extra discount</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={ms(16)} color={C.border} />
+        </TouchableOpacity>
+
+        {/* ── Sponsorship shortcut ── */}
+        <TouchableOpacity
+          style={s.navCard}
+          onPress={() => navigation.navigate("SponsorshipDetail", { batchId: batch.id, batchName: batch.name })}
+          activeOpacity={0.78}
+        >
+          <View style={[s.navIcon, { backgroundColor: colors.primary + "12" }]}>
+            <Ionicons name="business-outline" size={ms(18)} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.navTitle}>Sponsorship</Text>
+            <Text style={s.navSub}>CSR sponsor, payment milestones & invoices</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={ms(16)} color={C.border} />
+        </TouchableOpacity>
+
         {/* ── Enrolled Students ── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
@@ -683,6 +868,13 @@ export function BatchDetailScreen({ navigation, route }: Props) {
         onClose={() => setMoveTarget(null)}
         onMoved={() => load()}
       />
+
+      <MergeBatchModal
+        visible={showMerge}
+        fromBatch={batch}
+        onClose={() => setShowMerge(false)}
+        onMerged={() => load()}
+      />
     </SafeAreaView>
   );
 }
@@ -693,6 +885,12 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   safe:   { flex: 1, backgroundColor: colors.screenBg },
   scroll: { flex: 1, backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16), gap: ms(14) },
+
+  headerMergeBtn: {
+    width: ms(36), height: ms(36), borderRadius: ms(11),
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.headerText + "18",
+  },
 
   // Combined info card
   infoCard: {

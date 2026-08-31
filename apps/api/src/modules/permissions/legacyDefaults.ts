@@ -99,6 +99,17 @@ export const LEGACY_ROLE_ACCESS: Record<string, RoleAccess> = {
   // explicitly for review via the new admin UI, not a silent decision.
   fees: { admin: "rwed", frontdesk: "rwe" },
 
+  // New feature (CSR sponsorship), not a historical-access reproduction like
+  // the rest of this file — added so hand-crafted test tokens
+  // (legacyPermissionsForRole) get sponsors access without every test file
+  // needing its own PermissionGrant setup. Mirrors "fees"'s shape: admin full
+  // access, frontdesk can do everything except delete a sponsor/contract,
+  // teacher has no reason to touch this. On a real deployed tenant this has
+  // no effect until either the one-time backfill script is re-run for this
+  // key or an admin grants it manually via Settings → Permissions — "missing
+  // row = deny" applies here too.
+  sponsors: { admin: "rwed", frontdesk: "rwe" },
+
   // Explicit admin-only everywhere (API, web route, web nav).
   staff: { admin: "rwed" },
 
