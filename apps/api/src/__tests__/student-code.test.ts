@@ -15,7 +15,15 @@ const CENTER_B_ID = "99999999-9999-9999-9999-bbbbbbbbbbbb";
 async function makeFixtures() {
   await prisma.tenant.upsert({
     where: { id: TENANT_ID }, update: {},
-    create: { id: TENANT_ID, name: "The Success Tutorial Classes", slug: "success-tutorial" },
+    // Deliberately NOT "success-tutorial" — that exact slug is reserved by
+    // site.test.ts's own SITE_TENANT_SLUG-driven fixture (a different,
+    // auto-generated tenant id). resetDb() doesn't truncate the tenant
+    // table (many test files share a persistent "test-institute" tenant
+    // via idempotent upsert-by-id), so two files picking the same literal
+    // slug for two logically-different tenants collides on the second one
+    // — confirmed live in CI (this test's own upsert failing with "Unique
+    // constraint failed on the fields: (slug)").
+    create: { id: TENANT_ID, name: "Student Code Test Institute", slug: "student-code-test-tenant" },
   });
   await prisma.center.upsert({
     where: { id: CENTER_A_ID }, update: {},
@@ -37,7 +45,7 @@ describe("generateStudentCode", () => {
   it("derives the tenant/center abbreviation from the tenant's slug and the center's name", async () => {
     const year = new Date().getFullYear();
     const code = await generateStudentCode(prisma, TENANT_ID, CENTER_A_ID);
-    expect(code).toBe(`SUC-GHA-${year}-0001`);
+    expect(code).toBe(`STU-GHA-${year}-0001`);
   });
 
   it("increments the sequence for a second student in the same center", async () => {
@@ -46,7 +54,7 @@ describe("generateStudentCode", () => {
     });
     const year = new Date().getFullYear();
     const second = await generateStudentCode(prisma, TENANT_ID, CENTER_A_ID);
-    expect(second).toBe(`SUC-GHA-${year}-0002`);
+    expect(second).toBe(`STU-GHA-${year}-0002`);
   });
 
   it("resets the sequence independently for a different center under the same tenant", async () => {
@@ -57,13 +65,13 @@ describe("generateStudentCode", () => {
     // A student going into Center B is the first *there*, regardless of
     // how many students Center A already has.
     const centerBCode = await generateStudentCode(prisma, TENANT_ID, CENTER_B_ID);
-    expect(centerBCode).toBe(`SUC-KOL-${year}-0001`);
+    expect(centerBCode).toBe(`STU-KOL-${year}-0001`);
   });
 
   it("falls back to a generic 'GEN' segment when no center is given", async () => {
     const year = new Date().getFullYear();
     const code = await generateStudentCode(prisma, TENANT_ID, null);
-    expect(code).toBe(`SUC-GEN-${year}-0001`);
+    expect(code).toBe(`STU-GEN-${year}-0001`);
   });
 
   it("pads a short tenant slug/center name up to 3 letters instead of leaving it shorter", async () => {
