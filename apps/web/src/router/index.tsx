@@ -11,6 +11,7 @@ import { CenterPickPage } from "@/modules/auth/CenterPickPage";
 import { DashboardPage } from "@/modules/dashboard/DashboardPage";
 import { StudentsPage } from "@/modules/students/StudentsPage";
 import { StudentDetailPage } from "@/modules/students/StudentDetailPage";
+import { LegacyImportPage } from "@/modules/students/LegacyImportPage";
 import { LeadsPage } from "@/modules/leads/LeadsPage";
 import { AdmissionApplicationsPage } from "@/modules/admissionApplications/AdmissionApplicationsPage";
 import { BatchesPage } from "@/modules/batches/BatchesPage";
@@ -29,6 +30,10 @@ import { ProfilePage } from "@/modules/profile/ProfilePage";
 import { SettingsPage } from "@/modules/settings/SettingsPage";
 import { PermissionsPage } from "@/modules/permissions/PermissionsPage";
 import { SiteContentPage } from "@/modules/site-content/SiteContentPage";
+import { GovExamsPage } from "@/modules/gov-exams/GovExamsPage";
+import { SponsorsPage } from "@/modules/sponsors/SponsorsPage";
+import { SponsorDetailPage } from "@/modules/sponsors/SponsorDetailPage";
+import { PublicInvoicePage } from "@/modules/sponsors/PublicInvoicePage";
 
 export const router = createBrowserRouter([
   // Shareable per-institute link — not wrapped in AuthLayout, it's a
@@ -44,6 +49,8 @@ export const router = createBrowserRouter([
   { path: "/apply/:tenantSlug", element: <ApplyPage /> },
   // Public shareable APK download link — fully unauthenticated, no nav shell.
   { path: "/download/:tenantSlug", element: <DownloadPage /> },
+  // Public shareable sponsor invoice link — fully unauthenticated, no nav shell.
+  { path: "/invoice/:shareToken", element: <PublicInvoicePage /> },
   {
     element: <AuthLayout />,
     children: [
@@ -88,6 +95,17 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute screenKey="students">
             <StudentDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        // Direct-URL only, deliberately not linked from any nav — a
+        // one-off data-entry tool for backfilling students + payment
+        // history from pre-system paper registers into an existing batch.
+        path: "/students/legacy-import",
+        element: (
+          <ProtectedRoute screenKey="students">
+            <LegacyImportPage />
           </ProtectedRoute>
         ),
       },
@@ -172,6 +190,22 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: "/sponsors",
+        element: (
+          <ProtectedRoute screenKey="sponsors">
+            <SponsorsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/sponsors/:id",
+        element: (
+          <ProtectedRoute screenKey="sponsors">
+            <SponsorDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
         // Previously had no route-level gate at all, while the sidebar nav
         // hid this from frontdesk — an inconsistency (the API itself never
         // restricted reading schedule data for any role). Resolved toward
@@ -218,6 +252,17 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute adminOnly>
             <SiteContentPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        // Same reasoning as /site-content above — single-tenant feature
+        // (SITE_TENANT_SLUG-gated on the backend too), not a general
+        // operational screen.
+        path: "/gov-exams",
+        element: (
+          <ProtectedRoute adminOnly>
+            <GovExamsPage />
           </ProtectedRoute>
         ),
       },

@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, ActivityIndicator,
-  RefreshControl, KeyboardAvoidingView, Platform, Switch, Image,
+  RefreshControl, Switch, Image, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { ms, fs } from "../../utils/responsive";
+import { useKeyboardScrollIntoView } from "../../hooks/useKeyboardScrollIntoView";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SHEET_HEIGHT } from "../../components/ui/BottomSheet";
@@ -28,6 +29,8 @@ import { ROLES, ROLE_META, type Role } from "../../constants/roleMeta";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 import { usePermission } from "../../hooks/usePermission";
+
+const SCREEN_H = Dimensions.get("window").height;
 
 // ── Role chip ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +62,7 @@ interface CreateModalProps {
 }
 
 function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
+  const colors = useThemeColors();
   const md = useThemedStyles(makeMdStyles);
   const [fullName, setFullName] = useState("");
   const [email,    setEmail]    = useState("");
@@ -69,6 +73,9 @@ function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
   const [showPw,   setShowPw]   = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
+
+  const { scrollRef, recordFieldY, scrollFieldIntoView, onScrollViewLayout, onScroll } =
+    useKeyboardScrollIntoView({ sheetHeight: SCREEN_H * 0.85 });
 
   useEffect(() => {
     if (visible) {
@@ -102,61 +109,87 @@ function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={md.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={md.overlay}>
         <TouchableOpacity style={md.backdrop} activeOpacity={1} onPress={onClose} />
-        <ScrollView style={[md.sheet, { maxHeight: SHEET_HEIGHT.standard }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={[md.sheet, { maxHeight: SHEET_HEIGHT.standard }]}>
           <View style={md.drag} />
-          <Text style={md.title}>Add Staff Member</Text>
 
-          <Text style={md.sectionLabel}>Roles</Text>
-          <View style={md.rolePicker}>
-            {ROLES.map((r) => {
-              const m = ROLE_META[r];
-              const active = roles.includes(r);
-              return (
-                <TouchableOpacity
-                  key={r}
-                  style={[md.roleCard, active && { borderColor: m.color, backgroundColor: m.bg }]}
-                  onPress={() => setRoles(active ? roles.filter((x) => x !== r) : [...roles, r])}
-                  activeOpacity={0.7}
-                >
-                  <View style={[md.roleIcon, { backgroundColor: active ? m.color : C.border }]}>
-                    <Ionicons name={m.icon as any} size={ms(16)} color={active ? "#fff" : C.muted} />
-                  </View>
-                  <Text style={[md.roleCardLabel, active && { color: m.color }]}>{m.label}</Text>
-                  <Text style={md.roleCardDesc} numberOfLines={2}>{m.desc}</Text>
-                  {active && (
-                    <View style={[md.roleCheck, { backgroundColor: m.color }]}>
-                      <Ionicons name="checkmark" size={ms(11)} color="#fff" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={md.sectionLabel}>Details</Text>
-          <TextInput style={md.input} placeholder="Full name" placeholderTextColor={C.muted} value={fullName} onChangeText={setFullName} />
-          <TextInput style={md.input} placeholder="Email address" placeholderTextColor={C.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-          <TextInput style={md.input} placeholder="Phone number" placeholderTextColor={C.muted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-
-          <Text style={md.sectionLabel}>Initial Password</Text>
-          <View style={md.pwRow}>
-            <TextInput
-              style={[md.input, { flex: 1, marginBottom: 0 }]}
-              placeholder="Min. 6 characters"
-              placeholderTextColor={C.muted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPw}
-            />
-            <TouchableOpacity style={md.eyeBtn} onPress={() => setShowPw((v) => !v)}>
-              <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={ms(20)} color={C.muted} />
+          <View style={md.editHeader}>
+            <View style={md.editHeaderIcon}>
+              <Ionicons name="person-add-outline" size={ms(21)} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={md.editTitle}>Add Staff Member</Text>
+              <Text style={md.editDesc}>Create a login for a new team member.</Text>
+            </View>
+            <TouchableOpacity
+              style={md.editCloseBtn}
+              onPress={onClose}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={ms(18)} color={C.muted} />
             </TouchableOpacity>
           </View>
-          <Text style={md.pwHint}>Staff can change this after first login.</Text>
 
-          {!!error && <Text style={md.errorT}>{error}</Text>}
+          {/* Only this part scrolls — the Create button below stays pinned to
+              the bottom of the sheet regardless of scroll position. */}
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexShrink: 1 }}
+            onLayout={onScrollViewLayout}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={md.sectionLabel}>Roles</Text>
+            <View style={md.roleRow}>
+              {ROLES.map((r) => {
+                const m = ROLE_META[r];
+                const active = roles.includes(r);
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    style={[md.roleTab, active && { backgroundColor: m.color, borderColor: m.color }]}
+                    onPress={() => setRoles(active ? roles.filter((x) => x !== r) : [...roles, r])}
+                  >
+                    <Ionicons name={m.icon as any} size={ms(13)} color={active ? "#fff" : C.muted} />
+                    <Text style={[md.roleTabT, { color: active ? "#fff" : C.muted }]}>{m.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={md.sectionLabel}>Details</Text>
+            <View onLayout={recordFieldY("fullName")}>
+              <TextInput style={md.input} placeholder="Full name" placeholderTextColor={C.muted} value={fullName} onChangeText={setFullName} onFocus={() => scrollFieldIntoView("fullName")} />
+            </View>
+            <View onLayout={recordFieldY("email")}>
+              <TextInput style={md.input} placeholder="Email address" placeholderTextColor={C.muted} value={email} onChangeText={setEmail} onFocus={() => scrollFieldIntoView("email")} keyboardType="email-address" autoCapitalize="none" />
+            </View>
+            <View onLayout={recordFieldY("phone")}>
+              <TextInput style={md.input} placeholder="Phone number" placeholderTextColor={C.muted} value={phone} onChangeText={setPhone} onFocus={() => scrollFieldIntoView("phone")} keyboardType="phone-pad" />
+            </View>
+
+            <Text style={md.sectionLabel}>Initial Password</Text>
+            <View style={md.pwRow} onLayout={recordFieldY("password")}>
+              <TextInput
+                style={[md.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Min. 6 characters"
+                placeholderTextColor={C.muted}
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => scrollFieldIntoView("password")}
+                secureTextEntry={!showPw}
+              />
+              <TouchableOpacity style={md.eyeBtn} onPress={() => setShowPw((v) => !v)}>
+                <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={ms(20)} color={C.muted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={md.pwHint}>Staff can change this after first login.</Text>
+
+            {!!error && <Text style={md.errorT}>{error}</Text>}
+          </ScrollView>
 
           <TouchableOpacity style={[md.btn, saving && md.btnDim]} onPress={save} disabled={saving}>
             {saving
@@ -164,12 +197,9 @@ function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
               : <Text style={md.btnT}>Create Staff Account</Text>
             }
           </TouchableOpacity>
-          <TouchableOpacity style={md.cancelBtn} onPress={onClose}>
-            <Text style={md.cancelT}>Cancel</Text>
-          </TouchableOpacity>
-          <View style={{ height: ms(32) }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={{ height: ms(20) }} />
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -185,6 +215,7 @@ interface EditModalProps {
 }
 
 function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalProps) {
+  const colors = useThemeColors();
   const md = useThemedStyles(makeMdStyles);
   const [fullName, setFullName] = useState("");
   const [phone,    setPhone]    = useState("");
@@ -193,6 +224,9 @@ function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalP
   const [isActive, setIsActive] = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
+
+  const { scrollRef, recordFieldY, scrollFieldIntoView, onScrollViewLayout, onScroll } =
+    useKeyboardScrollIntoView({ sheetHeight: SCREEN_H * 0.65 });
 
   useEffect(() => {
     if (visible && member) {
@@ -225,50 +259,84 @@ function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalP
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={md.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={md.overlay}>
         <TouchableOpacity style={md.backdrop} activeOpacity={1} onPress={onClose} />
-        <ScrollView style={md.sheet} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={md.sheet}>
           <View style={md.drag} />
-          <Text style={md.title}>Edit Staff Member</Text>
 
-          <Text style={md.sectionLabel}>Roles</Text>
-          <View style={md.roleRow}>
-            {ROLES.map((r) => {
-              const m = ROLE_META[r];
-              const active = roles.includes(r);
-              return (
-                <TouchableOpacity
-                  key={r}
-                  style={[md.roleTab, active && { backgroundColor: m.color, borderColor: m.color }]}
-                  onPress={() => setRoles(active ? roles.filter((x) => x !== r) : [...roles, r])}
-                >
-                  <Ionicons name={m.icon as any} size={ms(13)} color={active ? "#fff" : C.muted} />
-                  <Text style={[md.roleTabT, { color: active ? "#fff" : C.muted }]}>{m.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          <View style={md.editHeader}>
+            <View style={md.editHeaderIcon}>
+              <Ionicons name="person-outline" size={ms(21)} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={md.editTitle}>Edit Staff Member</Text>
+              <Text style={md.editDesc}>Update role, contact details, and account status.</Text>
+            </View>
+            <TouchableOpacity
+              style={md.editCloseBtn}
+              onPress={onClose}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={ms(18)} color={C.muted} />
+            </TouchableOpacity>
           </View>
 
-          <Text style={md.sectionLabel}>Details</Text>
-          <TextInput style={md.input} placeholder="Full name" placeholderTextColor={C.muted} value={fullName} onChangeText={setFullName} />
-          <TextInput style={md.input} placeholder="Phone number" placeholderTextColor={C.muted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-
-          {!isSelf && (
-            <View style={md.toggleRow}>
-              <View>
-                <Text style={md.toggleLabel}>Account Active</Text>
-                <Text style={md.toggleSub}>Inactive accounts cannot log in.</Text>
-              </View>
-              <Switch
-                value={isActive}
-                onValueChange={setIsActive}
-                trackColor={{ true: C.green, false: C.border }}
-                thumbColor="#fff"
-              />
+          {/* Only this part scrolls — the Save button below stays pinned to
+              the bottom of the sheet regardless of scroll position.
+              flexShrink lets it give up space to the fixed header/button
+              siblings instead of pushing them past the sheet's maxHeight. */}
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexShrink: 1 }}
+            onLayout={onScrollViewLayout}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={md.sectionLabel}>Roles</Text>
+            <View style={md.roleRow}>
+              {ROLES.map((r) => {
+                const m = ROLE_META[r];
+                const active = roles.includes(r);
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    style={[md.roleTab, active && { backgroundColor: m.color, borderColor: m.color }]}
+                    onPress={() => setRoles(active ? roles.filter((x) => x !== r) : [...roles, r])}
+                  >
+                    <Ionicons name={m.icon as any} size={ms(13)} color={active ? "#fff" : C.muted} />
+                    <Text style={[md.roleTabT, { color: active ? "#fff" : C.muted }]}>{m.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          )}
 
-          {!!error && <Text style={md.errorT}>{error}</Text>}
+            <Text style={md.sectionLabel}>Details</Text>
+            <View onLayout={recordFieldY("fullName")}>
+              <TextInput style={md.input} placeholder="Full name" placeholderTextColor={C.muted} value={fullName} onChangeText={setFullName} onFocus={() => scrollFieldIntoView("fullName")} />
+            </View>
+            <View onLayout={recordFieldY("phone")}>
+              <TextInput style={md.input} placeholder="Phone number" placeholderTextColor={C.muted} value={phone} onChangeText={setPhone} onFocus={() => scrollFieldIntoView("phone")} keyboardType="phone-pad" />
+            </View>
+
+            {!isSelf && (
+              <View style={md.toggleRow}>
+                <View>
+                  <Text style={md.toggleLabel}>Account Active</Text>
+                  <Text style={md.toggleSub}>Inactive accounts cannot log in.</Text>
+                </View>
+                <Switch
+                  value={isActive}
+                  onValueChange={setIsActive}
+                  trackColor={{ true: C.green, false: C.border }}
+                  thumbColor="#fff"
+                />
+              </View>
+            )}
+
+            {!!error && <Text style={md.errorT}>{error}</Text>}
+          </ScrollView>
 
           <TouchableOpacity style={[md.btn, saving && md.btnDim]} onPress={save} disabled={saving}>
             {saving
@@ -276,12 +344,9 @@ function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalP
               : <Text style={md.btnT}>Save Changes</Text>
             }
           </TouchableOpacity>
-          <TouchableOpacity style={md.cancelBtn} onPress={onClose}>
-            <Text style={md.cancelT}>Cancel</Text>
-          </TouchableOpacity>
-          <View style={{ height: ms(32) }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={{ height: ms(20) }} />
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -304,6 +369,9 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
 
+  const { scrollRef, recordFieldY, scrollFieldIntoView, onScrollViewLayout, onScroll } =
+    useKeyboardScrollIntoView({ sheetHeight: SCREEN_H * 0.65 });
+
   useEffect(() => {
     if (visible) { setPassword(""); setConfirm(""); setError(""); }
   }, [visible]);
@@ -324,42 +392,54 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={md.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={md.overlay}>
         <TouchableOpacity style={md.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={md.sheet}>
           <View style={md.drag} />
 
-          <View style={md.resetHeader}>
-            <View style={md.resetIconWrap}>
-              <Ionicons name="key-outline" size={ms(24)} color={colors.orange} />
+          <View style={md.editHeader}>
+            <View style={[md.editHeaderIcon, { backgroundColor: colors.orangeBg }]}>
+              <Ionicons name="key-outline" size={ms(21)} color={colors.orange} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={md.title}>Reset Password</Text>
-              {member && (
-                <Text style={md.resetFor}>
-                  {"For "}
-                  <Text style={{ fontFamily: "Inter_700Bold", fontWeight: "700", color: C.text }}>{member.fullName}</Text>
-                </Text>
-              )}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={md.editTitle}>Reset Password</Text>
+              <Text style={md.editDesc}>Set a new password for this staff member.</Text>
             </View>
+            <TouchableOpacity
+              style={md.editCloseBtn}
+              onPress={onClose}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={ms(18)} color={C.muted} />
+            </TouchableOpacity>
           </View>
 
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexShrink: 1 }}
+            onLayout={onScrollViewLayout}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
           <Text style={md.sectionLabel}>New Password</Text>
-          <View style={md.pwRow}>
+          <View style={md.pwRow} onLayout={recordFieldY("password")}>
             <TextInput
               style={[md.input, { flex: 1, marginBottom: 0 }]}
               placeholder="Min. 6 characters"
               placeholderTextColor={C.muted}
+              onFocus={() => scrollFieldIntoView("password")}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPw}
-              autoFocus
             />
             <TouchableOpacity style={md.eyeBtn} onPress={() => setShowPw((v) => !v)}>
               <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={ms(20)} color={C.muted} />
             </TouchableOpacity>
           </View>
 
+          <View onLayout={recordFieldY("confirm")}>
           <Text style={[md.sectionLabel, { marginTop: ms(12) }]}>Confirm Password</Text>
           <TextInput
             style={md.input}
@@ -367,10 +447,13 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
             placeholderTextColor={C.muted}
             value={confirm}
             onChangeText={setConfirm}
+            onFocus={() => scrollFieldIntoView("confirm")}
             secureTextEntry={!showPw}
           />
+          </View>
 
           {!!error && <Text style={md.errorT}>{error}</Text>}
+          </ScrollView>
 
           <TouchableOpacity style={[md.btn, saving && md.btnDim]} onPress={save} disabled={saving}>
             {saving
@@ -378,12 +461,9 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
               : <Text style={md.btnT}>Reset Password</Text>
             }
           </TouchableOpacity>
-          <TouchableOpacity style={md.cancelBtn} onPress={onClose}>
-            <Text style={md.cancelT}>Cancel</Text>
-          </TouchableOpacity>
           <View style={{ height: ms(28) }} />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -1281,10 +1361,19 @@ const makeMdStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay:  { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.45)" },
   // "short" default — right for EditStaffModal/ResetPasswordModal (a handful of fields);
-  // CreateStaffModal overrides to "standard" at its own call site for its role-card grid.
+  // CreateStaffModal overrides to "standard" at its own call site for its extra fields.
   sheet:    { backgroundColor: C.card, borderTopLeftRadius: ms(24), borderTopRightRadius: ms(24), paddingHorizontal: ms(20), paddingTop: ms(8), maxHeight: SHEET_HEIGHT.short },
   drag:     { width: ms(36), height: ms(4), backgroundColor: C.border, borderRadius: ms(2), alignSelf: "center", marginBottom: ms(16) },
-  title:    { ...T.displayMedium, color: C.text, marginBottom: ms(4) },
+
+  // Shared modal-header row (icon badge + title/subtitle + close button) —
+  // matches ManageCentersModal's mc.header/headerIcon/title/desc/closeBtn
+  // exactly, per DESIGN_SYSTEM.md's documented popup-header pattern. Used by
+  // all three staff modals (Add/Edit/Reset Password).
+  editHeader:     { flexDirection: "row", alignItems: "flex-start", gap: ms(12), marginBottom: ms(14) },
+  editHeaderIcon: { width: ms(44), height: ms(44), borderRadius: ms(12), backgroundColor: colors.primary + "17", justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  editTitle:      { ...T.cardTitle, color: C.text, marginBottom: 3 },
+  editDesc:       { ...T.bodySmall, color: C.muted },
+  editCloseBtn:   { width: ms(34), height: ms(34), borderRadius: ms(10), backgroundColor: colors.inputBg, borderWidth: 1, borderColor: C.border, justifyContent: "center", alignItems: "center", flexShrink: 0 },
 
   sectionLabel: { ...T.sectionHeading, color: C.muted, marginTop: ms(8), marginBottom: ms(8) },
   input:        { backgroundColor: colors.inputBg, borderRadius: ms(12), paddingHorizontal: ms(14), paddingVertical: ms(12), ...T.body, color: C.text, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, marginBottom: ms(10) },
@@ -1295,23 +1384,10 @@ const makeMdStyles = (colors: ThemeColors) => StyleSheet.create({
   btn:          { backgroundColor: colors.primary, borderRadius: ms(14), paddingVertical: ms(14), alignItems: "center", marginTop: ms(16) },
   btnDim:       { opacity: 0.6 },
   btnT:         { ...T.buttonText, color: "#fff" },
-  cancelBtn:    { alignItems: "center", marginTop: ms(12) },
-  cancelT:      { ...T.buttonText, color: C.muted },
-
-  resetHeader:  { flexDirection: "row", alignItems: "center", gap: ms(12), marginBottom: ms(4) },
-  resetIconWrap:{ width: ms(44), height: ms(44), borderRadius: ms(12), backgroundColor: colors.orangeBg, justifyContent: "center", alignItems: "center" },
-  resetFor:     { ...T.body, color: C.muted },
 
   toggleRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.inputBg, borderRadius: ms(12), padding: ms(14), marginTop: ms(10), borderWidth: 1, borderColor: C.border },
   toggleLabel:  { ...T.listItemTitle, color: C.text },
   toggleSub:    { ...T.caption, color: C.muted, marginTop: 2 },
-
-  rolePicker:   { gap: ms(8) },
-  roleCard:     { borderRadius: ms(14), borderWidth: 2, borderColor: C.border, padding: ms(12), position: "relative" },
-  roleIcon:     { width: ms(32), height: ms(32), borderRadius: ms(9), justifyContent: "center", alignItems: "center", marginBottom: ms(6) },
-  roleCardLabel:{ ...T.cardTitle, color: C.text, marginBottom: 2 },
-  roleCardDesc: { ...T.caption, color: C.muted },
-  roleCheck:    { position: "absolute", top: ms(10), right: ms(10), width: ms(20), height: ms(20), borderRadius: ms(10), justifyContent: "center", alignItems: "center" },
 
   roleRow: { flexDirection: "row", gap: ms(8) },
   roleTab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(5), paddingVertical: ms(9), borderRadius: ms(10), backgroundColor: colors.inputBg, borderWidth: 1, borderColor: C.border },

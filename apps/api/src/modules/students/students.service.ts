@@ -3,11 +3,38 @@ import { getSignedPhotoUrl } from "../../lib/s3";
 
 type Tx = PrismaClient | Prisma.TransactionClient;
 
-export async function generateStudentCode(tx: Tx, tenantId: string): Promise<string> {
+// Letters only, uppercased, padded with "X" if the source is shorter than
+// `length` (e.g. a 2-letter slug) — always exactly `length` characters, so
+// the resulting code never has a variable-width segment.
+function abbreviate(text: string, length = 3): string {
+  const letters = text.replace(/[^a-zA-Z]/g, "").toUpperCase();
+  return letters.slice(0, length).padEnd(length, "X");
+}
+
+// Format: <tenant>-<center>-<year>-<seq>, e.g. "SUC-GHA-2026-0001" — readable
+// at a glance which institute+center a student belongs to, unlike the old
+// flat "INS-2026-0001" (a literal, tenant-agnostic prefix). Both
+// abbreviations are auto-derived (first 3 letters of the tenant's slug and
+// the center's name) rather than a separately admin-configured short code —
+// no new settings field needed, at the cost of two centers with very
+// similar names potentially abbreviating the same way.
+//
+// The sequence resets per center, not per tenant — matches how a physical
+// front desk would number admissions at their own branch, so two centers
+// under the same tenant both start at 0001 independently rather than
+// sharing one tenant-wide running count.
+export async function generateStudentCode(tx: Tx, tenantId: string, centerId: string | null): Promise<string> {
+  const [tenant, center] = await Promise.all([
+    tx.tenant.findUnique({ where: { id: tenantId }, select: { slug: true } }),
+    centerId ? tx.center.findUnique({ where: { id: centerId }, select: { name: true } }) : null,
+  ]);
+  const tenantAbbr = abbreviate(tenant?.slug ?? "INS");
+  const centerAbbr = abbreviate(center?.name ?? "GEN");
   const year = new Date().getFullYear();
-  const prefix = `INS-${year}-`;
+  const prefix = `${tenantAbbr}-${centerAbbr}-${year}-`;
+
   const count = await tx.student.count({
-    where: { tenantId, studentCode: { startsWith: prefix } },
+    where: { tenantId, centerId, studentCode: { startsWith: prefix } },
   });
   const seq = (count + 1).toString().padStart(4, "0");
   return `${prefix}${seq}`;

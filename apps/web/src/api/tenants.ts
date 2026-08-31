@@ -14,6 +14,11 @@ export interface TenantSettings {
   };
   classReminderMinutes: number;
   overdueGraceDays: number;
+  legalName: string | null;
+  registeredAddress: string | null;
+  gstin: string | null;
+  stateCode: string | null;
+  bankDetails: string | null;
 }
 
 export interface UpdateSettingsPayload {
@@ -25,6 +30,11 @@ export interface UpdateSettingsPayload {
   loginMethod?: "phone" | "email_username";
   classReminderMinutes?: number;
   overdueGraceDays?: number;
+  legalName?: string | null;
+  registeredAddress?: string | null;
+  gstin?: string | null;
+  stateCode?: string | null;
+  bankDetails?: string | null;
 }
 
 export async function getTenantSettings(): Promise<TenantSettings> {

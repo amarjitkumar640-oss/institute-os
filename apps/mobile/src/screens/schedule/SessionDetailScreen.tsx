@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, TextInput, FlatList,
 } from "react-native";
 import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { T } from "../../components/ui/typography";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -245,10 +246,9 @@ export function SessionDetailScreen({ route, navigation }: Props) {
         onBack={() => navigation.goBack()}
       />
 
-      <ScrollView
+      <KeyboardAvoidingScroll
         style={{ flex: 1, backgroundColor: colors.screenBg }}
         contentContainerStyle={sd.body}
-        showsVerticalScrollIndicator={false}
       >
         {/* Date + status card */}
         <View style={sd.dateCard}>
@@ -508,7 +508,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
             )}
           </View>
         )}
-      </ScrollView>
+      </KeyboardAvoidingScroll>
 
       {/* Faculty Picker — standard height (BottomSheet's own default) */}
       <BottomSheet

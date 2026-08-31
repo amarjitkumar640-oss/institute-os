@@ -93,6 +93,8 @@ function AdmitStudentDialog({
   const [preferredTiming, setPreferredTiming] = useState<PreferredTiming | null>(null);
   const [paymentMode, setPaymentMode]   = useState<PaymentMode | null>(null);
   const [amountPaid, setAmountPaid]     = useState("");
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
   const [centerId, setCenterId]         = useState<string | null>(null);
 
   // Prefill from a self-service AdmissionApplication opened via "Review" —
@@ -147,6 +149,11 @@ function AdmitStudentDialog({
       if (!fullName.trim())  errs.fullName = "Full name is required.";
       if (!phone.trim())     errs.phone    = "Phone number is required.";
       else if (!/^\d{7,15}$/.test(phone.trim())) errs.phone = "Enter a valid phone number (7–15 digits).";
+      if (!dob)              errs.dob      = "Date of birth is required.";
+      if (!aadhaar.trim())   errs.aadhaar  = "Aadhaar number is required.";
+      else if (!/^\d{12}$/.test(aadhaar.trim())) errs.aadhaar = "Enter a valid 12-digit Aadhaar number.";
+      if (!gender)           errs.gender   = "Please select a gender.";
+      if (!address.trim())   errs.address  = "Address is required.";
     }
     if (step === 1) {
       if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = "Enter a valid email address.";
@@ -154,7 +161,9 @@ function AdmitStudentDialog({
     if (step === 2) {
       if (!coursePreference) errs.coursePreference = "Please select a course.";
       if (!qualification)    errs.qualification    = "Please select your highest qualification.";
-      if (passYear.trim() && !/^\d{4}$/.test(passYear.trim())) errs.passYear = "Enter a valid 4-digit pass year.";
+      if (!passYear.trim())  errs.passYear = "Pass-out year is required.";
+      else if (!/^\d{4}$/.test(passYear.trim())) errs.passYear = "Enter a valid 4-digit pass year.";
+      if (!board.trim())     errs.board = "Board / University is required.";
     }
     if (step === 3) {
       if (!tcAcknowledged) errs.tcAcknowledged = "Please confirm the student has been informed of the terms.";
@@ -162,6 +171,14 @@ function AdmitStudentDialog({
     if (step === 4) {
       if (amountPaid.trim() && isNaN(Number(amountPaid))) errs.amountPaid = "Enter a valid amount.";
       if (amountPaid.trim() && Number(amountPaid) > 0 && !paymentMode) errs.paymentMode = "Select payment mode when recording a payment.";
+      if (discountAmount.trim() && (isNaN(Number(discountAmount)) || Number(discountAmount) < 0)) {
+        errs.discountAmount = "Enter a valid discount amount.";
+      } else if (discountAmount.trim()) {
+        const selectedCourse = (coursesData?.data ?? []).find((c) => c.id === selectedCourseId);
+        if (selectedCourse && Number(discountAmount) > selectedCourse.defaultFee) {
+          errs.discountAmount = "Discount cannot exceed the course fee.";
+        }
+      }
       if (!currentCenter && !centerId) errs.centerId = "Please select a center.";
     }
     setErrors(errs);
@@ -186,10 +203,13 @@ function AdmitStudentDialog({
         fullName: fullName.trim(),
         phone:    phone.trim(),
         email:    email.trim() || undefined,
-        dob:      dob ? new Date(dob) : undefined,
-        address:  address.trim() || undefined,
-        aadhaar:  aadhaar.trim() || undefined,
-        gender:   gender ?? undefined,
+        // dob/address/aadhaar/gender are enforced required by validateStep()
+        // on step 0 before the wizard can advance, so by the time this runs
+        // they're guaranteed present.
+        dob:      new Date(dob),
+        address:  address.trim(),
+        aadhaar:  aadhaar.trim(),
+        gender:   gender as Gender,
         fatherName:         fatherName.trim() || undefined,
         motherName:         motherName.trim() || undefined,
         guardianOccupation: guardianOccupation.trim() || undefined,
@@ -205,6 +225,8 @@ function AdmitStudentDialog({
         preferredTiming:    preferredTiming ?? undefined,
         paymentMode:        paymentMode ?? undefined,
         amountPaid:         amountPaid.trim() ? Number(amountPaid) : undefined,
+        discountAmount:     discountAmount.trim() ? Number(discountAmount) : undefined,
+        discountReason:     discountReason.trim() || undefined,
         tcAcknowledged,
         centerId:           centerId ?? undefined,
         applicationId:      initialApplication?.id ?? undefined,
@@ -220,7 +242,8 @@ function AdmitStudentDialog({
         batchName:   selectedBatch?.name,
       });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to admit student";
+      const data = (err as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
+      const msg = data?.message ?? data?.error ?? "Failed to admit student";
       toast({ variant: "destructive", title: msg });
     } finally {
       setLoading(false);
@@ -234,7 +257,8 @@ function AdmitStudentDialog({
     setSelectedCourseId(null); setCourseSearch("");
     setCoursePreference(null); setDurationPreference(null); setQualification(null); setPassYear(""); setBoard("");
     setWhatsapp(""); setGuardianPhone(""); setTcAcknowledged(false);
-    setBatchId(null); setPreferredTiming(null); setPaymentMode(null); setAmountPaid(""); setCenterId(null);
+    setBatchId(null); setPreferredTiming(null); setPaymentMode(null); setAmountPaid("");
+    setDiscountAmount(""); setDiscountReason(""); setCenterId(null);
     onClose();
   }
 
@@ -339,24 +363,24 @@ function AdmitStudentDialog({
                     <FormField label="Phone" error={errors.phone ? { message: errors.phone } as never : undefined} required>
                       <Input value={phone} onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); clearError("phone"); }} placeholder="10-digit mobile" />
                     </FormField>
-                    <FormField label="Date of Birth">
-                      <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+                    <FormField label="Date of Birth" error={errors.dob ? { message: errors.dob } as never : undefined} required>
+                      <Input type="date" value={dob} onChange={(e) => { setDob(e.target.value); clearError("dob"); }} />
                     </FormField>
-                    <FormField label="Aadhaar Number">
-                      <Input value={aadhaar} onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))} placeholder="12-digit Aadhaar" />
+                    <FormField label="Aadhaar Number" error={errors.aadhaar ? { message: errors.aadhaar } as never : undefined} required>
+                      <Input value={aadhaar} onChange={(e) => { setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12)); clearError("aadhaar"); }} placeholder="12-digit Aadhaar" />
                     </FormField>
                   </div>
-                  <FormField label="Gender">
+                  <FormField label="Gender" error={errors.gender ? { message: errors.gender } as never : undefined} required>
                     <OptionPills
                       options={[{ key: "male" as Gender, label: "Male" }, { key: "female" as Gender, label: "Female" }]}
                       value={gender}
-                      onSelect={setGender}
+                      onSelect={(g) => { setGender(g); clearError("gender"); }}
                     />
                   </FormField>
-                  <FormField label="Address">
+                  <FormField label="Address" error={errors.address ? { message: errors.address } as never : undefined} required>
                     <Textarea
                       value={address}
-                      onChange={(e) => setAddress(e.target.value)}
+                      onChange={(e) => { setAddress(e.target.value); clearError("address"); }}
                       placeholder="Full address"
                       rows={2}
                     />
@@ -479,15 +503,19 @@ function AdmitStudentDialog({
                   </FormField>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <FormField label="Pass Year" error={errors.passYear ? { message: errors.passYear } as never : undefined}>
+                    <FormField label="Pass Year" required error={errors.passYear ? { message: errors.passYear } as never : undefined}>
                       <Input
                         value={passYear}
                         onChange={(e) => { setPassYear(e.target.value.replace(/\D/g, "").slice(0, 4)); clearError("passYear"); }}
                         placeholder="e.g. 2022"
                       />
                     </FormField>
-                    <FormField label="Board / University">
-                      <Input value={board} onChange={(e) => setBoard(e.target.value)} placeholder="e.g. CBSE, Delhi Univ." />
+                    <FormField label="Board / University" required error={errors.board ? { message: errors.board } as never : undefined}>
+                      <Input
+                        value={board}
+                        onChange={(e) => { setBoard(e.target.value); clearError("board"); }}
+                        placeholder="e.g. CBSE, Delhi Univ."
+                      />
                     </FormField>
                   </div>
                 </div>
@@ -591,6 +619,24 @@ function AdmitStudentDialog({
                       placeholder="0"
                     />
                   </FormField>
+
+                  <FormField label="Discount for this Student (₹)" error={errors.discountAmount ? { message: errors.discountAmount } as never : undefined}>
+                    <Input
+                      type="number" min={0}
+                      value={discountAmount}
+                      onChange={(e) => { setDiscountAmount(e.target.value); clearError("discountAmount"); }}
+                      placeholder="Leave blank for automatic (course/batch offer)"
+                    />
+                  </FormField>
+                  {discountAmount.trim() && (
+                    <FormField label="Discount Reason">
+                      <Input
+                        value={discountReason}
+                        onChange={(e) => setDiscountReason(e.target.value)}
+                        placeholder="Optional — e.g. hardship discount"
+                      />
+                    </FormField>
+                  )}
 
                   {!currentCenter && (
                     <FormField label="Center" error={errors.centerId ? { message: errors.centerId } as never : undefined} required>

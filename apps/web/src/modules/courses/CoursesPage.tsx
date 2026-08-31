@@ -13,6 +13,7 @@ import {
 } from "@/api/fees";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
@@ -29,13 +30,17 @@ interface CourseFormState {
   name: string;
   durationMonths: string;
   defaultFee: string;
+  discountAmount: string;
+  discountReason: string;
   examCategoryIds: string[];
+  isFree: boolean;
 }
 
 interface CourseFormErrors {
   name?: string;
   durationMonths?: string;
   defaultFee?: string;
+  discountAmount?: string;
 }
 
 function validateCourseForm(f: CourseFormState): CourseFormErrors {
@@ -46,10 +51,18 @@ function validateCourseForm(f: CourseFormState): CourseFormErrors {
   if (!f.durationMonths.trim())              errs.durationMonths = "Duration is required.";
   else if (!Number.isInteger(months) || months < 1 || months > 60)
                                              errs.durationMonths = "Duration must be 1 – 60 months.";
-  const fee = Number(f.defaultFee);
-  if (f.defaultFee.trim() === "")            errs.defaultFee     = "Default fee is required.";
-  else if (isNaN(fee) || fee < 0)            errs.defaultFee     = "Fee must be 0 or a positive number.";
-  else if (fee > 10_000_000)                 errs.defaultFee     = "Fee cannot exceed ₹1,00,00,000.";
+  // A free course is never billed to anyone, so its fee/discount fields are
+  // meaningless — skip validating them entirely (submit forces both to 0).
+  if (!f.isFree) {
+    const fee = Number(f.defaultFee);
+    if (f.defaultFee.trim() === "")            errs.defaultFee     = "Default fee is required.";
+    else if (isNaN(fee) || fee < 0)            errs.defaultFee     = "Fee must be 0 or a positive number.";
+    else if (fee > 10_000_000)                 errs.defaultFee     = "Fee cannot exceed ₹1,00,00,000.";
+    const discount = f.discountAmount.trim() === "" ? 0 : Number(f.discountAmount);
+    if (isNaN(discount) || discount < 0)       errs.discountAmount = "Discount must be 0 or a positive number.";
+    else if (!errs.defaultFee && discount > fee)
+                                               errs.discountAmount = "Discount cannot exceed the default fee.";
+  }
   return errs;
 }
 
@@ -65,7 +78,10 @@ function CourseFormDialog({
     name:            existing?.name ?? "",
     durationMonths:  existing ? String(existing.durationMonths) : "",
     defaultFee:      existing ? String(existing.defaultFee) : "",
+    discountAmount:  existing?.discountAmount ? String(existing.discountAmount) : "",
+    discountReason:  existing?.discountReason ?? "",
     examCategoryIds: existing?.examCategories.map((e) => e.id) ?? [],
+    isFree:          existing?.isFree ?? false,
   }));
   const [errors, setErrors] = useState<CourseFormErrors>({});
   const [loading, setLoading] = useState(false);
@@ -94,7 +110,10 @@ function CourseFormDialog({
         name:            form.name.trim(),
         examCategoryIds: form.examCategoryIds,
         durationMonths:  Number(form.durationMonths),
-        defaultFee:      Number(form.defaultFee),
+        defaultFee:      form.isFree ? 0 : Number(form.defaultFee),
+        discountAmount:  form.isFree || form.discountAmount.trim() === "" ? 0 : Number(form.discountAmount),
+        discountReason:  form.isFree ? undefined : (form.discountReason.trim() || undefined),
+        isFree:          form.isFree,
       };
       return existing ? updateCourse(existing.id, payload) : createCourse(payload);
     },
@@ -181,7 +200,18 @@ function CourseFormDialog({
             <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wide">
               <Clock className="h-3.5 w-3.5" /> Schedule &amp; Fee
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5">
+              <div>
+                <p className="text-sm font-medium text-gray-800">Free course</p>
+                <p className="text-xs text-gray-400">
+                  Never billed to students (e.g. a dedicated CSR-sponsored program) — no fee schedule is generated
+                  on admission.
+                </p>
+              </div>
+              <Switch checked={form.isFree} onCheckedChange={(v) => setField("isFree", v)} />
+            </div>
+
+            <div className={cn("grid gap-4", form.isFree ? "grid-cols-1" : "grid-cols-2")}>
               <FormField label="Duration (months)" error={errors.durationMonths ? { message: errors.durationMonths } as never : undefined} required>
                 <Input
                   type="number" min={1} max={60}
@@ -190,19 +220,53 @@ function CourseFormDialog({
                   placeholder="e.g. 12"
                 />
               </FormField>
-              <FormField label="Default Fee (₹)" error={errors.defaultFee ? { message: errors.defaultFee } as never : undefined} required>
-                <div className="relative">
-                  <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                  <Input
-                    type="number" min={0}
-                    value={form.defaultFee}
-                    onChange={(e) => setField("defaultFee", e.target.value.replace(/[^0-9.]/g, ""))}
-                    placeholder="e.g. 15000"
-                    className="pl-9"
-                  />
-                </div>
-              </FormField>
+              {!form.isFree && (
+                <FormField label="Default Fee (₹)" error={errors.defaultFee ? { message: errors.defaultFee } as never : undefined} required>
+                  <div className="relative">
+                    <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                    <Input
+                      type="number" min={0}
+                      value={form.defaultFee}
+                      onChange={(e) => setField("defaultFee", e.target.value.replace(/[^0-9.]/g, ""))}
+                      placeholder="e.g. 15000"
+                      className="pl-9"
+                    />
+                  </div>
+                </FormField>
+              )}
             </div>
+
+            {!form.isFree && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    label="Standing Discount (₹)"
+                    error={errors.discountAmount ? { message: errors.discountAmount } as never : undefined}
+                  >
+                    <div className="relative">
+                      <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                      <Input
+                        type="number" min={0}
+                        value={form.discountAmount}
+                        onChange={(e) => setField("discountAmount", e.target.value.replace(/[^0-9.]/g, ""))}
+                        placeholder="e.g. 1000"
+                        className="pl-9"
+                      />
+                    </div>
+                  </FormField>
+                  <FormField label="Discount Reason">
+                    <Input
+                      value={form.discountReason}
+                      onChange={(e) => setField("discountReason", e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </FormField>
+                </div>
+                <p className="text-xs text-gray-400 -mt-2">
+                  Auto-applied to every new student who enrolls in this course going forward.
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -692,9 +756,18 @@ export function CoursesPage() {
     {
       accessorKey: "defaultFee",
       header: "Default Fee",
-      cell: ({ row }) => (
-        <span className="text-sm font-medium text-green-700">{formatCurrency(row.original.defaultFee)}</span>
-      ),
+      cell: ({ row }) => {
+        const { defaultFee, discountAmount } = row.original;
+        if (discountAmount > 0) {
+          return (
+            <span className="text-sm">
+              <span className="text-gray-400 line-through mr-1.5">{formatCurrency(defaultFee)}</span>
+              <span className="font-medium text-green-700">{formatCurrency(defaultFee - discountAmount)}</span>
+            </span>
+          );
+        }
+        return <span className="text-sm font-medium text-green-700">{formatCurrency(defaultFee)}</span>;
+      },
     },
     {
       id: "actions",

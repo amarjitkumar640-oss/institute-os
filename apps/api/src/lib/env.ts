@@ -34,4 +34,23 @@ export const env = cleanEnv(process.env, {
   // goes through the normal apps/web staff login (see site-admin.routes.ts,
   // apps/web/src/modules/site-content), not a separate credential.
   SITE_TENANT_SLUG: str({ default: "" }),
+
+  // Government Exam Intelligence — Step 4 automated scraping. AI extraction
+  // itself goes through the shared in-process AIGateway (see
+  // lib/aiGateway.ts) — no separate gateway URL/key here. Optional; unset
+  // means scraping no-ops with a warning rather than crashing the server
+  // (same convention as SMTP/Twilio above) — the sweep job just records an
+  // error on the source and moves on.
+  FIRECRAWL_API_KEY: str({ default: "" }),
+
+  // AI provider keys for @amarjit_gts/universal-ai-sdk's createAI() (see
+  // lib/aiGateway.ts) — the SDK's own ai-core package already reads these
+  // independently from process.env via its own env schema; declared here
+  // too, read-only, purely so ai-settings.service.ts's getProviderStatus()
+  // has a typed way to check presence (never returns the values). All
+  // optional — unset means that provider isn't usable yet.
+  OPENAI_API_KEY: str({ default: "" }),
+  GROQ_API_KEY: str({ default: "" }),
+  ANTHROPIC_API_KEY: str({ default: "" }),
+  GOOGLE_API_KEY: str({ default: "" }),
 });

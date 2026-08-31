@@ -16,6 +16,11 @@ export interface TenantSettings {
   };
   classReminderMinutes: number;
   overdueGraceDays:     number;
+  legalName:            string | null;
+  registeredAddress:    string | null;
+  gstin:                string | null;
+  stateCode:            string | null;
+  bankDetails:          string | null;
 }
 
 export async function getTenantSettings(): Promise<TenantSettings> {
@@ -38,4 +43,17 @@ export async function updateNotificationTiming(input: {
 
 export async function updateBrandingBackground(background: string | null): Promise<void> {
   await apiClient.patch("/tenants/me/settings", { background });
+}
+
+export interface LegalBillingSettings {
+  legalName?:         string | null;
+  registeredAddress?: string | null;
+  gstin?:             string | null;
+  stateCode?:         string | null;
+  bankDetails?:       string | null;
+}
+
+export async function updateLegalBillingSettings(input: LegalBillingSettings): Promise<LegalBillingSettings> {
+  const { data } = await apiClient.patch("/tenants/me/settings", input);
+  return data;
 }

@@ -120,6 +120,7 @@ module.exports = {
     plugins: [
       "expo-secure-store",
       "expo-local-authentication",
+      "expo-sharing",
       "@react-native-community/datetimepicker",
       [
         "expo-splash-screen",

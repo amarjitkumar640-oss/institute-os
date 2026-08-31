@@ -105,6 +105,25 @@ export interface FeeSummary {
   overdueCount:   number;
 }
 
+export type CollectionPeriod = "today" | "week" | "month" | "year";
+
+export interface CollectionSummary {
+  collectedToday:     number;
+  collectedThisWeek:  number;
+  collectedThisMonth: number;
+  collectedThisYear:  number;
+  totalPending:       number;
+  overdueCount:       number;
+}
+
+export interface BatchCollectionRow {
+  batchId:             string;
+  batchName:           string;
+  collectedAmount:     number;
+  pendingAmount:       number;
+  pendingStudentCount: number;
+}
+
 // ── Request payload types ─────────────────────────────────────────────────────
 
 export interface UpsertTemplatePayload {
@@ -245,6 +264,16 @@ export async function listPayments(scheduleId?: string): Promise<PaymentTransact
 // Summary
 export async function getFeeSummary(): Promise<FeeSummary> {
   const { data } = await apiClient.get<FeeSummary>("/fees/summary");
+  return data;
+}
+
+export async function getCollectionSummary(): Promise<CollectionSummary> {
+  const { data } = await apiClient.get<CollectionSummary>("/fees/collection-summary");
+  return data;
+}
+
+export async function getCollectionByBatch(period: CollectionPeriod): Promise<{ period: CollectionPeriod; batches: BatchCollectionRow[] }> {
+  const { data } = await apiClient.get("/fees/collection-by-batch", { params: { period } });
   return data;
 }
 

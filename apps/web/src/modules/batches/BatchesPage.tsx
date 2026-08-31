@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Search, Layers, Clock, Calendar, BookOpen, Lock, Activity, Pencil } from "lucide-react";
+import { Plus, Search, Layers, Clock, Calendar, BookOpen, Lock, Activity, Pencil, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createBatchSchema } from "@institute-os/shared";
 import { type z } from "zod";
-import { listBatches, createBatch, updateBatch, type Batch } from "@/api/batches";
+import { listBatches, createBatch, updateBatch, deleteBatch, type Batch } from "@/api/batches";
 import { listCourses, type Course } from "@/api/courses";
 import { createSlot, updateSlot, deleteSlot, listBatchSlots, type ClassSlot } from "@/api/schedule";
 import { listAssignableCenters } from "@/api/centers";
@@ -24,10 +24,15 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
+import { AddClassPeriodDialog, DAY_ORDER, DAY_LABELS, type DayOfWeek, type ClassPeriodDraft } from "./AddClassPeriodDialog";
 
-const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
-type DayOfWeek = typeof DAY_ORDER[number];
-const DAY_LABELS: Record<DayOfWeek, string> = { monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu", friday: "Fri", saturday: "Sat", sunday: "Sun" };
+function fmt12h(time24: string): string {
+  const [h, m] = time24.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
 
 function addMonths(date: string | Date, months: number): string {
   const d = new Date(date);
@@ -39,12 +44,61 @@ function toISODate(d: Date | string): string {
   return new Date(d).toISOString().slice(0, 10);
 }
 
+function newDraftId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// ── Reconciling ClassPeriodDrafts against real ClassSlot rows ─────────────────
+// Mirrors mobile's EditBatchScreen: a batch being edited already has real
+// ClassSlot rows server-side (unlike CreateBatchDialog, where periods are
+// purely local until the batch exists), so loading them back into the same
+// period-drafting UI means grouping slots that share one period's identity
+// (same time/subject/faculty/room, just a different day) back together, and
+// tracking each draft's real slot id per day so saving can update/create/
+// delete the exact right rows instead of naively replacing everything.
+function groupSlotsIntoPeriods(slots: ClassSlot[]): {
+  periods: ClassPeriodDraft[];
+  slotIdsByPeriod: Record<string, Partial<Record<DayOfWeek, string>>>;
+} {
+  const groups = new Map<string, ClassSlot[]>();
+  for (const slot of slots) {
+    const key = `${slot.startTime}|${slot.endTime}|${slot.subject?.id ?? ""}|${slot.faculty?.id ?? ""}|${slot.room ?? ""}`;
+    const existing = groups.get(key);
+    if (existing) existing.push(slot); else groups.set(key, [slot]);
+  }
+
+  const periods: ClassPeriodDraft[] = [];
+  const slotIdsByPeriod: Record<string, Partial<Record<DayOfWeek, string>>> = {};
+
+  for (const groupSlots of groups.values()) {
+    const id = newDraftId();
+    const first = groupSlots[0];
+    periods.push({
+      id,
+      days:        DAY_ORDER.filter((d) => groupSlots.some((s) => s.dayOfWeek === d)),
+      startTime:   first.startTime,
+      endTime:     first.endTime,
+      subjectId:   first.subject?.id ?? "",
+      subjectName: first.subject?.name ?? "",
+      facultyId:   first.faculty?.id ?? "",
+      facultyName: first.faculty?.fullName ?? "",
+      room:        first.room ?? "",
+    });
+    const idsByDay: Partial<Record<DayOfWeek, string>> = {};
+    for (const s of groupSlots) idsByDay[s.dayOfWeek as DayOfWeek] = s.id;
+    slotIdsByPeriod[id] = idsByDay;
+  }
+
+  return { periods, slotIdsByPeriod };
+}
+
 type CreateBatchForm = z.infer<typeof createBatchSchema>;
 
 const STATUS_COLORS: Record<string, "default" | "success" | "info" | "warning"> = {
   upcoming: "info",
   running: "success",
   completed: "default",
+  merged: "warning",
 };
 
 function CreateBatchDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -54,10 +108,8 @@ function CreateBatchDialog({ open, onClose }: { open: boolean; onClose: () => vo
   const { data: centers } = useQuery({ queryKey: ["centers-assignable"], queryFn: listAssignableCenters, enabled: !currentCenter });
 
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [selectedDays, setSelectedDays]     = useState<Set<DayOfWeek>>(new Set());
-  const [startTime, setStartTime]           = useState("");
-  const [endTime, setEndTime]               = useState("");
-  const [timingError, setTimingError]       = useState("");
+  const [periods, setPeriods] = useState<ClassPeriodDraft[]>([]);
+  const [periodModal, setPeriodModal] = useState<{ open: boolean; editing: ClassPeriodDraft | null }>({ open: false, editing: null });
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<CreateBatchForm>({
     resolver: zodResolver(createBatchSchema),
@@ -72,13 +124,19 @@ function CreateBatchDialog({ open, onClose }: { open: boolean; onClose: () => vo
     }
   }, [startDateVal, selectedCourse, setValue]);
 
-  function toggleDay(day: DayOfWeek) {
-    setSelectedDays((prev) => {
-      const next = new Set(prev);
-      next.has(day) ? next.delete(day) : next.add(day);
+  function handleSavePeriod(draft: ClassPeriodDraft) {
+    setPeriods((prev) => {
+      const idx = prev.findIndex((p) => p.id === draft.id);
+      if (idx === -1) return [...prev, draft];
+      const next = [...prev];
+      next[idx] = draft;
       return next;
     });
-    setTimingError("");
+    setPeriodModal({ open: false, editing: null });
+  }
+
+  function removePeriod(id: string) {
+    setPeriods((prev) => prev.filter((p) => p.id !== id));
   }
 
   const courses = coursesData?.data ?? [];
@@ -92,11 +150,21 @@ function CreateBatchDialog({ open, onClose }: { open: boolean; onClose: () => vo
         endDate: new Date(d.endDate).toISOString(),
       });
 
-      // Create one slot per selected day (best-effort — batch is already saved)
-      if (startTime && endTime && selectedDays.size > 0) {
+      // Create one slot per (period × day) combination (best-effort — batch is already saved)
+      if (periods.length > 0) {
         await Promise.allSettled(
-          Array.from(selectedDays).map((dayOfWeek) =>
-            createSlot(batch.id, { dayOfWeek, startTime, endTime, validFrom: toISODate(d.startDate) })
+          periods.flatMap((period) =>
+            period.days.map((dayOfWeek) =>
+              createSlot(batch.id, {
+                dayOfWeek,
+                startTime: period.startTime,
+                endTime:   period.endTime,
+                subjectId: period.subjectId || undefined,
+                facultyId: period.facultyId || undefined,
+                room:      period.room || undefined,
+                validFrom: toISODate(d.startDate),
+              })
+            )
           )
         );
       }
@@ -112,13 +180,6 @@ function CreateBatchDialog({ open, onClose }: { open: boolean; onClose: () => vo
   });
 
   function onSubmit(d: CreateBatchForm) {
-    const hasTiming = startTime || endTime || selectedDays.size > 0;
-    if (hasTiming) {
-      if (selectedDays.size === 0) { setTimingError("Select at least one class day"); return; }
-      if (!startTime || !endTime)  { setTimingError("Select both start and end time"); return; }
-      if (startTime >= endTime)    { setTimingError("Start time must be before end time"); return; }
-    }
-    setTimingError("");
     mutation.mutate(d);
   }
 
@@ -229,52 +290,49 @@ function CreateBatchDialog({ open, onClose }: { open: boolean; onClose: () => vo
               <span className="text-xs text-gray-400">Optional — can be added later</span>
             </div>
 
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-2">Class Days</p>
-              <div className="flex gap-1.5 flex-wrap">
-                {DAY_ORDER.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleDay(day)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-semibold border-[1.5px] transition-colors",
-                      selectedDays.has(day)
-                        ? "bg-[var(--color-primary,#7C3AED)] text-white border-[var(--color-primary,#7C3AED)]"
-                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-                    )}
-                  >
-                    {DAY_LABELS[day]}
-                  </button>
+            {periods.length === 0 ? (
+              <p className="text-xs text-gray-400">No class periods added yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {periods.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800">
+                        {p.days.map((d) => DAY_LABELS[d]).join(", ")}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {fmt12h(p.startTime)} – {fmt12h(p.endTime)}
+                        {p.subjectName && ` · ${p.subjectName}`}
+                        {p.facultyName && ` · ${p.facultyName}`}
+                        {p.room && ` · ${p.room}`}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPeriodModal({ open: true, editing: p })}
+                      className="shrink-0 h-7 w-7 flex items-center justify-center rounded-md bg-white border border-gray-200 text-gray-500 hover:text-gray-700"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removePeriod(p.id)}
+                      className="shrink-0 h-7 w-7 flex items-center justify-center rounded-md bg-white border border-gray-200 text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Start Time">
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                  <Input
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => { setStartTime(e.target.value); setTimingError(""); }}
-                    className="pl-9"
-                  />
-                </div>
-              </FormField>
-              <FormField label="End Time">
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                  <Input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => { setEndTime(e.target.value); setTimingError(""); }}
-                    className="pl-9"
-                  />
-                </div>
-              </FormField>
-            </div>
-            {timingError && <p className="text-xs text-red-600">{timingError}</p>}
+            <button
+              type="button"
+              onClick={() => setPeriodModal({ open: true, editing: null })}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-[1.5px] border-dashed border-[var(--color-primary,#7C3AED)]/40 text-xs font-semibold text-[var(--color-primary,#7C3AED)] hover:bg-[var(--color-primary,#7C3AED)]/5 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Class Period
+            </button>
           </div>
 
           <DialogFooter>
@@ -285,11 +343,18 @@ function CreateBatchDialog({ open, onClose }: { open: boolean; onClose: () => vo
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <AddClassPeriodDialog
+        open={periodModal.open}
+        initial={periodModal.editing}
+        onClose={() => setPeriodModal({ open: false, editing: null })}
+        onSave={handleSavePeriod}
+      />
     </Dialog>
   );
 }
 
-const STATUSES = ["upcoming", "running", "completed"] as const;
+const STATUSES = ["upcoming", "running", "completed", "merged"] as const;
 
 // ── Edit Batch Dialog ──────────────────────────────────────────────────────────
 
@@ -307,11 +372,14 @@ function EditBatchDialog({ batch, onClose }: { batch: Batch; onClose: () => void
   const [capacity,    setCapacity]    = useState(String(batch.capacity));
   const [status,      setStatus]      = useState(batch.status);
   const [startDate,   setStartDate]   = useState(toISODate(batch.startDate));
-  const [selectedDays, setSelectedDays] = useState<Set<DayOfWeek>>(new Set());
-  const [startTime,   setStartTime]   = useState("");
-  const [endTime,     setEndTime]     = useState("");
-  const [timingError, setTimingError] = useState("");
   const [errors,      setErrors]      = useState<Record<string, string>>({});
+
+  // ── Class periods — same per-period model as CreateBatchDialog, loaded
+  // back from this batch's real ClassSlot rows and reconciled against them
+  // on save (see groupSlotsIntoPeriods and the mutation below).
+  const [periods, setPeriods] = useState<ClassPeriodDraft[]>([]);
+  const [periodModal, setPeriodModal] = useState<{ open: boolean; editing: ClassPeriodDraft | null }>({ open: false, editing: null });
+  const originalSlotIdsByPeriod = useRef<Record<string, Partial<Record<DayOfWeek, string>>>>({});
 
   const endDate   = startDate ? addMonths(startDate, batch.course.durationMonths) : "";
   const examColor = batch.course.examCategories[0]?.color ?? "#7C3AED";
@@ -319,8 +387,7 @@ function EditBatchDialog({ batch, onClose }: { batch: Batch; onClose: () => void
     ? batch.course.examCategories.map((e) => e.label).join(", ")
     : "General";
 
-  // Load existing slots and pre-populate days/times
-  const { data: existingSlots } = useQuery<ClassSlot[]>({
+  const { data: existingSlots, isLoading: slotsLoading } = useQuery<ClassSlot[]>({
     queryKey: ["batch-slots", batch.id],
     queryFn:  () => listBatchSlots(batch.id),
   });
@@ -328,19 +395,24 @@ function EditBatchDialog({ batch, onClose }: { batch: Batch; onClose: () => void
   useEffect(() => {
     if (!existingSlots || initRef.current) return;
     initRef.current = true;
-    const active = existingSlots.filter((s) => s.isActive);
-    setSelectedDays(new Set(active.map((s) => s.dayOfWeek as DayOfWeek)));
-    const first = active[0];
-    if (first) { setStartTime(first.startTime); setEndTime(first.endTime); }
+    const { periods: loaded, slotIdsByPeriod } = groupSlotsIntoPeriods(existingSlots.filter((s) => s.isActive));
+    originalSlotIdsByPeriod.current = slotIdsByPeriod;
+    setPeriods(loaded);
   }, [existingSlots]);
 
-  function toggleDay(day: DayOfWeek) {
-    setSelectedDays((prev) => {
-      const next = new Set(prev);
-      next.has(day) ? next.delete(day) : next.add(day);
+  function handleSavePeriod(draft: ClassPeriodDraft) {
+    setPeriods((prev) => {
+      const idx = prev.findIndex((p) => p.id === draft.id);
+      if (idx === -1) return [...prev, draft];
+      const next = [...prev];
+      next[idx] = draft;
       return next;
     });
-    setTimingError("");
+    setPeriodModal({ open: false, editing: null });
+  }
+
+  function removePeriod(id: string) {
+    setPeriods((prev) => prev.filter((p) => p.id !== id));
   }
 
   function validate() {
@@ -349,19 +421,58 @@ function EditBatchDialog({ batch, onClose }: { batch: Batch; onClose: () => void
     if (!capacity.trim() || isNaN(Number(capacity)) || Number(capacity) < 1) errs.capacity = "Enter a valid capacity (min 1).";
     if (!startDate)                                                           errs.startDate = "Start date is required.";
     setErrors(errs);
-    // Timing cross-validation
-    const hasTiming = startTime || endTime || selectedDays.size > 0;
-    if (hasTiming) {
-      if (selectedDays.size === 0) { setTimingError("Select at least one class day"); return false; }
-      if (!startTime || !endTime)  { setTimingError("Select both start and end time"); return false; }
-      if (startTime >= endTime)    { setTimingError("Start time must be before end time"); return false; }
-    }
     return Object.keys(errs).length === 0;
+  }
+
+  // Reconciles the current `periods` state against whatever real ClassSlot
+  // rows this batch had when the dialog opened — update the ones that
+  // survived (by their recorded real id), create ones for newly-added
+  // days/periods, and delete any original id nothing in the final state
+  // still claims. Best-effort per call, same philosophy as
+  // CreateBatchDialog's own slot creation: the batch's core fields already
+  // saved successfully, so one slot failing shouldn't undo that.
+  async function reconcileClassPeriods() {
+    const claimedIds = new Set<string>();
+    const ops: Promise<unknown>[] = [];
+
+    for (const period of periods) {
+      const existingIdsForPeriod = originalSlotIdsByPeriod.current[period.id] ?? {};
+      for (const day of period.days) {
+        const existingId = existingIdsForPeriod[day];
+        if (existingId) {
+          claimedIds.add(existingId);
+          ops.push(updateSlot(existingId, {
+            startTime: period.startTime,
+            endTime:   period.endTime,
+            subjectId: period.subjectId || null,
+            facultyId: period.facultyId || null,
+            room:      period.room || null,
+          }));
+        } else {
+          ops.push(createSlot(batch.id, {
+            dayOfWeek: day,
+            startTime: period.startTime,
+            endTime:   period.endTime,
+            subjectId: period.subjectId || undefined,
+            facultyId: period.facultyId || undefined,
+            room:      period.room || undefined,
+            validFrom: startDate,
+          }));
+        }
+      }
+    }
+
+    for (const idsByDay of Object.values(originalSlotIdsByPeriod.current)) {
+      for (const id of Object.values(idsByDay)) {
+        if (id && !claimedIds.has(id)) ops.push(deleteSlot(id));
+      }
+    }
+
+    await Promise.allSettled(ops);
   }
 
   const mutation = useMutation({
     mutationFn: async () => {
-      // 1. Update batch metadata
       await updateBatch(batch.id, {
         name:      name.trim(),
         capacity:  Number(capacity),
@@ -369,25 +480,7 @@ function EditBatchDialog({ batch, onClose }: { batch: Batch; onClose: () => void
         endDate:   new Date(endDate).toISOString(),
         status,
       });
-
-      // 2. Reconcile slots (best-effort)
-      const active = (existingSlots ?? []).filter((s) => s.isActive);
-      const slotByDay = new Map(active.map((s) => [s.dayOfWeek as DayOfWeek, s]));
-
-      const hasTiming = startTime && endTime && selectedDays.size > 0;
-      if (hasTiming) {
-        const toDelete = active.filter((s) => !selectedDays.has(s.dayOfWeek as DayOfWeek));
-        const toCreate = Array.from(selectedDays).filter((d) => !slotByDay.has(d));
-        const toUpdate = active.filter(
-          (s) => selectedDays.has(s.dayOfWeek as DayOfWeek) &&
-                 (s.startTime !== startTime || s.endTime !== endTime)
-        );
-        await Promise.allSettled([
-          ...toDelete.map((s) => deleteSlot(s.id)),
-          ...toCreate.map((d) => createSlot(batch.id, { dayOfWeek: d, startTime, endTime, validFrom: startDate })),
-          ...toUpdate.map((s) => updateSlot(s.id, { startTime, endTime })),
-        ]);
-      }
+      await reconcileClassPeriods();
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["batches"] });
@@ -516,61 +609,60 @@ function EditBatchDialog({ batch, onClose }: { batch: Batch; onClose: () => void
             </div>
           </div>
 
-          {/* ── Class Timing ── */}
+          {/* ── Class Timing — same per-period model as Create, loaded back
+              from this batch's real ClassSlot rows and reconciled against
+              them on save (see groupSlotsIntoPeriods / reconcileClassPeriods). ── */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wide">
-                <Clock className="h-3.5 w-3.5" /> Class Timing
-              </div>
-              <span className="text-xs text-gray-400">Optional</span>
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wide">
+              <Clock className="h-3.5 w-3.5" /> Class Timing
             </div>
 
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-2">Class Days</p>
-              <div className="flex gap-1.5 flex-wrap">
-                {DAY_ORDER.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleDay(day)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-semibold border-[1.5px] transition-colors",
-                      selectedDays.has(day)
-                        ? "bg-[var(--color-primary,#7C3AED)] text-white border-[var(--color-primary,#7C3AED)]"
-                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-                    )}
-                  >
-                    {DAY_LABELS[day]}
-                  </button>
+            {slotsLoading ? (
+              <p className="text-xs text-gray-400">Loading class periods…</p>
+            ) : periods.length === 0 ? (
+              <p className="text-xs text-gray-400">No class periods set up yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {periods.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800">
+                        {p.days.map((d) => DAY_LABELS[d]).join(", ")}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {fmt12h(p.startTime)} – {fmt12h(p.endTime)}
+                        {p.subjectName && ` · ${p.subjectName}`}
+                        {p.facultyName && ` · ${p.facultyName}`}
+                        {p.room && ` · ${p.room}`}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPeriodModal({ open: true, editing: p })}
+                      className="shrink-0 h-7 w-7 flex items-center justify-center rounded-md bg-white border border-gray-200 text-gray-500 hover:text-gray-700"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removePeriod(p.id)}
+                      className="shrink-0 h-7 w-7 flex items-center justify-center rounded-md bg-white border border-gray-200 text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Start Time">
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                  <Input
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => { setStartTime(e.target.value); setTimingError(""); }}
-                    className="pl-9"
-                  />
-                </div>
-              </FormField>
-              <FormField label="End Time">
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                  <Input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => { setEndTime(e.target.value); setTimingError(""); }}
-                    className="pl-9"
-                  />
-                </div>
-              </FormField>
-            </div>
-            {timingError && <p className="text-xs text-red-600">{timingError}</p>}
+            <button
+              type="button"
+              onClick={() => setPeriodModal({ open: true, editing: null })}
+              disabled={slotsLoading}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-[1.5px] border-dashed border-[var(--color-primary,#7C3AED)]/40 text-xs font-semibold text-[var(--color-primary,#7C3AED)] hover:bg-[var(--color-primary,#7C3AED)]/5 transition-colors disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Class Period
+            </button>
           </div>
 
         </div>
@@ -582,19 +674,46 @@ function EditBatchDialog({ batch, onClose }: { batch: Batch; onClose: () => void
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AddClassPeriodDialog
+        open={periodModal.open}
+        initial={periodModal.editing}
+        onClose={() => setPeriodModal({ open: false, editing: null })}
+        onSave={handleSavePeriod}
+      />
     </Dialog>
   );
 }
 
 export function BatchesPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { isAllCenters } = useAuth();
+  const { canDelete } = usePermission("batches");
   const [search, setSearch]   = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Batch | null>(null);
 
   const { data: batches, isLoading } = useQuery({ queryKey: ["batches"], queryFn: listBatches });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteBatch,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["batches"] });
+      toast({ title: "Batch deleted" });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
+      toast({ variant: "destructive", title: msg?.message ?? msg?.error ?? "Failed to delete batch" });
+    },
+  });
+
+  function handleDelete(batch: Batch) {
+    if (confirm(`Delete "${batch.name}"? This also removes its weekly class schedule and all class sessions. This can't be undone.`)) {
+      deleteMutation.mutate(batch.id);
+    }
+  }
 
   const filtered = (batches ?? []).filter((b) => {
     const matchSearch = b.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -666,6 +785,14 @@ export function BatchesPage() {
           <Button size="sm" variant="ghost" onClick={() => navigate(`/batches/${row.original.id}`)}>
             View
           </Button>
+          {canDelete && (
+            <Button
+              size="sm" variant="ghost" className="text-red-600"
+              onClick={() => handleDelete(row.original)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       ),
     },

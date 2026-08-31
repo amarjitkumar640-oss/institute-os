@@ -32,6 +32,22 @@ jobs:
         run: |
           echo "${{ secrets.QA_ENV_FILE }}" >> "$GITHUB_ENV"
           echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/institute_os_test" >> "$GITHUB_ENV"
+          # QA_ENV_FILE carries real SMTP/Twilio credentials (needed for the
+          # actual QA deployment to send real password-reset emails/SMS) —
+          # but this same file gets loaded here just for JWT/S3/DB config.
+          # Several tests (password-reset.test.ts) specifically exercise the
+          # "mail/SMS provider isn't configured" path, which only holds
+          # locally (.env.test has no SMTP/Twilio vars at all); left as-is,
+          # real QA credentials leak into the test run and those assertions
+          # fail. Blanked out here so the test job always runs unconfigured,
+          # regardless of what QA_ENV_FILE happens to contain.
+          echo "SMTP_HOST=" >> "$GITHUB_ENV"
+          echo "SMTP_USER=" >> "$GITHUB_ENV"
+          echo "SMTP_PASS=" >> "$GITHUB_ENV"
+          echo "SMTP_FROM=" >> "$GITHUB_ENV"
+          echo "TWILIO_ACCOUNT_SID=" >> "$GITHUB_ENV"
+          echo "TWILIO_AUTH_TOKEN=" >> "$GITHUB_ENV"
+          echo "TWILIO_FROM_NUMBER=" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - run: npm run build -w packages/shared
@@ -87,6 +103,20 @@ jobs:
             VITE_API_URL=https://thesuccess.in/qa
             BASE_PATH=/qa/
 
+      # Public Government Exam Intelligence portal — served at /qa/exams/*
+      # (see infra/Caddyfile's handle_path /qa/exams* block).
+      - name: Build and push exam-portal — amd64, matching the Oracle instance
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/exam-portal/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/institute-os-exam-portal:quality
+          build-args: |
+            VITE_API_URL=https://thesuccess.in/qa
+            BASE_PATH=/qa/exams/
+
       - name: Sync infra config to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -108,8 +138,8 @@ jobs:
             ${{ secrets.QA_ENV_FILE }}
             ENVEOF
             cd ~/institute-os/infra
-            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api-qa web-qa
-            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d postgres-qa api-qa web-qa
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml pull api-qa web-qa exam-portal-qa
+            docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml up -d postgres-qa api-qa web-qa exam-portal-qa
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx prisma migrate deploy --schema prisma/schema.prisma
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx tsx prisma/backfillPhotoKeys.ts
             docker compose -f docker-compose.prod.yml -f docker-compose.quality.yml exec -T api-qa npx tsx prisma/seedDocumentTypes.ts

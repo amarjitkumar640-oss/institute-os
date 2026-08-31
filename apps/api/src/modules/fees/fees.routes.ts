@@ -15,6 +15,9 @@ import {
   getScheduleDetail,
   listSchedules,
   getFeeSummary,
+  getCollectionSummary,
+  getCollectionByBatch,
+  computeScheduleOutstanding,
 } from "./fees.service";
 import {
   upsertFeeTemplateSchema,
@@ -77,7 +80,10 @@ feesRouter.get(
     const data = await listSchedules(prisma, req.auth!.tenantId, await assignedCenterIds(req), { search, status, batchId });
     const mapped = data.map((s) => {
       const paidAmount = s.installments.reduce((sum, i) => sum + Number(i.paidAmount), 0);
-      const pendingAmount = Math.max(0, Number(s.effectiveFee) - paidAmount - Number(s.creditBalance));
+      const pendingAmount = computeScheduleOutstanding(
+        Number(s.effectiveFee), Number(s.creditBalance),
+        s.installments.map((i) => ({ paidAmount: Number(i.paidAmount), waivedAmount: Number(i.waivedAmount) })),
+      );
       return {
         id: s.id,
         enrollmentId: s.enrollmentId,
@@ -240,5 +246,29 @@ feesRouter.get(
       totalPending: summary.pending,
       overdueCount: summary.overdueCount,
     });
+  },
+);
+
+// ── Collection dashboard (today/week/month/year + batch-wise) ────────────────
+
+feesRouter.get(
+  "/collection-summary",
+  requireAuth,
+  requirePermission("fees", "read"),
+  async (req, res) => {
+    const summary = await getCollectionSummary(prisma, req.auth!.tenantId, await assignedCenterIds(req));
+    res.json(summary);
+  },
+);
+
+feesRouter.get(
+  "/collection-by-batch",
+  requireAuth,
+  requirePermission("fees", "read"),
+  validateQuery(z.object({ period: z.enum(["today", "week", "month", "year"]) })),
+  async (req, res) => {
+    const { period } = req.query as { period: "today" | "week" | "month" | "year" };
+    const data = await getCollectionByBatch(prisma, req.auth!.tenantId, await assignedCenterIds(req), period);
+    res.json(data);
   },
 );

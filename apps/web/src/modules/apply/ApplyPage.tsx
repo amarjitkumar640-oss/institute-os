@@ -164,6 +164,9 @@ export function ApplyPage() {
       if (!phone.trim())    errs.phone    = "Phone number is required.";
       else if (!/^\d{7,15}$/.test(phone.trim())) errs.phone = "Enter a valid phone number (7–15 digits).";
       if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = "Enter a valid email address.";
+      if (!dob)             errs.dob      = "Date of birth is required.";
+      if (!gender)          errs.gender   = "Please select a gender.";
+      if (!address.trim())  errs.address  = "Address is required.";
     }
     if (s === 1) {
       if (guardianEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guardianEmail.trim())) errs.guardianEmail = "Enter a valid email address.";
@@ -202,9 +205,11 @@ export function ApplyPage() {
         fullName: fullName.trim(),
         phone:    phone.trim(),
         email:    email.trim() || undefined,
-        dob:      dob ? new Date(dob) : undefined,
-        address:  address.trim() || undefined,
-        gender:   gender ?? undefined,
+        // dob/address/gender are enforced required by validateStep()'s step 0
+        // check before the wizard can advance, so they're guaranteed present here.
+        dob:      new Date(dob),
+        address:  address.trim(),
+        gender:   gender as Gender,
         fatherName:         fatherName.trim() || undefined,
         motherName:         motherName.trim() || undefined,
         guardianOccupation: guardianOccupation.trim() || undefined,
@@ -319,11 +324,11 @@ export function ApplyPage() {
                   <FormField label="Email" error={errors.email ? { message: errors.email, type: "" } as any : undefined}>
                     <MInput value={email} onChange={(e) => { setEmail(e.target.value); clearError("email"); }} placeholder="you@example.com" />
                   </FormField>
-                  <FormField label="Date of birth">
-                    <MInput type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+                  <FormField label="Date of birth" required error={errors.dob ? { message: errors.dob, type: "" } as any : undefined}>
+                    <MInput type="date" value={dob} onChange={(e) => { setDob(e.target.value); clearError("dob"); }} />
                   </FormField>
-                  <FormField label="Gender">
-                    <Select value={gender ?? undefined} onValueChange={(v) => setGender(v as Gender)}>
+                  <FormField label="Gender" required error={errors.gender ? { message: errors.gender, type: "" } as any : undefined}>
+                    <Select value={gender ?? undefined} onValueChange={(v) => { setGender(v as Gender); clearError("gender"); }}>
                       <MSelectTrigger><SelectValue placeholder="Select" /></MSelectTrigger>
                       <SelectContent>
                         <SelectItem value="male">Male</SelectItem>
@@ -331,8 +336,8 @@ export function ApplyPage() {
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label="Address" className="sm:col-span-2">
-                    <MTextarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your current address" />
+                  <FormField label="Address" required error={errors.address ? { message: errors.address, type: "" } as any : undefined} className="sm:col-span-2">
+                    <MTextarea value={address} onChange={(e) => { setAddress(e.target.value); clearError("address"); }} placeholder="Your current address" />
                   </FormField>
                 </div>
               )}

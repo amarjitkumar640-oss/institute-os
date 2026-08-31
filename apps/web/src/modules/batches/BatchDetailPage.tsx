@@ -1,12 +1,17 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Edit, Calendar, Users, Plus, Trash2, RefreshCw, Pencil, Repeat, MoreVertical, CheckCircle2, XCircle } from "lucide-react";
+import {
+  ArrowLeft, Edit, Calendar, Users, Plus, Trash2, RefreshCw, Pencil, Repeat, MoreVertical,
+  CheckCircle2, XCircle, Merge, IndianRupee, Clock, Building2, Tag, Landmark,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { updateBatchSchema } from "@institute-os/shared";
 import { type z } from "zod";
-import { getBatch, updateBatch } from "@/api/batches";
+import { getBatch, updateBatch, listBatches, mergeBatch, type MergeBatchResult } from "@/api/batches";
+import { OffersTab } from "./OffersTab";
+import { SponsorshipTab } from "./SponsorshipTab";
 import { listStudents } from "@/api/students";
 import { listFaculty } from "@/api/faculty";
 import { listSubjects } from "@/api/subjects";
@@ -28,6 +33,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField } from "@/components/FormField";
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { type ColumnDef } from "@tanstack/react-table";
@@ -41,6 +47,7 @@ const STATUS_COLORS: Record<string, "default" | "success" | "info" | "warning"> 
   upcoming: "info",
   running: "success",
   completed: "default",
+  merged: "warning",
 };
 
 const DAY_OPTIONS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
@@ -117,6 +124,127 @@ function EditBatchDialog({ batchId, open, onClose }: { batchId: string; open: bo
             <Button type="submit" disabled={isSubmitting}>Save</Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Merge Batch ──────────────────────────────────────────────────────────────
+// Moves every active student out of this batch and into another — see
+// batch-merge.service.ts on the API side for exactly what does and doesn't
+// move (no course-match requirement, fee/courseId untouched, this batch's
+// class slots deactivated once emptied and its status set to "merged").
+
+function MergeBatchDialog({
+  batch, open, onClose,
+}: {
+  batch: { id: string; name: string; enrolledCount: number; centerId: string };
+  open: boolean;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [toBatchId, setToBatchId] = useState<string | null>(null);
+  const [result, setResult] = useState<MergeBatchResult | null>(null);
+
+  const { data: batches, isLoading: loadingBatches } = useQuery({
+    queryKey: ["batches"],
+    queryFn: listBatches,
+    enabled: open,
+  });
+
+  // Same-center only, matching the existing per-student "Move to Batch"
+  // picker in the mobile app — a student physically attends one center.
+  const targets = (batches ?? []).filter((b) => b.id !== batch.id && b.centerId === batch.centerId && b.status !== "merged");
+  const target = targets.find((b) => b.id === toBatchId) ?? null;
+
+  const mutation = useMutation({
+    mutationFn: () => mergeBatch(batch.id, toBatchId!),
+    onSuccess: (data) => {
+      setResult(data);
+      qc.invalidateQueries({ queryKey: ["batches"] });
+      qc.invalidateQueries({ queryKey: ["batch", batch.id] });
+      qc.invalidateQueries({ queryKey: ["batch", toBatchId] });
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: (err: any) =>
+      toast({ variant: "destructive", title: "Merge failed", description: err?.response?.data?.error }),
+  });
+
+  function handleClose() {
+    setToBatchId(null);
+    setResult(null);
+    onClose();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Merge {batch.name} Into Another Batch</DialogTitle></DialogHeader>
+
+        {result ? (
+          <div className="space-y-3">
+            <p className="text-sm text-emerald-700 bg-emerald-50 rounded-lg p-3">
+              {result.mergedCount} student(s) moved into {target?.name ?? "the target batch"}.
+              {result.sourceBatchStatus === "merged" && ` ${batch.name} is now empty and marked as merged.`}
+            </p>
+            {result.skipped.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-amber-700 mb-1.5">
+                  {result.skipped.length} student(s) need manual handling:
+                </p>
+                <div className="space-y-1">
+                  {result.skipped.map((s) => (
+                    <p key={s.studentId} className="text-xs text-amber-700 bg-amber-50 rounded p-2">
+                      <strong>{s.fullName}</strong> — {s.reason}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button onClick={() => { handleClose(); navigate(`/batches/${batch.id}`); }}>Done</Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              Moves all {batch.enrolledCount} active student(s) — and their full fee/payment history — into another
+              batch. No course-match required; each student's own course record and fee amount are left untouched.
+              This batch will be marked <span className="font-medium">merged</span> once empty and can't be reused for new enrollments.
+            </p>
+            <FormField label="Target Batch" required>
+              {loadingBatches ? (
+                <Skeleton className="h-9 w-full" />
+              ) : (
+                <Select value={toBatchId ?? "__none__"} onValueChange={setToBatchId}>
+                  <SelectTrigger><SelectValue placeholder="Select a batch in the same center" /></SelectTrigger>
+                  <SelectContent>
+                    {targets.length === 0 && <SelectItem value="__none__" disabled>No other batches in this center</SelectItem>}
+                    {targets.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} — {b.course.name} ({b.enrolledCount}/{b.capacity})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </FormField>
+            {target && target.capacity - target.enrolledCount < batch.enrolledCount && (
+              <p className="text-xs text-amber-600">
+                {target.name} only has room for {Math.max(0, target.capacity - target.enrolledCount)} more student(s) right
+                now — the rest will be reported as skipped rather than blocking the merge. Increase its capacity first if
+                you want everyone to fit.
+              </p>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button onClick={() => mutation.mutate()} disabled={!toBatchId || mutation.isPending}>
+                {mutation.isPending ? "Merging…" : "Merge"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -659,6 +787,7 @@ export function BatchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [showEdit, setShowEdit] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
 
   const { data: batch, isLoading } = useQuery({
     queryKey: ["batch", id],
@@ -680,6 +809,12 @@ export function BatchDetailPage() {
   );
 
   if (!batch) return <div className="p-6 text-gray-500">Batch not found</div>;
+
+  const examColor = batch.course.examCategories[0]?.color ?? "#7C3AED";
+  const examLabel = batch.course.examCategories.length
+    ? batch.course.examCategories.map((c) => c.label).join(", ")
+    : "General";
+  const fillPct = batch.capacity > 0 ? Math.min(100, Math.round((batch.enrolledCount / batch.capacity) * 100)) : 0;
 
   const studentColumns: ColumnDef<Student>[] = [
     {
@@ -706,17 +841,33 @@ export function BatchDetailPage() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="flex items-center gap-4 border-b border-gray-100 bg-white px-6 py-4">
+      <div className="flex items-center gap-4 border-b border-gray-100 bg-white px-6 py-5">
         <Button variant="ghost" size="icon" onClick={() => navigate("/batches")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-gray-900">{batch.name}</h1>
-            <Badge variant={STATUS_COLORS[batch.status]}>{batch.status}</Badge>
+            <Badge variant={STATUS_COLORS[batch.status]} className="capitalize">{batch.status}</Badge>
           </div>
-          <p className="text-sm text-gray-500">{batch.course.name} &middot; {formatDate(batch.startDate)} – {formatDate(batch.endDate)}</p>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+              style={{ background: examColor + "18", color: examColor }}
+            >
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: examColor }} />
+              {examLabel}
+            </span>
+            <p className="text-sm text-gray-500">
+              {batch.course.name} &middot; {formatDate(batch.startDate)} – {formatDate(batch.endDate)}
+            </p>
+          </div>
         </div>
+        {batch.status !== "merged" && batch.enrolledCount > 0 && (
+          <Button variant="outline" onClick={() => setShowMerge(true)}>
+            <Merge className="mr-2 h-4 w-4" /> Merge Into…
+          </Button>
+        )}
         <Button variant="outline" onClick={() => setShowEdit(true)}>
           <Edit className="mr-2 h-4 w-4" /> Edit
         </Button>
@@ -726,26 +877,60 @@ export function BatchDetailPage() {
         <div className="grid grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Enrolled</p>
-              <p className="text-2xl font-bold mt-1">{batch.enrolledCount} / {batch.capacity}</p>
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 bg-blue-50">
+                  <Users className="h-[18px] w-[18px] text-blue-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Enrolled</p>
+                  <p className="text-xl font-bold text-gray-900 mt-0.5">{batch.enrolledCount} / {batch.capacity}</p>
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full bg-gray-100 mt-3 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${fillPct}%`, background: "var(--color-primary, #7C3AED)" }}
+                />
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Course Fee</p>
-              <p className="text-2xl font-bold mt-1">{formatCurrency(batch.course.defaultFee)}</p>
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 bg-emerald-50">
+                  <IndianRupee className="h-[18px] w-[18px] text-emerald-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Course Fee</p>
+                  <p className="text-xl font-bold text-gray-900 mt-0.5">{formatCurrency(batch.course.defaultFee)}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Duration</p>
-              <p className="text-2xl font-bold mt-1">{batch.course.durationMonths}m</p>
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 bg-amber-50">
+                  <Clock className="h-[18px] w-[18px] text-amber-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Duration</p>
+                  <p className="text-xl font-bold text-gray-900 mt-0.5">{batch.course.durationMonths} months</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Center</p>
-              <p className="text-lg font-bold mt-1 truncate">{batch.center?.name ?? "—"}</p>
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 bg-violet-50">
+                  <Building2 className="h-[18px] w-[18px] text-violet-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Center</p>
+                  <p className="text-xl font-bold text-gray-900 mt-0.5 truncate">{batch.center?.name ?? "—"}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -760,11 +945,23 @@ export function BatchDetailPage() {
               <Calendar className="mr-2 h-4 w-4" />
               Schedule
             </TabsTrigger>
+            <TabsTrigger value="offers">
+              <Tag className="mr-2 h-4 w-4" />
+              Offers
+            </TabsTrigger>
+            <TabsTrigger value="sponsorship">
+              <Landmark className="mr-2 h-4 w-4" />
+              Sponsorship
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="students" className="mt-4">
             {(students ?? []).length === 0 ? (
-              <div className="py-8 text-center text-gray-400">No students enrolled yet</div>
+              <EmptyState
+                icon={Users}
+                title="No students enrolled yet"
+                description="Students admitted into this batch will show up here."
+              />
             ) : (
               <DataTable columns={studentColumns} data={students ?? []} />
             )}
@@ -773,11 +970,26 @@ export function BatchDetailPage() {
           <TabsContent value="schedule" className="mt-4">
             <ScheduleTab batchId={id!} />
           </TabsContent>
+
+          <TabsContent value="offers" className="mt-4">
+            <OffersTab batchId={id!} />
+          </TabsContent>
+
+          <TabsContent value="sponsorship" className="mt-4">
+            <SponsorshipTab batchId={id!} />
+          </TabsContent>
         </Tabs>
       </div>
 
       {showEdit && id && (
         <EditBatchDialog batchId={id} open={showEdit} onClose={() => setShowEdit(false)} />
+      )}
+      {showMerge && (
+        <MergeBatchDialog
+          batch={{ id: batch.id, name: batch.name, enrolledCount: batch.enrolledCount, centerId: batch.centerId }}
+          open={showMerge}
+          onClose={() => setShowMerge(false)}
+        />
       )}
     </div>
   );

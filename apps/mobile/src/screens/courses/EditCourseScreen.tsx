@@ -3,14 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   TextInput,
   Animated,
   ActivityIndicator,
   TouchableOpacity,
-  Keyboard,
+  Switch,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { FormField } from "../../components/ui/FormField";
 import { SelectChips } from "../../components/ui/SelectChips";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
@@ -38,6 +36,9 @@ interface FormState {
   examCategoryIds: string[];
   durationMonths: string;
   defaultFee: string;
+  discountAmount: string;
+  discountReason: string;
+  isFree: boolean;
 }
 
 interface FormErrors {
@@ -45,6 +46,7 @@ interface FormErrors {
   examCategory?: string;
   durationMonths?: string;
   defaultFee?: string;
+  discountAmount?: string;
   submit?: string;
 }
 
@@ -53,6 +55,8 @@ interface UpdatedCourse {
   examCategories: ExamCategoryItem[];
   durationMonths: number;
   defaultFee: number;
+  discountAmount: number;
+  isFree: boolean;
 }
 
 // "General" and specific categories are mutually exclusive — see the same
@@ -75,10 +79,18 @@ function validate(form: FormState): FormErrors {
   else if (!Number.isInteger(months) || months < 1 || months > 60)
     errors.durationMonths = "Duration must be a whole number between 1 and 60.";
 
-  const fee = Number(form.defaultFee);
-  if (form.defaultFee.trim() === "") errors.defaultFee = "Default fee is required.";
-  else if (isNaN(fee) || fee < 0) errors.defaultFee = "Fee must be 0 or a positive number.";
-  else if (fee > 10_000_000) errors.defaultFee = "Fee cannot exceed ₹1,00,00,000.";
+  // A free course is never billed to anyone, so its fee/discount fields are
+  // meaningless — skip validating them entirely (submit forces both to 0).
+  if (!form.isFree) {
+    const fee = Number(form.defaultFee);
+    if (form.defaultFee.trim() === "") errors.defaultFee = "Default fee is required.";
+    else if (isNaN(fee) || fee < 0) errors.defaultFee = "Fee must be 0 or a positive number.";
+    else if (fee > 10_000_000) errors.defaultFee = "Fee cannot exceed ₹1,00,00,000.";
+
+    const discount = form.discountAmount.trim() === "" ? 0 : Number(form.discountAmount);
+    if (isNaN(discount) || discount < 0) errors.discountAmount = "Discount must be 0 or a positive number.";
+    else if (!errors.defaultFee && discount > fee) errors.discountAmount = "Discount cannot exceed the default fee.";
+  }
 
   return errors;
 }
@@ -88,23 +100,15 @@ export function EditCourseScreen({ navigation, route }: Props) {
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
   const { course } = route.params;
-  const scrollRef = useRef<ScrollView>(null);
-
-  // RN auto-scrolls to keep a focused field visible above the keyboard but
-  // never scrolls back on dismiss — undo that so the form returns to its
-  // original scroll position once the keyboard is fully gone.
-  useEffect(() => {
-    const sub = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-    return () => sub.remove();
-  }, []);
 
   const initialForm: FormState = {
     name:            course.name,
     examCategoryIds: course.examCategories.map((c) => c.id),
     durationMonths:  String(course.durationMonths),
     defaultFee:      String(course.defaultFee),
+    discountAmount:  course.discountAmount ? String(course.discountAmount) : "",
+    discountReason:  course.discountReason ?? "",
+    isFree:          course.isFree ?? false,
   };
 
   const [form, setForm]               = useState<FormState>(initialForm);
@@ -154,7 +158,10 @@ export function EditCourseScreen({ navigation, route }: Props) {
     form.name           !== initialForm.name ||
     categoriesChanged ||
     form.durationMonths !== initialForm.durationMonths ||
-    form.defaultFee     !== initialForm.defaultFee;
+    form.defaultFee     !== initialForm.defaultFee ||
+    form.discountAmount !== initialForm.discountAmount ||
+    form.discountReason !== initialForm.discountReason ||
+    form.isFree          !== initialForm.isFree;
 
   async function handleSubmit() {
     const errs = validate(form);
@@ -168,18 +175,24 @@ export function EditCourseScreen({ navigation, route }: Props) {
         name:            form.name.trim(),
         examCategoryIds: form.examCategoryIds,
         durationMonths:  Number(form.durationMonths),
-        defaultFee:      Number(form.defaultFee),
+        defaultFee:      form.isFree ? 0 : Number(form.defaultFee),
+        discountAmount:  form.isFree || form.discountAmount.trim() === "" ? 0 : Number(form.discountAmount),
+        discountReason:  form.isFree ? undefined : (form.discountReason.trim() || undefined),
+        isFree:          form.isFree,
       });
 
       if (!result.ok) {
         if ("conflict" in result) { setErrors({ name: result.message }); return; }
         if ("notFound" in result) { setErrors({ submit: "Course not found. It may have been deleted." }); return; }
+        if ("discountExceedsFee" in result) { setErrors({ discountAmount: result.message }); return; }
       } else {
         showSuccessCard({
           name:           result.course.name,
           examCategories: result.course.examCategories,
           durationMonths: result.course.durationMonths,
           defaultFee:     result.course.defaultFee,
+          discountAmount: result.course.discountAmount,
+          isFree:         result.course.isFree,
         });
       }
     } catch {
@@ -202,18 +215,29 @@ export function EditCourseScreen({ navigation, route }: Props) {
 
       <ScreenHeader title="Edit Course" onBack={handleBack} />
 
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}
+      <KeyboardAvoidingScroll
+        style={s.scroll}
+        contentContainerStyle={s.scrollContent}
+        footer={
+          <View style={s.footer}>
+            <PrimaryButton
+              label="Save Changes"
+              onPress={handleSubmit}
+              loading={loading}
+              disabled={loading || !isDirty}
+              icon="checkmark-circle-outline"
+            />
+            {isDirty && !loading && (
+              <PrimaryButton
+                label="Reset Changes"
+                onPress={() => { setForm(initialForm); setErrors({}); }}
+                variant="outline"
+                icon="refresh-outline"
+              />
+            )}
+          </View>
+        }
       >
-        <ScrollView
-          ref={scrollRef}
-          style={s.scroll}
-          contentContainerStyle={s.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           {/* Basic Info */}
           <View style={s.section}>
             <SectionHead icon="document-text-outline" title="Basic Information" color={colors.primary} />
@@ -265,19 +289,60 @@ export function EditCourseScreen({ navigation, route }: Props) {
               blurOnSubmit={false}
             />
 
-            <FormField
-              label="DEFAULT FEE (₹)"
-              value={form.defaultFee}
-              onChangeText={(v) => setField("defaultFee", v.replace(/[^0-9.]/g, ""))}
-              placeholder="e.g. 15000"
-              keyboardType="decimal-pad"
-              error={errors.defaultFee}
-              required
-              icon="wallet-outline"
-              hint="This fee will be the default for new enrollments"
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-            />
+            <View style={s.freeToggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.freeToggleLabel}>Free course</Text>
+                <Text style={s.freeToggleSub}>
+                  Never billed to students (e.g. a dedicated CSR-sponsored program) — no fee schedule is generated
+                  on admission.
+                </Text>
+              </View>
+              <Switch
+                value={form.isFree}
+                onValueChange={(v) => setField("isFree", v)}
+                trackColor={{ true: colors.primary, false: C.border }}
+                thumbColor={C.placeholder}
+              />
+            </View>
+
+            {!form.isFree && (
+              <>
+                <FormField
+                  label="DEFAULT FEE (₹)"
+                  value={form.defaultFee}
+                  onChangeText={(v) => setField("defaultFee", v.replace(/[^0-9.]/g, ""))}
+                  placeholder="e.g. 15000"
+                  keyboardType="decimal-pad"
+                  error={errors.defaultFee}
+                  required
+                  icon="wallet-outline"
+                  hint="This fee will be the default for new enrollments"
+                  returnKeyType="next"
+                />
+
+                <FormField
+                  label="STANDING DISCOUNT (₹)"
+                  value={form.discountAmount}
+                  onChangeText={(v) => setField("discountAmount", v.replace(/[^0-9.]/g, ""))}
+                  placeholder="e.g. 1000"
+                  keyboardType="decimal-pad"
+                  error={errors.discountAmount}
+                  icon="pricetag-outline"
+                  hint="Auto-applied to every new student who enrolls in this course"
+                  returnKeyType="next"
+                />
+
+                <FormField
+                  label="DISCOUNT REASON"
+                  value={form.discountReason}
+                  onChangeText={(v) => setField("discountReason", v)}
+                  placeholder="Optional"
+                  icon="chatbox-ellipses-outline"
+                  returnKeyType="done"
+                  onSubmitEditing={handleSubmit}
+                />
+              </>
+            )}
           </View>
 
           {errors.submit && (
@@ -306,33 +371,18 @@ export function EditCourseScreen({ navigation, route }: Props) {
                 <Text style={s.previewKey}>Duration</Text>
                 <Text style={s.previewVal}>{form.durationMonths ? `${form.durationMonths} months` : "—"}</Text>
               </View>
-              <View style={[s.previewRow, { borderBottomWidth: 0 }]}>
+              <View style={s.previewRow}>
                 <Text style={s.previewKey}>Default Fee</Text>
                 <Text style={s.previewVal}>{form.defaultFee ? `₹${Number(form.defaultFee).toLocaleString("en-IN")}` : "—"}</Text>
+              </View>
+              <View style={[s.previewRow, { borderBottomWidth: 0 }]}>
+                <Text style={s.previewKey}>Standing Discount</Text>
+                <Text style={s.previewVal}>{form.discountAmount ? `₹${Number(form.discountAmount).toLocaleString("en-IN")}` : "—"}</Text>
               </View>
             </View>
           )}
 
-        </ScrollView>
-
-        <View style={s.footer}>
-          <PrimaryButton
-            label="Save Changes"
-            onPress={handleSubmit}
-            loading={loading}
-            disabled={loading || !isDirty}
-            icon="checkmark-circle-outline"
-          />
-          {isDirty && !loading && (
-            <PrimaryButton
-              label="Reset Changes"
-              onPress={() => { setForm(initialForm); setErrors({}); }}
-              variant="outline"
-              icon="refresh-outline"
-            />
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScroll>
 
       {/* Full-screen loader */}
       {loading && (
@@ -367,7 +417,20 @@ export function EditCourseScreen({ navigation, route }: Props) {
               <DetailRow icon="book-outline"   label="Course Name" value={updatedCourse.name} color={colors.primary} />
               <DetailRow icon="layers-outline" label="Category"    value={updatedCourse.examCategories.length ? updatedCourse.examCategories.map((c) => c.label).join(", ") : "General (All Categories)"} color={C.blue} />
               <DetailRow icon="time-outline"   label="Duration"    value={`${updatedCourse.durationMonths} months`} color={C.orange} />
-              <DetailRow icon="wallet-outline" label="Default Fee" value={`₹${updatedCourse.defaultFee.toLocaleString("en-IN")}`} color={C.green} last />
+              <DetailRow
+                icon="wallet-outline" label="Default Fee"
+                value={`₹${updatedCourse.defaultFee.toLocaleString("en-IN")}`}
+                color={C.green}
+                last={updatedCourse.discountAmount <= 0}
+              />
+              {updatedCourse.discountAmount > 0 && (
+                <DetailRow
+                  icon="pricetag-outline" label="Standing Discount"
+                  value={`₹${updatedCourse.discountAmount.toLocaleString("en-IN")}`}
+                  color={C.orange}
+                  last
+                />
+              )}
             </View>
 
             <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85} style={s.doneBtnWrap}>
@@ -438,6 +501,10 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
 
   submitError:   { backgroundColor: "#FEF0EE", borderRadius: ms(12), borderWidth: 1, borderColor: "#F5C6C0", padding: ms(14), marginBottom: ms(16) },
   submitErrorT:  { ...T.body, color: C.red },
+
+  freeToggleRow:   { flexDirection: "row", alignItems: "center", gap: ms(12), borderWidth: 1, borderColor: C.border, borderRadius: ms(12), padding: ms(12), marginBottom: ms(16) },
+  freeToggleLabel: { ...T.body, fontFamily: "Inter_600SemiBold", color: C.text },
+  freeToggleSub:   { ...T.caption, color: C.muted, marginTop: ms(2) },
 
   preview:       { backgroundColor: C.card, borderRadius: ms(18), padding: ms(18), marginBottom: ms(20), borderWidth: 1.5, borderColor: C.border },
   previewTitle:  { ...T.sectionHeading, color: C.blue, letterSpacing: 1, marginBottom: ms(12) },

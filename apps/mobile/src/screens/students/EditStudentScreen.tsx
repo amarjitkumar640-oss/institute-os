@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TextInput, Animated, Easing, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView,
+  TextInput, Animated, Easing, TouchableOpacity,
   ActivityIndicator, Modal, Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,7 @@ import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { FormField } from "../../components/ui/FormField";
 import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
 import { T } from "../../components/ui/typography";
@@ -1197,45 +1198,48 @@ export function EditStudentScreen({ navigation, route }: Props) {
       <ScreenHeader title="Edit Student" onBack={handleHeaderBack} />
       <StepBar current={step} />
 
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingScroll
+        style={s.scroll}
+        contentContainerStyle={s.body}
+        footer={
+          <View style={s.footer}>
+            <View style={s.navRow}>
+              {step > 0 && (
+                <TouchableOpacity style={s.prevBtn} onPress={handlePrev} activeOpacity={0.75}>
+                  <Ionicons name="chevron-back" size={ms(18)} color={colors.primary} />
+                  <Text style={s.prevBtnT}>Back</Text>
+                </TouchableOpacity>
+              )}
+              <View style={s.navSpacer} />
+              {step < STEPS.length - 1 ? (
+                <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleNext} activeOpacity={0.85}>
+                  <Text style={s.nextBtnT}>Next</Text>
+                  <Ionicons name="chevron-forward" size={ms(18)} color="#fff" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
+                  {loading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <>
+                        <Text style={s.nextBtnT}>Save Changes</Text>
+                        <Ionicons name="checkmark-circle-outline" size={ms(18)} color="#fff" />
+                      </>
+                  }
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <Text style={s.stepPill}>Step {step + 1} of {STEPS.length} — {STEPS[step].label}</Text>
+          </View>
+        }
+      >
 
           <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
             <View style={s.card}>
               {renderStep()}
             </View>
           </Animated.View>
-
-          <View style={s.navRow}>
-            {step > 0 && (
-              <TouchableOpacity style={s.prevBtn} onPress={handlePrev} activeOpacity={0.75}>
-                <Ionicons name="chevron-back" size={ms(18)} color={colors.primary} />
-                <Text style={s.prevBtnT}>Back</Text>
-              </TouchableOpacity>
-            )}
-            <View style={s.navSpacer} />
-            {step < STEPS.length - 1 ? (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleNext} activeOpacity={0.85}>
-                <Text style={s.nextBtnT}>Next</Text>
-                <Ionicons name="chevron-forward" size={ms(18)} color="#fff" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
-                {loading
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <>
-                      <Text style={s.nextBtnT}>Save Changes</Text>
-                      <Ionicons name="checkmark-circle-outline" size={ms(18)} color="#fff" />
-                    </>
-                }
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <Text style={s.stepPill}>Step {step + 1} of {STEPS.length} — {STEPS[step].label}</Text>
-          <View style={{ height: ms(24) }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScroll>
 
       {/* Full-screen loader */}
       {loading && (
@@ -1419,7 +1423,8 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   submitError:   { backgroundColor: C.red + "08", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(14), marginTop: ms(8) },
   submitErrorT:  { ...T.body, color: C.red },
 
-  navRow:       { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
+  footer:       { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
+  navRow:       { flexDirection: "row", alignItems: "center" },
   navSpacer:    { flex: 1 },
   prevBtn:      { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(16), paddingVertical: ms(12), borderRadius: ms(14), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border },
   prevBtnT:     { ...T.buttonText, color: colors.primary },
