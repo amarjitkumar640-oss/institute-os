@@ -261,7 +261,7 @@ describe("importLegacyStudent", () => {
     await prisma.tenant.upsert({
       where: { id: otherTenantId },
       update: {},
-      create: { id: otherTenantId, name: "Other Institute", slug: "other-institute" },
+      create: { id: otherTenantId, name: "Other Institute", slug: "other-institute-legacy-import" },
     });
     const otherCenterId = "44444444-4444-4444-4444-444444444444";
     const otherCenter = await prisma.center.upsert({

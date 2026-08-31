@@ -1290,7 +1290,14 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
       if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = "Enter a valid email address.";
     }
     if (step === 2) {
-      if (!coursePreference)   errs.coursePreference   = "Please select a course.";
+      // selectedCourseId (not coursePreference) is the real signal that a
+      // course was chosen — the manual CoursePickerModal always sets both
+      // together, but the prefill-from-AdmissionApplication effect can set
+      // selectedCourseId alone when the application's own coursePreference
+      // field is empty even though it has a specific courseId. Validating
+      // on coursePreference let that show a selected course while still
+      // blocking Next with "Please select a course."
+      if (!selectedCourseId)   errs.coursePreference   = "Please select a course.";
       if (!qualification)      errs.qualification      = "Please select your highest qualification.";
       if (!passYear.trim() || !/^\d{4}$/.test(passYear.trim())) errs.passYear = "Enter a valid 4-digit pass year (e.g. 2022).";
       if (!board.trim())       errs.board              = "Board / University name is required.";
