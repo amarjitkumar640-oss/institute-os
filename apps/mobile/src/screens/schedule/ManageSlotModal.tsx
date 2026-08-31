@@ -64,7 +64,7 @@ function facultyAvatarColor(name: string, colors: ThemeColors) {
 
 // ── Subject grid picker ───────────────────────────────────────────────────────
 
-function SubjectGrid({
+export function SubjectGrid({
   subjects, selectedId, onSelect, onBack,
 }: {
   subjects:   SubjectItem[];
@@ -216,7 +216,7 @@ function SubjectGrid({
 
 // ── Faculty list picker ───────────────────────────────────────────────────────
 
-function FacultyGrid({
+export function FacultyGrid({
   faculties, selectedId, onSelect, onBack,
 }: {
   faculties:  FacultyItem[];

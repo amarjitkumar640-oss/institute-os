@@ -6,6 +6,9 @@ export interface Course {
   name: string;
   durationMonths: number;
   defaultFee: number;
+  discountAmount: number;
+  discountReason: string | null;
+  isFree: boolean;
   tenantId: string;
   createdAt: string;
   examCategories: ExamCategory[];
@@ -16,6 +19,9 @@ export interface CreateCoursePayload {
   examCategoryIds: string[];
   durationMonths: number;
   defaultFee: number;
+  discountAmount?: number;
+  discountReason?: string;
+  isFree?: boolean;
 }
 
 export async function listCourses(params?: { search?: string; examCategoryId?: string }): Promise<{ data: Course[]; total: number }> {

@@ -24,6 +24,7 @@ export const SCREEN_REGISTRY: ScreenDefinition[] = [
   { key: "schedule", label: "Schedule", module: "Academics", platforms: ["web", "mobile"] },
   { key: "faculty-attendance", label: "Faculty Attendance", module: "Academics", platforms: ["mobile"] },
   { key: "fees", label: "Fees", module: "Finance", platforms: ["web", "mobile"] },
+  { key: "sponsors", label: "CSR Sponsors", module: "Finance", platforms: ["web", "mobile"] },
   { key: "staff", label: "Staff", module: "Organization", platforms: ["web", "mobile"] },
   { key: "centers", label: "Centers", module: "Organization", platforms: ["web", "mobile"] },
   { key: "notifications", label: "Notifications", module: "Organization", platforms: ["web", "mobile"] },

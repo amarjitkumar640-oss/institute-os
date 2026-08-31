@@ -4,6 +4,7 @@ import { env } from "./lib/env";
 import { prisma } from "./lib/prisma";
 import { backfillAdmissionPayments } from "./modules/fees/fees.service";
 import { startJobScheduler } from "./modules/jobs/scheduler";
+import { startGovExamsScheduler } from "./modules/gov-exams/gov-exams-scheduler";
 
 app.listen(env.PORT, () => {
   console.log(`API listening on http://localhost:${env.PORT}`);
@@ -12,4 +13,5 @@ app.listen(env.PORT, () => {
     .catch((err) => console.error("Fee backfill error:", err));
 
   startJobScheduler(prisma);
+  startGovExamsScheduler(prisma);
 });

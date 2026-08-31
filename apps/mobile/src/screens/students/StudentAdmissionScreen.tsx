@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Keyboard,
-  Platform, TextInput, Animated, Easing, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView,
+  TextInput, Animated, Easing, TouchableOpacity,
   ActivityIndicator, Modal, Linking, Share, Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { BottomSheet, SHEET_HEIGHT } from "../../components/ui/BottomSheet";
@@ -1125,17 +1126,7 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
 
   const [step, setStep]  = useState(0);
   const slideAnim        = useRef(new Animated.Value(0)).current;
-  const scrollRef        = useRef<import("react-native").ScrollView>(null);
-
-  // RN auto-scrolls to keep a focused field visible above the keyboard but
-  // never scrolls back on dismiss — undo that so the form returns to its
-  // original scroll position once the keyboard is fully gone.
-  useEffect(() => {
-    const sub = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-    return () => sub.remove();
-  }, []);
+  const scrollRef        = useRef<ScrollView>(null);
 
   // ── QR Scanner ──
   const [scannerOpen, setScannerOpen]     = useState(false);
@@ -1200,6 +1191,8 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
   const [preferredTiming, setPreferredTiming] = useState<BatchTiming | null>(null);
   const [paymentMode, setPaymentMode]     = useState<PaymentMode | null>(null);
   const [amountPaid, setAmountPaid]       = useState("");
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
 
   // ── Submit ──
   const [errors, setErrors]   = useState<Record<string, string>>({});
@@ -1286,13 +1279,25 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
       if (!fullName.trim())  errs.fullName = "Full name is required.";
       if (!phone.trim())     errs.phone    = "Phone number is required.";
       else if (!/^\d{7,15}$/.test(phone.trim())) errs.phone = "Enter a valid phone number (7–15 digits, no spaces).";
-      if (dob.trim() && !parseDisplayDate(dob)) errs.dob = "Enter date of birth in DD/MM/YYYY format.";
+      if (!dob.trim())       errs.dob      = "Date of birth is required.";
+      else if (!parseDisplayDate(dob)) errs.dob = "Enter date of birth in DD/MM/YYYY format.";
+      if (!gender)           errs.gender   = "Please select a gender.";
+      if (!aadhaar.trim())   errs.aadhaar  = "Aadhaar number is required.";
+      else if (!/^\d{12}$/.test(aadhaar.trim())) errs.aadhaar = "Enter a valid 12-digit Aadhaar number.";
+      if (!address.trim())  errs.address  = "Address is required.";
     }
     if (step === 1) {
       if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = "Enter a valid email address.";
     }
     if (step === 2) {
-      if (!coursePreference)   errs.coursePreference   = "Please select a course.";
+      // selectedCourseId (not coursePreference) is the real signal that a
+      // course was chosen — the manual CoursePickerModal always sets both
+      // together, but the prefill-from-AdmissionApplication effect can set
+      // selectedCourseId alone when the application's own coursePreference
+      // field is empty even though it has a specific courseId. Validating
+      // on coursePreference let that show a selected course while still
+      // blocking Next with "Please select a course."
+      if (!selectedCourseId)   errs.coursePreference   = "Please select a course.";
       if (!qualification)      errs.qualification      = "Please select your highest qualification.";
       if (!passYear.trim() || !/^\d{4}$/.test(passYear.trim())) errs.passYear = "Enter a valid 4-digit pass year (e.g. 2022).";
       if (!board.trim())       errs.board              = "Board / University name is required.";
@@ -1304,6 +1309,14 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
       if (amountPaid.trim() && isNaN(Number(amountPaid))) errs.amountPaid = "Enter a valid amount (numbers only).";
       if (amountPaid.trim() && !isNaN(Number(amountPaid)) && Number(amountPaid) > 0 && !paymentMode) {
         errs.paymentMode = "Select a payment mode when recording a payment.";
+      }
+      if (discountAmount.trim() && (isNaN(Number(discountAmount)) || Number(discountAmount) < 0)) {
+        errs.discountAmount = "Enter a valid discount amount.";
+      } else if (discountAmount.trim()) {
+        const selectedCourse = courses.find((c) => c.id === selectedCourseId);
+        if (selectedCourse && Number(discountAmount) > selectedCourse.defaultFee) {
+          errs.discountAmount = "Discount cannot exceed the course fee.";
+        }
       }
     }
     setErrors(errs);
@@ -1371,10 +1384,13 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
         fullName:           fullName.trim(),
         phone:              phone.trim(),
         email:              email.trim() || null,
-        dob:                parseDisplayDate(dob) ?? null,
-        address:            address.trim() || null,
-        aadhaar:            aadhaar.trim() || null,
-        gender,
+        // dob/address/aadhaar/gender are enforced required by validateStep()
+        // on step 0 before the wizard can advance, so they're guaranteed
+        // present (and dob guaranteed parseable) by the time this runs.
+        dob:                parseDisplayDate(dob) as string,
+        address:            address.trim(),
+        aadhaar:            aadhaar.trim(),
+        gender:             gender as Gender,
         fatherName:         fatherName.trim() || null,
         motherName:         motherName.trim() || null,
         guardianOccupation: guardianOccupation.trim() || null,
@@ -1390,6 +1406,8 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
         preferredTiming,
         paymentMode,
         amountPaid:         amountPaid.trim() ? Number(amountPaid) : null,
+        discountAmount:     discountAmount.trim() ? Number(discountAmount) : null,
+        discountReason:     discountReason.trim() || null,
         tcAcknowledged:     tcAcknowledged || undefined,
         applicationId,
       };
@@ -1472,17 +1490,26 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
           <FormField label="FULL NAME" value={fullName} onChangeText={(v) => { setFullName(v); setErrors((p) => ({ ...p, fullName: "" })); }}
             placeholder="e.g. Rahul Kumar Sharma" error={errors.fullName} icon="person-outline" maxLength={120} clearable returnKeyType="next" required />
           <FormField label="DATE OF BIRTH" value={dob} onChangeText={(v) => { setDob(autoFormatDate(v)); setErrors((p) => ({ ...p, dob: "" })); }}
-            placeholder="DD/MM/YYYY" keyboardType="number-pad" error={errors.dob} icon="calendar-outline" hint="Auto-filled from Aadhaar if scanned" />
+            placeholder="DD/MM/YYYY" keyboardType="number-pad" error={errors.dob} icon="calendar-outline" hint="Auto-filled from Aadhaar if scanned" required />
 
           <View style={s.fieldBlock}>
-            <Text style={s.fieldLabel}>GENDER</Text>
-            <OptionRow options={GENDER_OPTIONS} value={gender} onSelect={setGender} color={colors.primary} />
+            <View style={s.reqLabelRow}>
+              <Text style={s.fieldLabel}>GENDER</Text>
+              <Text style={s.reqAsterisk}> *</Text>
+            </View>
+            <OptionRow options={GENDER_OPTIONS} value={gender} onSelect={(v) => { setGender(v); setErrors((p) => ({ ...p, gender: "" })); }} color={colors.primary} />
+            {!!errors.gender && (
+              <View style={s.inlineError}>
+                <Ionicons name="alert-circle-outline" size={ms(13)} color={C.red} />
+                <Text style={s.inlineErrorT}>{errors.gender}</Text>
+              </View>
+            )}
           </View>
 
-          <FormField label="AADHAAR NUMBER" value={aadhaar} onChangeText={(v) => setAadhaar(v.replace(/\D/g, "").slice(0, 12))}
-            placeholder="12-digit Aadhaar number" keyboardType="number-pad" icon="card-outline" hint="Auto-filled from Aadhaar if scanned" />
-          <FormField label="ADDRESS" value={address} onChangeText={setAddress}
-            placeholder="House, Street, City, State" icon="location-outline" hint="Auto-filled from Aadhaar if scanned" />
+          <FormField label="AADHAAR NUMBER" value={aadhaar} onChangeText={(v) => { setAadhaar(v.replace(/\D/g, "").slice(0, 12)); setErrors((p) => ({ ...p, aadhaar: "" })); }}
+            placeholder="12-digit Aadhaar number" keyboardType="number-pad" error={errors.aadhaar} icon="card-outline" hint="Auto-filled from Aadhaar if scanned" required />
+          <FormField label="ADDRESS" value={address} onChangeText={(v) => { setAddress(v); setErrors((p) => ({ ...p, address: "" })); }}
+            placeholder="House, Street, City, State" error={errors.address} icon="location-outline" hint="Auto-filled from Aadhaar if scanned" required />
           <FormField label="PHONE NUMBER" value={phone} onChangeText={(v) => { setPhone(v.replace(/\D/g, "")); setErrors((p) => ({ ...p, phone: "" })); }}
             placeholder="e.g. 9876543210" keyboardType="phone-pad" error={errors.phone} icon="call-outline" required />
         </View>
@@ -1512,7 +1539,7 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
 
           <View style={s.fieldBlock}>
             <View style={s.reqLabelRow}>
-              <Text style={[s.fieldLabel, !!errors.coursePreference && { color: C.red }]}>COURSE APPLIED FOR</Text>
+              <Text style={s.fieldLabel}>COURSE APPLIED FOR</Text>
               <Text style={s.reqAsterisk}> *</Text>
             </View>
             <TouchableOpacity
@@ -1553,7 +1580,7 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
 
           <View style={s.fieldBlock}>
             <View style={s.reqLabelRow}>
-              <Text style={[s.fieldLabel, !!errors.qualification && { color: C.red }]}>HIGHEST QUALIFICATION</Text>
+              <Text style={s.fieldLabel}>HIGHEST QUALIFICATION</Text>
               <Text style={s.reqAsterisk}> *</Text>
             </View>
             <TouchableOpacity
@@ -1720,6 +1747,32 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
           </View>
 
           <View style={s.fieldBlock}>
+            <Text style={[s.fieldLabel, !!errors.discountAmount && { color: C.red }]}>DISCOUNT FOR THIS STUDENT (₹)</Text>
+            <View style={[s.amountRow, !!errors.discountAmount && s.amountRowErr]}>
+              <Text style={s.amountPrefix}>₹</Text>
+              <TextInput
+                style={s.amountInput}
+                value={discountAmount}
+                onChangeText={(v) => { setDiscountAmount(v.replace(/[^0-9.]/g, "")); setErrors((p) => ({ ...p, discountAmount: "" })); }}
+                placeholder="Leave blank for automatic"
+                placeholderTextColor={C.placeholder}
+                keyboardType="decimal-pad"
+              />
+            </View>
+            {!!errors.discountAmount && (
+              <View style={s.inlineError}>
+                <Ionicons name="alert-circle-outline" size={ms(13)} color={C.red} />
+                <Text style={s.inlineErrorT}>{errors.discountAmount}</Text>
+              </View>
+            )}
+          </View>
+
+          {!!discountAmount.trim() && (
+            <FormField label="DISCOUNT REASON" value={discountReason} onChangeText={setDiscountReason}
+              placeholder="Optional — e.g. hardship discount" />
+          )}
+
+          <View style={s.fieldBlock}>
             <Text style={[s.fieldLabel, !!errors.paymentMode && { color: C.red }]}>MODE OF PAYMENT</Text>
             <PaymentModePicker
               value={paymentMode}
@@ -1752,8 +1805,45 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
       {/* Step progress bar */}
       <StepBar current={step} />
 
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingScroll
+        ref={scrollRef}
+        style={s.scroll}
+        contentContainerStyle={s.body}
+        footer={
+          <View style={s.footer}>
+            {/* Navigation buttons — same Back/Next/Complete row, now pinned
+                instead of scrolling away; still swaps per step like before. */}
+            <View style={s.navRow}>
+              {step > 0 && (
+                <TouchableOpacity style={s.prevBtn} onPress={handlePrev} activeOpacity={0.75}>
+                  <Ionicons name="chevron-back" size={ms(18)} color={colors.primary} />
+                  <Text style={s.prevBtnT}>Back</Text>
+                </TouchableOpacity>
+              )}
+              <View style={s.navSpacer} />
+              {step < 4 ? (
+                <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleNext} activeOpacity={0.85}>
+                  <Text style={s.nextBtnT}>Next</Text>
+                  <Ionicons name="chevron-forward" size={ms(18)} color="#fff" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={() => handleSubmit()} disabled={loading} activeOpacity={0.85}>
+                  {loading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <>
+                        <Text style={s.nextBtnT}>Complete Admission</Text>
+                        <Ionicons name="checkmark-circle-outline" size={ms(18)} color="#fff" />
+                      </>
+                  }
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Step indicator pill */}
+            <Text style={s.stepPill}>Step {step + 1} of {STEPS.length} — {STEPS[step].label}</Text>
+          </View>
+        }
+      >
 
           {/* Animated step wrapper */}
           <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
@@ -1762,40 +1852,7 @@ export function StudentAdmissionScreen({ navigation, route }: Props) {
               {renderStep()}
             </View>
           </Animated.View>
-
-          {/* Navigation buttons */}
-          <View style={s.navRow}>
-            {step > 0 && (
-              <TouchableOpacity style={s.prevBtn} onPress={handlePrev} activeOpacity={0.75}>
-                <Ionicons name="chevron-back" size={ms(18)} color={colors.primary} />
-                <Text style={s.prevBtnT}>Back</Text>
-              </TouchableOpacity>
-            )}
-            <View style={s.navSpacer} />
-            {step < 4 ? (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={handleNext} activeOpacity={0.85}>
-                <Text style={s.nextBtnT}>Next</Text>
-                <Ionicons name="chevron-forward" size={ms(18)} color="#fff" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={[s.nextBtn, s.nextBtnGrad, { backgroundColor: colors.primary }]} onPress={() => handleSubmit()} disabled={loading} activeOpacity={0.85}>
-                {loading
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <>
-                      <Text style={s.nextBtnT}>Complete Admission</Text>
-                      <Ionicons name="checkmark-circle-outline" size={ms(18)} color="#fff" />
-                    </>
-                }
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Step indicator pill */}
-          <Text style={s.stepPill}>Step {step + 1} of {STEPS.length} — {STEPS[step].label}</Text>
-
-          <View style={{ height: ms(24) }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScroll>
 
       {/* QR Scanner modal */}
       <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => setScannerOpen(false)}>
@@ -2108,7 +2165,8 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   inlineErrorT:  { ...T.helperText, color: C.red, flex: 1 },
 
   // Nav buttons
-  navRow:       { flexDirection: "row", alignItems: "center", marginBottom: ms(10) },
+  footer:       { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
+  navRow:       { flexDirection: "row", alignItems: "center" },
   navSpacer:    { flex: 1 },
   prevBtn:      { flexDirection: "row", alignItems: "center", gap: ms(4), paddingHorizontal: ms(16), paddingVertical: ms(12), borderRadius: ms(14), backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border },
   prevBtnT:     { ...T.buttonText, color: colors.primary },

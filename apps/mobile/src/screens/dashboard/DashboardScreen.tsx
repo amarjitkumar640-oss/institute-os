@@ -472,6 +472,7 @@ export function DashboardScreen() {
                 { label: "Faculty", icon: "people-outline" as const, nav: "FacultyList" as const, color: C.orange, badge: 0 },
                 { label: "Courses", icon: "book-outline" as const, nav: "CourseList" as const, color: colors.primary, badge: 0 },
                 { label: "Subjects", icon: "library-outline" as const, nav: "SubjectList" as const, color: C.blue, badge: 0 },
+                { label: "Sponsors", icon: "business-outline" as const, nav: "Sponsors" as const, color: C.orange, badge: 0 },
               ]).map((q) => (
                 <TouchableOpacity
                   key={q.label}

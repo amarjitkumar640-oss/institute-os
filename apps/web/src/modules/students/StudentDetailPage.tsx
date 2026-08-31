@@ -203,7 +203,7 @@ function FeeTab({ studentId }: { studentId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide">Total Fee</p>
@@ -214,6 +214,14 @@ function FeeTab({ studentId }: { studentId: string }) {
           <CardContent className="p-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide">Effective Fee</p>
             <p className="text-xl font-bold mt-1">{formatCurrency(feeSchedule.effectiveFee)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Pending</p>
+            <p className={`text-xl font-bold mt-1 ${feeSchedule.pendingAmount > 0 ? "text-red-600" : "text-green-600"}`}>
+              {formatCurrency(feeSchedule.pendingAmount)}
+            </p>
           </CardContent>
         </Card>
         <Card>

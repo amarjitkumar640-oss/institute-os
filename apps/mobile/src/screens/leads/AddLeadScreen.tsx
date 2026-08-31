@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TextInput, TouchableOpacity, ActivityIndicator, Keyboard,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
@@ -33,17 +33,6 @@ const SOURCE_CHIPS = ["Walk-in", "Referral", "Phone Call", "Social Media"];
 export function AddLeadScreen({ navigation }: Props) {
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
-  const scrollRef = useRef<ScrollView>(null);
-
-  // RN auto-scrolls to keep a focused field visible above the keyboard but
-  // never scrolls back on dismiss — undo that so the form returns to its
-  // original scroll position once the keyboard is fully gone.
-  useEffect(() => {
-    const sub = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-    return () => sub.remove();
-  }, []);
 
   const [name, setName]           = useState("");
   const [phone, setPhone]         = useState("");
@@ -144,8 +133,15 @@ export function AddLeadScreen({ navigation }: Props) {
     <SafeAreaView style={s.safe} edges={["bottom"]}>
       <ScreenHeader title="New Lead" onBack={() => navigation.goBack()} />
 
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingScroll
+        style={s.scroll}
+        contentContainerStyle={s.body}
+        footer={
+          <View style={s.footer}>
+            <PrimaryButton label="Save Lead" icon="checkmark-circle-outline" onPress={() => handleSubmit()} loading={loading} disabled={loading} />
+          </View>
+        }
+      >
           <View style={s.card}>
             <FormField label="LEAD'S NAME" value={name} onChangeText={(v) => { setName(v); setErrors((p) => ({ ...p, name: "" })); }}
               placeholder="e.g. Priya Sharma" error={errors.name} icon="person-outline" clearable />
@@ -225,10 +221,7 @@ export function AddLeadScreen({ navigation }: Props) {
             )}
           </View>
 
-          <PrimaryButton label="Save Lead" icon="checkmark-circle-outline" onPress={() => handleSubmit()} loading={loading} disabled={loading} />
-          <View style={{ height: ms(24) }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScroll>
 
       <CenterPickerSheet
         visible={centerPickerVisible}
@@ -244,6 +237,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   flex:   { flex: 1 },
   scroll: { flex: 1, backgroundColor: colors.screenBg },
   body:   { paddingHorizontal: ms(16), paddingTop: ms(8), paddingBottom: ms(16) },
+  footer: { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
 
   card: { backgroundColor: C.card, borderRadius: ms(20), padding: ms(18), marginBottom: ms(16), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 

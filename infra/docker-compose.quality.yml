@@ -17,6 +17,14 @@ services:
     expose:
       - "80"
 
+  # Built with BASE_PATH=/qa/exams/ so it's reachable at /qa/exams/* — see
+  # infra/Caddyfile's handle_path /qa/exams* block.
+  exam-portal-qa:
+    image: ghcr.io/amarjitkumar640-oss/institute-os-exam-portal:quality
+    restart: always
+    expose:
+      - "80"
+
   postgres-qa:
     image: postgres:16-alpine
     restart: always

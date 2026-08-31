@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
+  ActivityIndicator, Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ms } from "../../utils/responsive";
+import { useKeyboardScrollIntoView } from "../../hooks/useKeyboardScrollIntoView";
 import { BottomSheet, SHEET_HEIGHT } from "../ui/BottomSheet";
 import { T } from "../ui/typography";
 import { C } from "../../theme";
@@ -12,6 +13,8 @@ import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context
 import { forgotPassword, resetPassword } from "../../api/auth";
 
 type Step = "request" | "sent-sms" | "sent-email" | "done";
+
+const SCREEN_H = Dimensions.get("window").height;
 
 interface Props {
   visible: boolean;
@@ -32,6 +35,9 @@ export function ForgotPasswordSheet({ visible, onClose, loginMethod }: Props) {
   const [showPw, setShowPw]     = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]       = useState("");
+
+  const { scrollRef, recordFieldY, scrollFieldIntoView, onScrollViewLayout, onScroll } =
+    useKeyboardScrollIntoView({ sheetHeight: SCREEN_H * 0.65 });
 
   useEffect(() => {
     if (visible) {
@@ -74,7 +80,15 @@ export function ForgotPasswordSheet({ visible, onClose, loginMethod }: Props) {
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeight={SHEET_HEIGHT.short}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flexShrink: 1 }}
+        onLayout={onScrollViewLayout}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={s.drag} />
 
         {step === "request" && (
@@ -110,35 +124,42 @@ export function ForgotPasswordSheet({ visible, onClose, loginMethod }: Props) {
                 a given identifier (see auth.routes.ts's forgot-password
                 handler), so this copy can't claim delivery happened either. */}
             <Text style={s.sub}>If that phone number matches an account, we've texted a 6-digit code to it.</Text>
-            <TextInput
-              style={s.input}
-              placeholder="6-digit code"
-              placeholderTextColor={C.muted}
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-            />
-            <View style={s.pwRow}>
+            <View onLayout={recordFieldY("code")}>
+              <TextInput
+                style={s.input}
+                placeholder="6-digit code"
+                placeholderTextColor={C.muted}
+                value={code}
+                onChangeText={setCode}
+                onFocus={() => scrollFieldIntoView("code")}
+                keyboardType="number-pad"
+              />
+            </View>
+            <View style={s.pwRow} onLayout={recordFieldY("password")}>
               <TextInput
                 style={[s.input, { flex: 1, marginBottom: 0 }]}
                 placeholder="New password (min. 6 characters)"
                 placeholderTextColor={C.muted}
                 value={password}
                 onChangeText={setPassword}
+                onFocus={() => scrollFieldIntoView("password")}
                 secureTextEntry={!showPw}
               />
               <TouchableOpacity style={s.eyeBtn} onPress={() => setShowPw((v) => !v)}>
                 <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={ms(20)} color={C.muted} />
               </TouchableOpacity>
             </View>
-            <TextInput
-              style={s.input}
-              placeholder="Confirm new password"
-              placeholderTextColor={C.muted}
-              value={confirm}
-              onChangeText={setConfirm}
-              secureTextEntry={!showPw}
-            />
+            <View onLayout={recordFieldY("confirm")}>
+              <TextInput
+                style={s.input}
+                placeholder="Confirm new password"
+                placeholderTextColor={C.muted}
+                value={confirm}
+                onChangeText={setConfirm}
+                onFocus={() => scrollFieldIntoView("confirm")}
+                secureTextEntry={!showPw}
+              />
+            </View>
             {!!error && <Text style={s.errorT}>{error}</Text>}
             <TouchableOpacity style={[s.btn, { backgroundColor: colors.primary }, submitting && s.btnDim]} onPress={handleReset} disabled={submitting}>
               {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.btnT}>Reset Password</Text>}
@@ -177,7 +198,7 @@ export function ForgotPasswordSheet({ visible, onClose, loginMethod }: Props) {
             </TouchableOpacity>
           </>
         )}
-      </KeyboardAvoidingView>
+      </ScrollView>
     </BottomSheet>
   );
 }

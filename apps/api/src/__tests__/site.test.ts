@@ -6,7 +6,6 @@ import { env } from "../lib/env";
 import { resetDb, legacyPermissionsForRole } from "./setup";
 import type { AuthPayload } from "../middleware/auth";
 
-const TENANT_ID = "44444444-4444-4444-4444-444444444444";
 // Must match whatever SITE_TENANT_SLUG is actually set to in the running
 // environment (.env.test locally, QA_ENV_FILE/PROD_ENV_FILE in CI) — the
 // site module resolves the tenant purely from that env var, so the seeded
@@ -17,15 +16,22 @@ const TENANT_ID = "44444444-4444-4444-4444-444444444444";
 const TENANT_SLUG = env.SITE_TENANT_SLUG || "site-test-tenant";
 const OTHER_TENANT_ID = "55555555-5555-5555-5555-555555555555";
 
+// Upsert keyed on slug, not a hardcoded id — resetDb() deliberately never
+// truncates Tenant (see setup.ts), so this row is a single shared fixture
+// across every test file that needs "the SITE_TENANT_SLUG tenant"
+// (gov-exams.test.ts seeds the same slug independently, same pattern).
+// Keying on id instead creates a second tenant row with a conflicting slug
+// the moment both files run in the same suite, in whichever order Jest
+// picks that run — this was a real CI failure (a fresh CI run orders test
+// files differently than a machine with cached run-timing data), not a
+// theoretical race. Callers read the returned tenant's actual `.id` rather
+// than assuming a fixed value, since the row may already exist (created by
+// the other file) under an id neither file controls.
 async function seedTenant() {
-  // update: { slug } (not {}) — TENANT_SLUG is derived from an env var that
-  // can differ between runs (local .env.test vs CI's QA_ENV_FILE), so a
-  // pre-existing row from an earlier run with a different value must be
-  // resynced, not left stale.
   return prisma.tenant.upsert({
-    where:  { id: TENANT_ID },
-    update: { slug: TENANT_SLUG },
-    create: { id: TENANT_ID, name: "Site Test Institute", slug: TENANT_SLUG },
+    where:  { slug: TENANT_SLUG },
+    update: {},
+    create: { name: "Site Test Institute", slug: TENANT_SLUG },
   });
 }
 
@@ -104,8 +110,8 @@ describe("site admin", () => {
   });
 
   it("rejects a non-admin staff member (e.g. a teacher)", async () => {
-    await seedTenant();
-    const token = tokenFor({ staffId: "s1", roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID });
+    const tenant = await seedTenant();
+    const token = tokenFor({ staffId: "s1", roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: tenant.id });
     const res = await request(app).get("/api/site/admin/highlights").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(403);
   });
@@ -119,16 +125,16 @@ describe("site admin", () => {
   });
 
   it("lets an admin of the site tenant in, empty list to start", async () => {
-    await seedTenant();
-    const token = tokenFor({ staffId: "s1", roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
+    const tenant = await seedTenant();
+    const token = tokenFor({ staffId: "s1", roles: ["admin"], activeRole: "admin", centerId: null, tenantId: tenant.id });
     const res = await request(app).get("/api/site/admin/highlights").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
   });
 
   it("full create → list (includes inactive) → update → delete cycle", async () => {
-    await seedTenant();
-    const token = tokenFor({ staffId: "s1", roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
+    const tenant = await seedTenant();
+    const token = tokenFor({ staffId: "s1", roles: ["admin"], activeRole: "admin", centerId: null, tenantId: tenant.id });
 
     const create = await request(app)
       .post("/api/site/admin/highlights")

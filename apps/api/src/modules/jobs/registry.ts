@@ -44,6 +44,10 @@ export const JOB_REGISTRY: JobDefinition[] = [
     defaultIntervalMinutes: 60,
     run: runBatchStatusSweep,
   },
+  // GovSource / GovJobVacancyPromptTemplate / GovCurrentAffairsPromptTemplate
+  // are NOT registered here — each row is independently scheduled (its own
+  // frequency/time-of-day, own Run Now) via gov-exams-scheduler.ts instead
+  // of one bundled job. See SourcesTab.tsx / SearchPromptsTab.tsx.
 ];
 
 export function getJobDefinition(key: string): JobDefinition | undefined {

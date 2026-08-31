@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, KeyboardAvoidingView, ScrollView, Keyboard,
-  Platform, TextInput, Animated, Easing, TouchableOpacity,
+  View, Text, StyleSheet,
+  TextInput, Animated, Easing, TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,6 +10,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { T } from "../../components/ui/typography";
@@ -52,17 +53,6 @@ export function CreateSubjectScreen({ navigation }: Props) {
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
-
-  // RN auto-scrolls to keep a focused field visible above the keyboard but
-  // never scrolls back on dismiss — undo that so the form returns to its
-  // original scroll position once the keyboard is fully gone.
-  useEffect(() => {
-    const sub = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-    return () => sub.remove();
-  }, []);
 
   const [name, setName]                   = useState("");
   const [nameError, setNameError]         = useState<string | undefined>();
@@ -168,14 +158,21 @@ export function CreateSubjectScreen({ navigation }: Props) {
     <SafeAreaView style={s.safe} edges={["bottom"]}>
       <ScreenHeader title="Add Subject" onBack={() => navigation.goBack()} />
 
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView
-          ref={scrollRef}
-          style={s.flex}
-          contentContainerStyle={s.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAvoidingScroll
+        style={s.flex}
+        contentContainerStyle={s.content}
+        footer={
+          <View style={s.footer}>
+            <PrimaryButton
+              label="Add Subject"
+              onPress={handleSubmit}
+              loading={loading}
+              disabled={loading}
+              icon="add-circle-outline"
+            />
+          </View>
+        }
+      >
         <View>
 
           {/* ── Name ── */}
@@ -235,16 +232,7 @@ export function CreateSubjectScreen({ navigation }: Props) {
           )}
 
         </View>
-
-          <PrimaryButton
-            label="Add Subject"
-            onPress={handleSubmit}
-            loading={loading}
-            disabled={loading}
-            icon="add-circle-outline"
-          />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScroll>
 
       {/* Full-screen loader */}
       {loading && (
@@ -361,11 +349,8 @@ const dr = StyleSheet.create({
 const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   safe:          { flex: 1, backgroundColor: colors.screenBg },
   flex:          { flex: 1 },
-  // Used as a ScrollView contentContainerStyle now (not a plain View) — flexGrow
-  // instead of flex lets the button still sit at the bottom via
-  // justifyContent when content is short, but the view can grow/scroll past
-  // the viewport when the keyboard shrinks available space.
-  content:       { flexGrow: 1, backgroundColor: colors.screenBg, paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(8), paddingBottom: ms(20), justifyContent: "space-between" },
+  content:       { backgroundColor: colors.screenBg, paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(8), paddingBottom: ms(20) },
+  footer:        { paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
 
   section:       { backgroundColor: C.card, borderRadius: ms(18), padding: SECTION_PAD, marginBottom: ms(12), shadowColor: C.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: ms(10), elevation: 3 },
 

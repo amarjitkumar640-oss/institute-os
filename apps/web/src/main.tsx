@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { TenantProvider } from "@/context/TenantContext";
 import { QueryProvider } from "@/context/QueryProvider";
 import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { router } from "@/router";
 import "./index.css";
 
@@ -13,8 +14,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <TenantProvider>
       <AuthProvider>
         <QueryProvider>
-          <RouterProvider router={router} />
-          <Toaster />
+          <TooltipProvider>
+            <RouterProvider router={router} />
+            <Toaster />
+          </TooltipProvider>
         </QueryProvider>
       </AuthProvider>
     </TenantProvider>

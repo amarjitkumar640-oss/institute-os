@@ -106,7 +106,14 @@ describe("jobs API", () => {
 
     expect(res.status).toBe(200);
     const keys = res.body.map((j: { key: string }) => j.key).sort();
-    expect(keys).toEqual(["batch-status-sweep", "class-reminder-sweep", "overdue-installment-sweep"]);
+    // gov-source-scrape-sweep / gov-current-affairs-sweep are gone —
+    // GovSource/prompt-template rows are scheduled independently now (see
+    // gov-exams-scheduler.ts), not through this generic job registry.
+    expect(keys).toEqual([
+      "batch-status-sweep",
+      "class-reminder-sweep",
+      "overdue-installment-sweep",
+    ]);
   });
 
   it("403s for a non-admin role", async () => {

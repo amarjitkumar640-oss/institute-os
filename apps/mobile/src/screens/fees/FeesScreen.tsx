@@ -26,6 +26,7 @@ import {
   type StudentFeeSchedule, type FeeSummary,
 } from "../../api/fees";
 import { listBatches, type BatchItem } from "../../api/batches";
+import { CollectionView } from "./CollectionView";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FeesList">;
 
@@ -294,6 +295,7 @@ export function FeesScreen({ navigation, route }: Props) {
   const [filter,         setFilter]         = useState<ScheduleFilter>(route.params?.initialFilter ?? "all");
   const [batchFilter,    setBatchFilter]    = useState<string | null>(null);
   const [batchSheetOpen, setBatchSheetOpen] = useState(false);
+  const [screenTab,      setScreenTab]      = useState<"schedules" | "collection">("schedules");
 
   // Only the very first load should show the full-screen loading overlay —
   // every reload after that is triggered by changing a filter, which should
@@ -463,59 +465,82 @@ export function FeesScreen({ navigation, route }: Props) {
 
       <ScreenHeader
         title="Fees & Payments"
-        count={!loading && !error ? visible.length : undefined}
+        count={screenTab === "schedules" && !loading && !error ? visible.length : undefined}
         countLabel="students"
         onBack={() => navigation.goBack()}
       />
 
-      <View style={ls.body}>
-        <FlatList
-          data={loading || !!error ? [] : visible}
-          keyExtractor={(s) => s.id}
-          renderItem={({ item, index }) => (
-            <ScheduleCard
-              schedule={item}
-              index={index}
-              onPress={() => navigation.navigate("FeeScheduleDetail", {
-                enrollmentId: item.enrollmentId,
-                studentName:  item.enrollment?.student.fullName ?? "Student",
-              })}
+      <View style={ls.tabBar}>
+        {(["schedules", "collection"] as const).map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[ls.tab, screenTab === tab && ls.tabActive]}
+            onPress={() => setScreenTab(tab)}
+          >
+            <Ionicons
+              name={tab === "schedules" ? "list-outline" : "bar-chart-outline"}
+              size={ms(14)}
+              color={screenTab === tab ? colors.primary : C.muted}
             />
-          )}
-          ListHeaderComponent={ListHeader}
-          ListEmptyComponent={
-            !loading && !error ? (
-              <EmptyState
-                scene="students"
-                color={FILTERS.find((f) => f.key === filter)?.color ?? colors.primary}
-                title={search ? "No records match" : "No fee schedules yet"}
-                subtitle={search ? "Try a different name" : "Fee schedules will appear here after admission"}
-              />
-            ) : null
-          }
-          contentContainerStyle={ls.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); load(true); }}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-        />
-
-        {loading && (
-          <View style={ls.overlay}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        )}
-        {!!error && (
-          <View style={ls.overlay}>
-            <ListErrorState title="Failed to load fees" onRetry={() => load()} />
-          </View>
-        )}
+            <Text style={[ls.tabT, screenTab === tab && ls.tabTActive]}>
+              {tab === "schedules" ? "Schedules" : "Collection"}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
+
+      {screenTab === "collection" ? (
+        <CollectionView />
+      ) : (
+        <View style={ls.body}>
+          <FlatList
+            data={loading || !!error ? [] : visible}
+            keyExtractor={(s) => s.id}
+            renderItem={({ item, index }) => (
+              <ScheduleCard
+                schedule={item}
+                index={index}
+                onPress={() => navigation.navigate("FeeScheduleDetail", {
+                  enrollmentId: item.enrollmentId,
+                  studentName:  item.enrollment?.student.fullName ?? "Student",
+                })}
+              />
+            )}
+            ListHeaderComponent={ListHeader}
+            ListEmptyComponent={
+              !loading && !error ? (
+                <EmptyState
+                  scene="students"
+                  color={FILTERS.find((f) => f.key === filter)?.color ?? colors.primary}
+                  title={search ? "No records match" : "No fee schedules yet"}
+                  subtitle={search ? "Try a different name" : "Fee schedules will appear here after admission"}
+                />
+              ) : null
+            }
+            contentContainerStyle={ls.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => { setRefreshing(true); load(true); }}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+          />
+
+          {loading && (
+            <View style={ls.overlay}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          )}
+          {!!error && (
+            <View style={ls.overlay}>
+              <ListErrorState title="Failed to load fees" onRetry={() => load()} />
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Batch bottom sheet */}
       <BatchSheet
@@ -585,6 +610,27 @@ const fc = StyleSheet.create({
 const makeLsStyles = (colors: ThemeColors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.screenBg },
   body: { flex: 1, backgroundColor: colors.screenBg },
+
+  // Schedules / Collection tab bar
+  tabBar: {
+    flexDirection:     "row",
+    backgroundColor:   C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  tab: {
+    flex:              1,
+    flexDirection:     "row",
+    alignItems:        "center",
+    justifyContent:    "center",
+    gap:               ms(5),
+    paddingVertical:   ms(12),
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  tabActive:  { borderBottomColor: colors.primary },
+  tabT:       { ...T.chipText, color: C.muted },
+  tabTActive: { ...T.chipText, color: colors.primary },
 
   // Summary card
   summaryCard: {

@@ -19,6 +19,7 @@ import { listCourseNames, type CourseNameItem } from "../../api/courses";
 import { listStudentEnrollments, enrollStudent } from "../../api/enrollments";
 import { ms, fs } from "../../utils/responsive";
 import { useAuth } from "../../context/AuthContext";
+import { useAlert } from "../../context/AlertContext";
 import { usePermission } from "../../hooks/usePermission";
 import { C } from "../../theme";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../context/ThemeContext";
@@ -236,10 +237,11 @@ const makeBmStyles = (colors: ThemeColors) => StyleSheet.create({
 
 // ── Student Card ──────────────────────────────────────────────────────────────
 
-function StudentCard({ student, showEnroll, canEdit, onEdit, onEnroll, isAllCenters }: {
+function StudentCard({ student, showEnroll, canEdit, onPress, onEdit, onEnroll, isAllCenters }: {
   student: StudentItem;
   showEnroll: boolean;
   canEdit: boolean;
+  onPress: () => void;
   onEdit: () => void;
   onEnroll: () => void;
   isAllCenters?: boolean;
@@ -259,7 +261,7 @@ function StudentCard({ student, showEnroll, canEdit, onEdit, onEnroll, isAllCent
   const showCenterChip = isAllCenters && !!student.center;
 
   return (
-    <View style={cs.card}>
+    <TouchableOpacity style={cs.card} onPress={onPress} activeOpacity={0.8}>
       {(showCenterChip || canEdit) && (
         <View style={cs.cardHeaderRow}>
           {showCenterChip ? (
@@ -359,7 +361,7 @@ function StudentCard({ student, showEnroll, canEdit, onEdit, onEnroll, isAllCent
           </View>
         </>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -493,9 +495,23 @@ export function StudentListScreen({ navigation, route }: Props) {
   const cs = useThemedStyles(makeCsStyles);
   const nav = useNavigation<Nav>();
   const { isAllCenters } = useAuth();
+  const { showAlert } = useAlert();
   const { canWrite, canEdit } = usePermission("students");
   const batchId = route?.params?.batchId;
   const batchName = route?.params?.batchName;
+
+  // A card's own tap goes straight to that student's fee schedule — the
+  // richer per-student detail view (profile/academic/documents) doesn't
+  // exist yet on mobile, so this is the one thing there's actually
+  // somewhere to navigate to. No active enrollment means no fee schedule
+  // exists at all, so there's nowhere useful to send the tap.
+  function handleCardPress(student: StudentItem) {
+    if (!student.activeEnrollment) {
+      showAlert("No Active Enrollment", `${student.fullName} isn't enrolled in a batch yet, so there's no fee schedule to show.`, "info");
+      return;
+    }
+    navigation.navigate("FeeScheduleDetail", { enrollmentId: student.activeEnrollment.id, studentName: student.fullName });
+  }
 
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -636,6 +652,7 @@ export function StudentListScreen({ navigation, route }: Props) {
                   student={item}
                   showEnroll={!batchId}
                   canEdit={canEdit}
+                  onPress={() => handleCardPress(item)}
                   onEdit={() => navigation.navigate("EditStudent", { student: item })}
                   onEnroll={() => setEnrollTarget(item)}
                   isAllCenters={isAllCenters}

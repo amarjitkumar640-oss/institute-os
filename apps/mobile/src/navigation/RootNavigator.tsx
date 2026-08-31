@@ -50,6 +50,10 @@ import { AddLeadScreen }     from "../screens/leads/AddLeadScreen";
 import { AdmissionApplicationsScreen } from "../screens/admissionApplications/AdmissionApplicationsScreen";
 import { StudentsScreen }    from "../screens/students/StudentsScreen";
 import { BatchScheduleScreen } from "../screens/schedule/BatchScheduleScreen";
+import { BatchOffersScreen } from "../screens/batches/BatchOffersScreen";
+import { SponsorshipDetailScreen } from "../screens/batches/SponsorshipDetailScreen";
+import { SponsorsScreen } from "../screens/sponsors/SponsorsScreen";
+import { SponsorDetailScreen } from "../screens/sponsors/SponsorDetailScreen";
 import { SessionDetailScreen } from "../screens/schedule/SessionDetailScreen";
 import { NotificationsScreen } from "../screens/notifications/NotificationsScreen";
 
@@ -147,7 +151,13 @@ function RootNavigatorInner({ fontsLoaded }: { fontsLoaded: boolean }) {
 
         {/* Class Schedule */}
         <Stack.Screen name="BatchSchedule" component={BatchScheduleScreen} />
+        <Stack.Screen name="BatchOffers" component={BatchOffersScreen} />
         <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
+
+        {/* CSR Sponsorship */}
+        <Stack.Screen name="SponsorshipDetail" component={SponsorshipDetailScreen} />
+        <Stack.Screen name="Sponsors" component={SponsorsScreen} />
+        <Stack.Screen name="SponsorDetail" component={SponsorDetailScreen} />
 
         {/* Notifications */}
         <Stack.Screen name="Notifications" component={NotificationsScreen} />

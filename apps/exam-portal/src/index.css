@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body {
+    margin: 0;
+    font-family: "Manrope", "Noto Sans Devanagari", -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #f6f5e3;
+    color: #211A3A;
+  }
+}
