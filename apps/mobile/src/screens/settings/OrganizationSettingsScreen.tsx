@@ -5,10 +5,11 @@ import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { T } from "../../components/ui/typography";
 import { useAlert } from "../../context/AlertContext";
-import { getTenantSettings, updateLoginMethod, updateNotificationTiming, updateBrandingBackground, type TenantSettings, type LoginMethod } from "../../api/tenants";
+import { getTenantSettings, updateLoginMethod, updateNotificationTiming, updateBrandingBackground, updateLegalBillingSettings, type TenantSettings, type LoginMethod } from "../../api/tenants";
 import {
   fetchNotificationRouting, updateNotificationRouting,
   type NotificationRoutingEntry, type NotificationType,
@@ -59,6 +60,12 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
   const [overdueGraceDays, setOverdueGraceDays]         = useState("0");
   const [bgColor, setBgColor]                           = useState("");
 
+  const [legalName, setLegalName]                 = useState("");
+  const [registeredAddress, setRegisteredAddress] = useState("");
+  const [gstin, setGstin]                         = useState("");
+  const [stateCode, setStateCode]                 = useState("");
+  const [bankDetails, setBankDetails]             = useState("");
+
   const [routing, setRouting]           = useState<NotificationRoutingEntry[]>([]);
   const [routingLoading, setRoutingLoading] = useState(true);
   const [routingSavingType, setRoutingSavingType] = useState<NotificationType | null>(null);
@@ -71,6 +78,11 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
         setClassReminderMinutes(String(data.classReminderMinutes));
         setOverdueGraceDays(String(data.overdueGraceDays));
         setBgColor(data.branding.background ?? "");
+        setLegalName(data.legalName ?? "");
+        setRegisteredAddress(data.registeredAddress ?? "");
+        setGstin(data.gstin ?? "");
+        setStateCode(data.stateCode ?? "");
+        setBankDetails(data.bankDetails ?? "");
       })
       .catch(() => showAlert("Error", "Could not load organization settings.", "error"))
       .finally(() => setLoading(false));
@@ -97,6 +109,13 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
           overdueGraceDays:     Number(overdueGraceDays) || 0,
         }),
         updateBrandingBackground(bgTrimmed || null),
+        updateLegalBillingSettings({
+          legalName:         legalName.trim() || null,
+          registeredAddress: registeredAddress.trim() || null,
+          gstin:             gstin.trim() || null,
+          stateCode:         stateCode.trim() || null,
+          bankDetails:       bankDetails.trim() || null,
+        }),
       ]);
       setBrandColors({ background: bgTrimmed || null });
       showAlert("Saved", "Organization settings updated.", "success");
@@ -147,7 +166,15 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-        <View style={s.body}>
+        <KeyboardAvoidingScroll
+          style={s.body}
+          contentContainerStyle={s.bodyContent}
+          footer={
+            <View style={s.footer}>
+              <PrimaryButton label="Save Changes" onPress={handleSave} loading={saving} disabled={saving} icon="checkmark-circle-outline" />
+            </View>
+          }
+        >
           <Text style={s.sectionLabel}>BRANDING</Text>
           <View style={s.card}>
             <View style={s.swatchRow}>
@@ -227,6 +254,60 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
             <Text style={s.hint}>How many days past the due date before an installment counts as overdue for notifications.</Text>
           </View>
 
+          <Text style={s.sectionLabel}>LEGAL &amp; BILLING</Text>
+          <View style={s.card}>
+            <Text style={s.hint}>
+              Shown on generated invoices for CSR-sponsored courses (Sponsors) — the seller details on a tax
+              invoice, alongside the sponsor's own.
+            </Text>
+            <View style={{ height: ms(14) }} />
+            <Text style={s.fieldLabel}>Registered Legal Name</Text>
+            <TextInput
+              style={[s.numberInput, { width: undefined }]}
+              value={legalName}
+              onChangeText={setLegalName}
+              placeholder="Defaults to the institute name if left blank"
+              placeholderTextColor={C.placeholder}
+            />
+            <View style={{ height: ms(14) }} />
+            <Text style={s.fieldLabel}>Registered Address</Text>
+            <TextInput
+              style={[s.numberInput, { width: undefined }]}
+              value={registeredAddress}
+              onChangeText={setRegisteredAddress}
+              placeholderTextColor={C.placeholder}
+            />
+            <View style={{ height: ms(14) }} />
+            <Text style={s.fieldLabel}>GSTIN</Text>
+            <TextInput
+              style={[s.numberInput, { width: undefined }]}
+              value={gstin}
+              onChangeText={setGstin}
+              autoCapitalize="characters"
+              maxLength={20}
+              placeholderTextColor={C.placeholder}
+            />
+            <View style={{ height: ms(14) }} />
+            <Text style={s.fieldLabel}>GST State Code</Text>
+            <TextInput
+              style={s.numberInput}
+              value={stateCode}
+              onChangeText={setStateCode}
+              placeholder="e.g. 27"
+              maxLength={2}
+              placeholderTextColor={C.placeholder}
+            />
+            <View style={{ height: ms(14) }} />
+            <Text style={s.fieldLabel}>Bank Details</Text>
+            <TextInput
+              style={[s.numberInput, { width: undefined }]}
+              value={bankDetails}
+              onChangeText={setBankDetails}
+              placeholder="Account name, number, IFSC — shown in the invoice footer"
+              placeholderTextColor={C.placeholder}
+            />
+          </View>
+
           <Text style={s.sectionLabel}>NOTIFICATION ROUTING</Text>
           <View style={s.card}>
             {routingLoading ? (
@@ -260,9 +341,7 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
             )}
           </View>
 
-          <View style={{ flex: 1 }} />
-          <PrimaryButton label="Save Changes" onPress={handleSave} loading={saving} disabled={saving} icon="checkmark-circle-outline" />
-        </View>
+        </KeyboardAvoidingScroll>
       )}
     </SafeAreaView>
   );
@@ -271,7 +350,9 @@ export function OrganizationSettingsScreen({ navigation }: Props) {
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   safe:   { flex: 1, backgroundColor: colors.screenBg },
   loader: { flex: 1, backgroundColor: colors.screenBg, alignItems: "center", justifyContent: "center" },
-  body:   { flex: 1, backgroundColor: colors.screenBg, paddingHorizontal: ms(16), paddingTop: ms(16), paddingBottom: ms(20) },
+  body:        { flex: 1, backgroundColor: colors.screenBg },
+  bodyContent: { paddingHorizontal: ms(16), paddingTop: ms(16), paddingBottom: ms(20) },
+  footer:      { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(4), backgroundColor: colors.screenBg },
 
   sectionLabel: { ...T.sectionHeading, color: C.muted, letterSpacing: 1.1, marginBottom: ms(8), marginTop: ms(4) },
   card: {

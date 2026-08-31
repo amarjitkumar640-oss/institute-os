@@ -73,7 +73,20 @@ export async function createSlot(batchId: string, payload: CreateSlotPayload): P
   return data;
 }
 
-export async function updateSlot(slotId: string, payload: Partial<CreateSlotPayload & { isActive?: boolean }>): Promise<ClassSlot> {
+export interface UpdateSlotPayload {
+  startTime?: string;
+  endTime?:   string;
+  // Nullable, unlike CreateSlotPayload's own — the backend's updateSlotSchema
+  // accepts null to explicitly clear a previously-set subject/faculty/room,
+  // not just omit-to-leave-unchanged (undefined).
+  subjectId?: string | null;
+  facultyId?: string | null;
+  room?:      string | null;
+  validTo?:   string | null;
+  isActive?:  boolean;
+}
+
+export async function updateSlot(slotId: string, payload: UpdateSlotPayload): Promise<ClassSlot> {
   const { data } = await apiClient.patch<ClassSlot>(`/api/schedule/class-slots/${slotId}`, payload);
   return data;
 }

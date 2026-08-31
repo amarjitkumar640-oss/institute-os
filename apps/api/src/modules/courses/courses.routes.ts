@@ -70,6 +70,9 @@ coursesRouter.post(
   async (req, res) => {
     const result = await createCourse(req.body, req.auth!.tenantId);
     if (!result.ok) {
+      if ("discountExceedsFee" in result) {
+        return res.status(422).json({ error: "Discount cannot exceed the default fee" });
+      }
       return res.status(409).json({
         error: "A course with this name already exists",
       });
@@ -90,6 +93,9 @@ coursesRouter.patch(
     const result = await updateCourse(req.params.id, req.auth!.tenantId, req.body);
     if (!result.ok) {
       if ("notFound" in result) return res.status(404).json({ error: "Course not found" });
+      if ("discountExceedsFee" in result) {
+        return res.status(422).json({ error: "Discount cannot exceed the default fee" });
+      }
       return res.status(409).json({
         error: "Another course with this name already exists",
       });

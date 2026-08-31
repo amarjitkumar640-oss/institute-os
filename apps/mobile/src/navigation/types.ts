@@ -35,6 +35,10 @@ export type RootStackParamList = {
   AdmissionApplications: undefined;
   Students: undefined;
   BatchSchedule: { batchId: string; batchName: string };
+  BatchOffers: { batchId: string; batchName: string };
+  SponsorshipDetail: { batchId: string; batchName: string };
+  SponsorDetail: { sponsorId: string };
+  Sponsors: undefined;
   SessionDetail: { sessionId: string; batchId: string; batchName: string };
   Notifications: undefined;
 };

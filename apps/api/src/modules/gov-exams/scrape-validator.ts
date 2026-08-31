@@ -1,4 +1,4 @@
-import { prisma } from "../../lib/prisma";
+import type { GovOrgType } from "@prisma/client";
 import { slugify } from "../../lib/slugify";
 import type { CurrentAffairInput, RecruitmentInput } from "./gov-exams.service";
 import type { CurrentAffairExtractionItem, RecruitmentExtractionItem } from "./scrape-schemas";
@@ -6,10 +6,10 @@ import type { CurrentAffairExtractionItem, RecruitmentExtractionItem } from "./s
 // Deterministic, rule-based validation — never delegated to the AI, same
 // principle as checkEligibility() in gov-exams.service.ts. An item that
 // fails a rule still gets created (as draft, for admin review) rather than
-// silently discarded; only a genuinely unusable item (no title, no
-// resolvable organization) is skipped entirely. True duplicates aren't
-// checked here — createRecruitment()/createCurrentAffair() already reject
-// on slug clash, which the sweep treats as "already exists, skip".
+// silently discarded; only a genuinely unusable item (no title) is skipped
+// entirely. True duplicates aren't checked here — createRecruitment()/
+// createCurrentAffair() already reject on slug clash, which the sweep
+// treats as "already exists, skip".
 
 const MIN_YEAR = 2020;
 const MAX_YEAR = 2035;
@@ -28,8 +28,10 @@ export function parseSaneDate(value: string | null | undefined): Date | null {
 }
 
 export interface RecruitmentValidationContext {
-  /** From the GovSource row, if the admin configured one. */
-  organizationId?: string;
+  /** Known statically at every call site (the GovSource row's own category,
+   * the prompt template's category, or the import dialog's selector) —
+   * never inferred from the extracted item. */
+  category: GovOrgType;
 }
 
 export type RecruitmentValidationResult =
@@ -37,29 +39,13 @@ export type RecruitmentValidationResult =
   | { outcome: "draft"; input: Omit<RecruitmentInput, "source" | "sourceUrl">; reasons: string[] }
   | { outcome: "published"; input: Omit<RecruitmentInput, "source" | "sourceUrl"> };
 
-export async function validateRecruitmentItem(
+export function validateRecruitmentItem(
   item: RecruitmentExtractionItem,
   ctx: RecruitmentValidationContext,
-): Promise<RecruitmentValidationResult> {
+): RecruitmentValidationResult {
   const title = item.title?.trim();
   if (!title || title.length < 5 || title.length > 300) {
     return { outcome: "unusable", reason: "Missing or unusable title" };
-  }
-
-  let organizationId = ctx.organizationId;
-  if (!organizationId && item.organizationName) {
-    const match = await prisma.govOrganization.findFirst({
-      where: {
-        OR: [
-          { name: { equals: item.organizationName, mode: "insensitive" } },
-          { shortName: { equals: item.organizationName, mode: "insensitive" } },
-        ],
-      },
-    });
-    organizationId = match?.id;
-  }
-  if (!organizationId) {
-    return { outcome: "unusable", reason: "Could not resolve an organization for this recruitment" };
   }
 
   const reasons: string[] = [];
@@ -78,7 +64,8 @@ export async function validateRecruitmentItem(
   }
 
   const input: Omit<RecruitmentInput, "source" | "sourceUrl"> = {
-    organizationId,
+    category: ctx.category,
+    organization: item.organizationName ?? undefined,
     title,
     slug: slugify(title),
     totalVacancies,
@@ -100,7 +87,18 @@ export type CurrentAffairValidationResult =
   | { outcome: "draft"; input: Omit<CurrentAffairInput, "source" | "sourceUrl">; reasons: string[] }
   | { outcome: "published"; input: Omit<CurrentAffairInput, "source" | "sourceUrl"> };
 
-export function validateCurrentAffairItem(item: CurrentAffairExtractionItem): CurrentAffairValidationResult {
+// categoryKeyToId/defaultCategoryId are resolved once per scrape run by the
+// caller (gov-sources.service.ts) from the live CurrentAffairCategory table
+// — this function stays a pure sync validator, no DB access of its own.
+export interface CurrentAffairCategoryLookup {
+  categoryKeyToId: Map<string, string>;
+  defaultCategoryId: string;
+}
+
+export function validateCurrentAffairItem(
+  item: CurrentAffairExtractionItem,
+  lookup: CurrentAffairCategoryLookup,
+): CurrentAffairValidationResult {
   const title = item.title?.trim();
   const whatHappened = item.whatHappened?.trim();
   if (!title || title.length < 5 || !whatHappened || whatHappened.length < 10) {
@@ -113,13 +111,13 @@ export function validateCurrentAffairItem(item: CurrentAffairExtractionItem): Cu
   if (item.publishedDate && !parsedDate) reasons.push("publishedDate did not parse to a valid date — defaulted to today");
   const publishedDate = parsedDate ?? new Date();
 
-  const category = item.category;
-  if (!category) reasons.push("No category extracted — defaulted to 'national'");
+  const matchedCategoryId = item.category ? lookup.categoryKeyToId.get(item.category) : undefined;
+  if (!matchedCategoryId) reasons.push("No category extracted — defaulted to the site's default category");
 
   const input: Omit<CurrentAffairInput, "source" | "sourceUrl"> = {
     title,
     slug: slugify(title),
-    category: category ?? "national",
+    categoryId: matchedCategoryId ?? lookup.defaultCategoryId,
     whatHappened,
     keyFacts: item.keyFacts ?? undefined,
     whyImportant: item.whyImportant ?? undefined,

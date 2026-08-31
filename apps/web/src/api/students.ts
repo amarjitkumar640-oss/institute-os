@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { AdmitStudentInput, UpdateStudentInput } from "@institute-os/shared";
+import type { AdmitStudentInput, UpdateStudentInput, BulkImportLegacyStudentsInput } from "@institute-os/shared";
 
 export interface Student {
   id: string;
@@ -73,5 +73,16 @@ export async function uploadStudentPhoto(id: string, file: File): Promise<Studen
 
 export async function deleteStudentPhoto(id: string): Promise<Student> {
   const { data } = await apiClient.delete<Student>(`/api/students/${id}/photo`);
+  return data;
+}
+
+export type LegacyImportResult =
+  | { index: number; success: true; studentId: string; studentCode: string }
+  | { index: number; success: false; error: string };
+
+export async function bulkImportLegacyStudents(
+  payload: BulkImportLegacyStudentsInput,
+): Promise<{ results: LegacyImportResult[] }> {
+  const { data } = await apiClient.post<{ results: LegacyImportResult[] }>("/api/students/bulk-import-legacy", payload);
   return data;
 }

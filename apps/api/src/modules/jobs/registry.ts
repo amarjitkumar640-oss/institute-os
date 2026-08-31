@@ -1,7 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { runClassReminderSweep, runOverdueInstallmentSweep } from "../notifications/sweep";
 import { runBatchStatusSweep } from "../batches/batchStatus.sweep";
-import { runSourceScrapeSweep } from "../gov-exams/gov-sources.service";
 
 export type JobTrigger = "scheduler" | "manual";
 
@@ -45,13 +44,10 @@ export const JOB_REGISTRY: JobDefinition[] = [
     defaultIntervalMinutes: 60,
     run: runBatchStatusSweep,
   },
-  {
-    key: "gov-source-scrape-sweep",
-    label: "Government Exam Source Scrape",
-    description: "Scrapes every enabled GovSource, extracts structured recruitment/current-affairs data via the AI Gateway, validates it, and auto-publishes what passes (drafts what doesn't).",
-    defaultIntervalMinutes: 60,
-    run: runSourceScrapeSweep,
-  },
+  // GovSource / GovJobVacancyPromptTemplate / GovCurrentAffairsPromptTemplate
+  // are NOT registered here — each row is independently scheduled (its own
+  // frequency/time-of-day, own Run Now) via gov-exams-scheduler.ts instead
+  // of one bundled job. See SourcesTab.tsx / SearchPromptsTab.tsx.
 ];
 
 export function getJobDefinition(key: string): JobDefinition | undefined {

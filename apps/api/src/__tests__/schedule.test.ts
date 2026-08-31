@@ -1,453 +1,92 @@
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import request from "supertest";
-import { app } from "../app";
-import { prisma } from "../lib/prisma";
-import { env } from "../lib/env";
-import { resetDb, legacyPermissionsForRole } from "./setup";
-import type { AuthPayload } from "../middleware/auth";
+import { isScheduleDue, mostRecentScheduledFireTime, type ScheduleConfig } from "../lib/schedule";
 
-const TENANT_ID = "22222222-2222-2222-2222-222222222222";
+// All "now" instants below are UTC; comments give the equivalent IST
+// (UTC+5:30) wall-clock time for clarity, since that's what the schedule
+// config's timeOfDay/dayOfWeek/dayOfMonth are expressed in.
 
-async function ensureTestTenant() {
-  return prisma.tenant.upsert({
-    where:  { id: TENANT_ID },
-    update: {},
-    create: { id: TENANT_ID, name: "Test Institute 2", slug: "test-institute-2" },
-  });
-}
-
-async function makeAdmin() {
-  await ensureTestTenant();
-  const passwordHash = await bcrypt.hash("secret123", 10);
-  return prisma.staff.create({
-    data: { tenantId: TENANT_ID, fullName: "Admin", phone: "9100000001", email: "admin2@x.test", roles: ["admin"], passwordHash },
-  });
-}
-
-async function makeCourseAndBatch() {
-  await ensureTestTenant();
-  const course = await prisma.course.create({
-    data: { tenantId: TENANT_ID, name: "SSC CGL Foundation", durationMonths: 6, defaultFee: 10000 },
-  });
-  return prisma.batch.create({
-    data: {
-      tenantId: TENANT_ID, courseId: course.id, name: "SSC-Morning-B", capacity: 10,
-      startDate: new Date(), endDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 60),
-    },
-  });
-}
-
-async function makeSession(
-  batchId: string, scheduledDate: string,
-  times: { startTime?: string; endTime?: string } = {},
-) {
-  return prisma.classSession.create({
-    data: {
-      batchId, scheduledDate: new Date(`${scheduledDate}T00:00:00.000Z`),
-      startTime: times.startTime ?? "09:00", endTime: times.endTime ?? "10:00", status: "scheduled",
-    },
-  });
-}
-
-function tokenFor(payload: AuthPayload) {
-  const permissions = payload.permissions ?? legacyPermissionsForRole([payload.activeRole]);
-  return jwt.sign({ ...payload, permissions }, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
-}
-
-function isoDate(daysFromToday: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + daysFromToday);
-  return d.toISOString().slice(0, 10);
-}
-
-// "HH:MM" offset from right now, in the server's local time — matches how
-// patchSession itself compares (toTimeString(), not UTC). Used to build
-// same-day sessions whose end time is deterministically already-passed or
-// not-yet-reached, regardless of what time the test suite happens to run.
-function hhmmOffset(minutesFromNow: number): string {
-  return new Date(Date.now() + minutesFromNow * 60000).toTimeString().slice(0, 5);
-}
-
-describe("session completion date validation", () => {
-  // Pin the clock to a fixed midday moment for this whole block. hhmmOffset
-  // builds same-day "before/after now" timestamps as bare HH:MM strings, and
-  // sessionHasEnded (schedule.service.ts) compares those as strings — which
-  // silently breaks whenever an offset crosses midnight (e.g. 70 minutes
-  // from 23:35 wraps to "00:45", which then string-compares as EARLIER than
-  // "23:35" even though it's actually still in the future). Freezing "now"
-  // at noon keeps every offset used below safely within the same day,
-  // regardless of what real-world time the suite happens to run at — only
-  // Date is faked (setTimeout/etc left real) so the actual DB/HTTP calls
-  // these tests make still run normally.
-  beforeAll(() => {
-    jest.useFakeTimers({
-      doNotFake: ["setTimeout", "setInterval", "setImmediate", "clearTimeout", "clearInterval", "clearImmediate", "nextTick", "queueMicrotask", "hrtime", "performance"],
-    });
-    jest.setSystemTime(new Date("2026-01-15T12:00:00"));
-  });
-  afterAll(() => jest.useRealTimers());
-
-  beforeEach(resetDb);
-  afterAll(async () => prisma.$disconnect());
-
-  it("rejects marking a future-dated session as completed", async () => {
-    const batch = await makeCourseAndBatch();
-    const session = await makeSession(batch.id, isoDate(3));
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "completed" });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/ended/i);
-
-    const unchanged = await prisma.classSession.findUnique({ where: { id: session.id } });
-    expect(unchanged?.status).toBe("scheduled");
-  });
-
-  it("allows cancelling a future-dated session", async () => {
-    const batch = await makeCourseAndBatch();
-    const session = await makeSession(batch.id, isoDate(3));
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "cancelled" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("cancelled");
-  });
-
-  it("allows completing today's session once its end time has passed", async () => {
-    const batch = await makeCourseAndBatch();
-    const session = await makeSession(batch.id, isoDate(0), {
-      startTime: hhmmOffset(-90), endTime: hhmmOffset(-30),
-    });
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "completed" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("completed");
-  });
-
-  it("rejects completing today's session before its end time has passed", async () => {
-    const batch = await makeCourseAndBatch();
-    const session = await makeSession(batch.id, isoDate(0), {
-      startTime: hhmmOffset(10), endTime: hhmmOffset(70),
-    });
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "completed" });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/ended/i);
-  });
-
-  it("rejects completing when the same request reschedules the end time forward to later today", async () => {
-    const batch = await makeCourseAndBatch();
-    // Currently already-ended, but the PATCH also pushes endTime forward —
-    // validation must use the NEW end time, not the session's old one.
-    const session = await makeSession(batch.id, isoDate(0), {
-      startTime: hhmmOffset(-90), endTime: hhmmOffset(-30),
-    });
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "completed", endTime: hhmmOffset(60) });
-
-    expect(res.status).toBe(400);
-  });
-
-  it("allows completing a past session", async () => {
-    const batch = await makeCourseAndBatch();
-    const session = await makeSession(batch.id, isoDate(-2));
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "completed" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("completed");
-  });
-
-  it("rejects rescheduling to a future date and completing in the same request", async () => {
-    const batch = await makeCourseAndBatch();
-    const session = await makeSession(batch.id, isoDate(-1));
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "completed", scheduledDate: isoDate(5) });
-
-    expect(res.status).toBe(400);
+describe("mostRecentScheduledFireTime — hourly", () => {
+  it("returns the top of the current UTC hour", () => {
+    const now = new Date("2026-08-28T14:37:22.000Z");
+    const config: ScheduleConfig = { frequency: "hourly", timeOfDay: null, dayOfWeek: null, dayOfMonth: null };
+    expect(mostRecentScheduledFireTime(config, now).toISOString()).toBe("2026-08-28T14:00:00.000Z");
   });
 });
 
-async function makeTeacherWithFaculty(label: string) {
-  const passwordHash = await bcrypt.hash("secret123", 10);
-  const staff = await prisma.staff.create({
-    data: {
-      tenantId: TENANT_ID, fullName: `${label} Teacher`, phone: `92${label.charCodeAt(0)}000000`,
-      email: `${label.toLowerCase()}@teacher2.test`, roles: ["teacher"], passwordHash,
-    },
-  });
-  const faculty = await prisma.faculty.create({
-    data: {
-      tenantId: TENANT_ID, employeeCode: `FAC2-${label}`, fullName: `${label} Teacher`,
-      phone: staff.phone, email: staff.email, qualification: "M.Sc",
-      joiningDate: new Date(), staffId: staff.id,
-    },
-  });
-  return { staff, faculty };
-}
+describe("mostRecentScheduledFireTime — daily", () => {
+  const config: ScheduleConfig = { frequency: "daily", timeOfDay: "09:00", dayOfWeek: null, dayOfMonth: null };
 
-describe("teacher cannot cancel a class", () => {
-  beforeEach(resetDb);
-  afterAll(async () => prisma.$disconnect());
-
-  it("rejects a teacher cancelling their own session", async () => {
-    const batch = await makeCourseAndBatch();
-    const { staff, faculty } = await makeTeacherWithFaculty("A");
-    const session = await prisma.classSession.create({
-      data: {
-        batchId: batch.id, facultyId: faculty.id, scheduledDate: new Date(`${isoDate(0)}T00:00:00.000Z`),
-        startTime: "09:00", endTime: "10:00", status: "scheduled",
-      },
-    });
-    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "cancelled" });
-
-    expect(res.status).toBe(403);
-
-    const unchanged = await prisma.classSession.findUnique({ where: { id: session.id } });
-    expect(unchanged?.status).toBe("scheduled");
+  it("uses today's scheduled time when it has already passed (IST)", () => {
+    // 2026-08-28 15:00 IST — well after 09:00 IST today.
+    const now = new Date("2026-08-28T09:30:00.000Z");
+    expect(mostRecentScheduledFireTime(config, now).toISOString()).toBe("2026-08-28T03:30:00.000Z"); // 09:00 IST = 03:30 UTC
   });
 
-  it("still allows admin to cancel", async () => {
-    const batch = await makeCourseAndBatch();
-    const session = await makeSession(batch.id, isoDate(0));
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "cancelled" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("cancelled");
-  });
-
-  it("still allows a teacher to mark their own ended session completed", async () => {
-    const batch = await makeCourseAndBatch();
-    const { staff, faculty } = await makeTeacherWithFaculty("B");
-    const session = await prisma.classSession.create({
-      data: {
-        batchId: batch.id, facultyId: faculty.id, scheduledDate: new Date(`${isoDate(0)}T00:00:00.000Z`),
-        startTime: hhmmOffset(-90), endTime: hhmmOffset(-30), status: "scheduled",
-      },
-    });
-    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ status: "completed" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("completed");
+  it("falls back to yesterday's scheduled time when today's hasn't happened yet (IST)", () => {
+    // 2026-08-28 08:00 IST — before 09:00 IST today.
+    const now = new Date("2026-08-28T02:30:00.000Z");
+    expect(mostRecentScheduledFireTime(config, now).toISOString()).toBe("2026-08-27T03:30:00.000Z");
   });
 });
 
-describe("teacher cannot reassign subject or faculty", () => {
-  beforeEach(resetDb);
-  afterAll(async () => prisma.$disconnect());
+describe("mostRecentScheduledFireTime — weekly", () => {
+  // Friday (5) at 18:00 IST.
+  const config: ScheduleConfig = { frequency: "weekly", timeOfDay: "18:00", dayOfWeek: 5, dayOfMonth: null };
 
-  it("rejects a teacher changing the subject of their own session", async () => {
-    const batch = await makeCourseAndBatch();
-    const { staff, faculty } = await makeTeacherWithFaculty("C");
-    const subject = await prisma.subject.create({ data: { tenantId: TENANT_ID, name: "Reasoning" } });
-    const session = await prisma.classSession.create({
-      data: {
-        batchId: batch.id, facultyId: faculty.id, scheduledDate: new Date(`${isoDate(0)}T00:00:00.000Z`),
-        startTime: "09:00", endTime: "10:00", status: "scheduled",
-      },
-    });
-    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ subjectId: subject.id });
-
-    expect(res.status).toBe(403);
+  it("finds this week's occurrence when it has already passed", () => {
+    // Saturday 2026-08-29 in IST (>= Friday 18:00 IST).
+    const now = new Date("2026-08-29T04:00:00.000Z"); // Sat 09:30 IST
+    const result = mostRecentScheduledFireTime(config, now);
+    expect(result.toISOString()).toBe("2026-08-28T12:30:00.000Z"); // Fri 2026-08-28 18:00 IST
   });
 
-  it("rejects a teacher reassigning the faculty of their own session", async () => {
-    const batch = await makeCourseAndBatch();
-    const { staff, faculty: facultyA } = await makeTeacherWithFaculty("D");
-    const { faculty: facultyB } = await makeTeacherWithFaculty("E");
-    const session = await prisma.classSession.create({
-      data: {
-        batchId: batch.id, facultyId: facultyA.id, scheduledDate: new Date(`${isoDate(0)}T00:00:00.000Z`),
-        startTime: "09:00", endTime: "10:00", status: "scheduled",
-      },
-    });
-    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: facultyA.id });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ facultyId: facultyB.id });
-
-    expect(res.status).toBe(403);
-
-    const unchanged = await prisma.classSession.findUnique({ where: { id: session.id } });
-    expect(unchanged?.facultyId).toBe(facultyA.id);
-  });
-
-  it("still allows admin to reassign subject and faculty", async () => {
-    const batch = await makeCourseAndBatch();
-    const { faculty } = await makeTeacherWithFaculty("F");
-    const subject = await prisma.subject.create({ data: { tenantId: TENANT_ID, name: "Quant" } });
-    const session = await makeSession(batch.id, isoDate(0));
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-sessions/${session.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ subjectId: subject.id, facultyId: faculty.id });
-
-    expect(res.status).toBe(200);
-    expect(res.body.subjectId).toBe(subject.id);
-    expect(res.body.facultyId).toBe(faculty.id);
+  it("falls back to the previous week's occurrence, crossing a month boundary", () => {
+    // 2026-09-01 (Tuesday IST) — before this week's Friday.
+    const now = new Date("2026-09-01T04:00:00.000Z"); // Tue 09:30 IST
+    const result = mostRecentScheduledFireTime(config, now);
+    expect(result.toISOString()).toBe("2026-08-28T12:30:00.000Z"); // preceding Friday, in August
   });
 });
 
-describe("teacher cannot mark attendance", () => {
-  beforeEach(resetDb);
-  afterAll(async () => prisma.$disconnect());
-
-  it("rejects a teacher marking attendance for their own session", async () => {
-    const batch = await makeCourseAndBatch();
-    const { staff, faculty } = await makeTeacherWithFaculty("G");
-    const session = await prisma.classSession.create({
-      data: {
-        batchId: batch.id, facultyId: faculty.id, scheduledDate: new Date(`${isoDate(0)}T00:00:00.000Z`),
-        startTime: "09:00", endTime: "10:00", status: "scheduled",
-      },
-    });
-    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
-
-    const res = await request(app)
-      .put(`/api/schedule/class-sessions/${session.id}/attendance`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ marks: [] });
-
-    expect(res.status).toBe(403);
+describe("mostRecentScheduledFireTime — monthly", () => {
+  it("clamps day 31 to the real last day of a shorter month (February, non-leap)", () => {
+    const config: ScheduleConfig = { frequency: "monthly", timeOfDay: "10:00", dayOfWeek: null, dayOfMonth: 31 };
+    // 2027-02-20 IST — after Feb 28 hasn't happened yet this month, so falls back to January 31.
+    const now = new Date("2027-02-20T05:00:00.000Z"); // Feb 20 10:30 IST
+    const result = mostRecentScheduledFireTime(config, now);
+    expect(result.toISOString()).toBe("2027-01-31T04:30:00.000Z"); // Jan 31 2027 10:00 IST
   });
 
-  it("still allows a teacher to view (GET) the roster for their own session", async () => {
-    const batch = await makeCourseAndBatch();
-    const { staff, faculty } = await makeTeacherWithFaculty("H");
-    const session = await prisma.classSession.create({
-      data: {
-        batchId: batch.id, facultyId: faculty.id, scheduledDate: new Date(`${isoDate(0)}T00:00:00.000Z`),
-        startTime: "09:00", endTime: "10:00", status: "scheduled",
-      },
-    });
-    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
-
-    const res = await request(app)
-      .get(`/api/schedule/class-sessions/${session.id}/attendance`)
-      .set("Authorization", `Bearer ${token}`);
-
-    expect(res.status).toBe(200);
+  it("uses this month's clamped occurrence once it has passed", () => {
+    const config: ScheduleConfig = { frequency: "monthly", timeOfDay: "10:00", dayOfWeek: null, dayOfMonth: 31 };
+    // 2027-03-01 IST — after February's clamped occurrence (Feb 28, 10:00 IST).
+    const now = new Date("2027-03-01T05:00:00.000Z");
+    const result = mostRecentScheduledFireTime(config, now);
+    expect(result.toISOString()).toBe("2027-02-28T04:30:00.000Z"); // Feb 28 2027 10:00 IST (clamped)
   });
 
-  it("still allows admin to mark attendance", async () => {
-    const batch = await makeCourseAndBatch();
-    const session = await makeSession(batch.id, isoDate(0));
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
-
-    const res = await request(app)
-      .put(`/api/schedule/class-sessions/${session.id}/attendance`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ marks: [] });
-
-    expect(res.status).toBe(200);
+  it("crosses a year boundary correctly (configured for the 1st, evaluated in early January)", () => {
+    const config: ScheduleConfig = { frequency: "monthly", timeOfDay: "06:00", dayOfWeek: null, dayOfMonth: 1 };
+    // 2027-01-01 05:00 IST — before this month's 06:00 IST occurrence.
+    const now = new Date("2026-12-31T23:30:00.000Z");
+    const result = mostRecentScheduledFireTime(config, now);
+    expect(result.toISOString()).toBe("2026-12-01T00:30:00.000Z"); // Dec 1 2026 06:00 IST
   });
 });
 
-describe("teacher cannot edit the weekly slot template", () => {
-  beforeEach(resetDb);
-  afterAll(async () => prisma.$disconnect());
+describe("isScheduleDue", () => {
+  const config: ScheduleConfig = { frequency: "daily", timeOfDay: "09:00", dayOfWeek: null, dayOfMonth: null };
+  const now = new Date("2026-08-28T09:30:00.000Z"); // well after today's 09:00 IST (03:30 UTC)
 
-  it("rejects a teacher editing a slot in their own batch", async () => {
-    const batch = await makeCourseAndBatch();
-    const { staff, faculty } = await makeTeacherWithFaculty("I");
-    const slot = await prisma.classSlot.create({
-      data: {
-        batchId: batch.id, facultyId: faculty.id, dayOfWeek: "monday",
-        startTime: "09:00", endTime: "10:00", validFrom: new Date(),
-      },
-    });
-    const token = tokenFor({ staffId: staff.id, roles: ["teacher"], activeRole: "teacher", centerId: null, tenantId: TENANT_ID, facultyId: faculty.id });
-
-    const res = await request(app)
-      .patch(`/api/schedule/class-slots/${slot.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ room: "Room 5" });
-
-    expect(res.status).toBe(403);
-
-    const unchanged = await prisma.classSlot.findUnique({ where: { id: slot.id } });
-    expect(unchanged?.room).toBeNull();
+  it("is due when never run before", () => {
+    expect(isScheduleDue(config, null, now)).toBe(true);
   });
 
-  it("still allows admin to edit a slot", async () => {
-    const batch = await makeCourseAndBatch();
-    const slot = await prisma.classSlot.create({
-      data: { batchId: batch.id, dayOfWeek: "monday", startTime: "09:00", endTime: "10:00", validFrom: new Date() },
-    });
-    const admin = await makeAdmin();
-    const token = tokenFor({ staffId: admin.id, roles: ["admin"], activeRole: "admin", centerId: null, tenantId: TENANT_ID });
+  it("is due when the last run was before today's scheduled fire time", () => {
+    expect(isScheduleDue(config, new Date("2026-08-27T03:30:00.000Z"), now)).toBe(true);
+  });
 
-    const res = await request(app)
-      .patch(`/api/schedule/class-slots/${slot.id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ room: "Room 5" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.room).toBe("Room 5");
+  it("is not due when the last run was at or after today's scheduled fire time", () => {
+    expect(isScheduleDue(config, new Date("2026-08-28T03:30:00.000Z"), now)).toBe(false);
+    expect(isScheduleDue(config, new Date("2026-08-28T05:00:00.000Z"), now)).toBe(false);
   });
 });

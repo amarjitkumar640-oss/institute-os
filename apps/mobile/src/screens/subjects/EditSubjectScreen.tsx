@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, KeyboardAvoidingView, ScrollView, Keyboard,
-  Platform, Animated, Easing, TouchableOpacity,
+  View, Text, StyleSheet,
+  Animated, Easing, TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,6 +10,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { T } from "../../components/ui/typography";
@@ -56,17 +57,6 @@ export function EditSubjectScreen({ navigation, route }: Props) {
   const { showConfirm } = useAlert();
   const insets = useSafeAreaInsets();
   const { subject } = route.params;
-  const scrollRef = useRef<ScrollView>(null);
-
-  // RN auto-scrolls to keep a focused field visible above the keyboard but
-  // never scrolls back on dismiss — undo that so the form returns to its
-  // original scroll position once the keyboard is fully gone.
-  useEffect(() => {
-    const sub = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-    return () => sub.remove();
-  }, []);
 
   const [name, setName]           = useState(subject.name);
   const [nameError, setNameError] = useState<string | undefined>();
@@ -184,14 +174,29 @@ export function EditSubjectScreen({ navigation, route }: Props) {
     <SafeAreaView style={s.safe} edges={["bottom"]}>
       <ScreenHeader title="Edit Subject" onBack={handleBack} />
 
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView
-          ref={scrollRef}
-          style={s.flex}
-          contentContainerStyle={s.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAvoidingScroll
+        style={s.flex}
+        contentContainerStyle={s.content}
+        footer={
+          <View style={s.footer}>
+            <PrimaryButton
+              label="Save Changes"
+              onPress={handleSubmit}
+              loading={loading}
+              disabled={loading || !isDirty}
+              icon="checkmark-circle-outline"
+            />
+            {isDirty && !loading && (
+              <PrimaryButton
+                label="Reset Changes"
+                onPress={() => { setName(subject.name); setCategoryIds(subject.examCategories.map((c) => c.id)); setNameError(undefined); setSubmitError(undefined); }}
+                variant="outline"
+                icon="refresh-outline"
+              />
+            )}
+          </View>
+        }
+      >
 
           {/* ── Name ── */}
           <View style={s.section}>
@@ -258,25 +263,7 @@ export function EditSubjectScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          <View style={s.buttonGroup}>
-            <PrimaryButton
-              label="Save Changes"
-              onPress={handleSubmit}
-              loading={loading}
-              disabled={loading || !isDirty}
-              icon="checkmark-circle-outline"
-            />
-            {isDirty && !loading && (
-              <PrimaryButton
-                label="Reset Changes"
-                onPress={() => { setName(subject.name); setCategoryIds(subject.examCategories.map((c) => c.id)); setNameError(undefined); setSubmitError(undefined); }}
-                variant="outline"
-                icon="refresh-outline"
-              />
-            )}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScroll>
 
       {/* Full-screen loader */}
       {loading && (
@@ -413,7 +400,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
 
   submitError:   { backgroundColor: C.red + "0F", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(12), marginBottom: ms(10) },
   submitErrorT:  { ...T.body, color: C.red },
-  buttonGroup:   { gap: ms(12) },
+  footer:        { gap: ms(12), paddingHorizontal: CONTENT_H_PAD, paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
 
   loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
   loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },

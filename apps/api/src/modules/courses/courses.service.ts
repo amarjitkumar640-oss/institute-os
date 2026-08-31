@@ -14,11 +14,16 @@ const CATEGORY_INCLUDE = { examCategories: { include: { examCategory: true } } }
 type WithCategoryLinks = { examCategories: { examCategory: unknown }[] };
 
 // Prisma Decimal → number, and flatten the join-table rows into a plain examCategories array
-function serializeCourse<T extends { defaultFee: Prisma.Decimal } & WithCategoryLinks>(
+function serializeCourse<T extends { defaultFee: Prisma.Decimal; discountAmount: Prisma.Decimal } & WithCategoryLinks>(
   course: T
-): Omit<T, "defaultFee" | "examCategories"> & { defaultFee: number; examCategories: unknown[] } {
-  const { defaultFee, examCategories, ...rest } = course;
-  return { ...rest, defaultFee: Number(defaultFee), examCategories: examCategories.map((ec) => ec.examCategory) };
+): Omit<T, "defaultFee" | "discountAmount" | "examCategories"> & { defaultFee: number; discountAmount: number; examCategories: unknown[] } {
+  const { defaultFee, discountAmount, examCategories, ...rest } = course;
+  return {
+    ...rest,
+    defaultFee: Number(defaultFee),
+    discountAmount: Number(discountAmount),
+    examCategories: examCategories.map((ec) => ec.examCategory),
+  };
 }
 
 // Deliberately open to any authenticated staff, unlike listCourses() (which
@@ -90,9 +95,12 @@ export async function getCourse(id: string, tenantId: string) {
 
 export type CreateResult =
   | { ok: true; course: ReturnType<typeof serializeCourse> }
-  | { ok: false; conflict: true };
+  | { ok: false; conflict: true }
+  | { ok: false; discountExceedsFee: true };
 
 export async function createCourse(data: CreateCourseInput, tenantId: string): Promise<CreateResult> {
+  if ((data.discountAmount ?? 0) > data.defaultFee) return { ok: false, discountExceedsFee: true };
+
   const clash = await prisma.course.findFirst({
     where: { tenantId, name: { equals: data.name, mode: "insensitive" } },
   });
@@ -115,7 +123,8 @@ export async function createCourse(data: CreateCourseInput, tenantId: string): P
 export type UpdateResult =
   | { ok: true; course: ReturnType<typeof serializeCourse> }
   | { ok: false; notFound: true }
-  | { ok: false; conflict: true };
+  | { ok: false; conflict: true }
+  | { ok: false; discountExceedsFee: true };
 
 export async function updateCourse(
   id: string,
@@ -124,6 +133,10 @@ export async function updateCourse(
 ): Promise<UpdateResult> {
   const existing = await prisma.course.findFirst({ where: { id, tenantId } });
   if (!existing) return { ok: false, notFound: true };
+
+  const effectiveFee      = data.defaultFee      ?? Number(existing.defaultFee);
+  const effectiveDiscount = data.discountAmount  ?? Number(existing.discountAmount);
+  if (effectiveDiscount > effectiveFee) return { ok: false, discountExceedsFee: true };
 
   // Only check name uniqueness when the name is being changed
   if (data.name !== undefined && data.name.toLowerCase() !== existing.name.toLowerCase()) {

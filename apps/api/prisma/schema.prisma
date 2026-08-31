@@ -25,6 +25,12 @@ enum BatchStatus {
   upcoming
   running
   completed
+  // Every active enrollment was merged into another batch (see
+  // mergeBatch() in modules/batches/batch-merge.service.ts) — distinct
+  // from `completed`, which means the batch actually ran its course to
+  // the end. Kept around (not deleted) as a historical record even
+  // though it now has no active students.
+  merged
 }
 
 enum ApplicationStatus {
@@ -168,6 +174,21 @@ model Tenant {
   classReminderMinutes Int @default(15)
   overdueGraceDays     Int @default(0)
 
+  // Legal/billing details — needed to generate a compliant invoice for a
+  // corporate sponsor (SponsorInvoice), which must show the *seller's* own
+  // GSTIN/address, not just the buyer's. Nullable: most tenants never issue
+  // an invoice and don't need to fill this in.
+  legalName         String?
+  registeredAddress String?
+  gstin             String?
+  stateCode         String? // 2-digit GST state code, e.g. "27" for Maharashtra
+  bankDetails       String?
+  // Sequential invoice numbering — incremented atomically inside the same
+  // transaction as SponsorInvoice creation (see invoice.service.ts). Unlike
+  // generateReceiptNo() (timestamp+random, fine for internal receipts), an
+  // invoice is a legal document and needs real sequential numbers.
+  nextInvoiceSeq Int @default(1)
+
   centers        Center[]
   staff          Staff[]
   courses        Course[]
@@ -185,6 +206,10 @@ model Tenant {
   permissionGrants         PermissionGrant[]
   appReleases              AppRelease[]
   siteHighlights           SiteHighlight[]
+  aiAssistantSessions      AiAssistantSession[]
+  batchDiscountOffers      BatchDiscountOffer[]
+  sponsors                 Sponsor[]
+  sponsorshipContracts     SponsorshipContract[]
 
   @@map("tenants")
 }
@@ -301,6 +326,7 @@ model Staff {
   jobRuns                  JobRun[]
   permissionGrantsUpdated  PermissionGrant[]
   passwordResetTokens      PasswordResetToken[]
+  aiAssistantSessions      AiAssistantSession[]
 
   @@unique([tenantId, phone])
   @@unique([tenantId, username])
@@ -402,6 +428,18 @@ model Course {
   name           String
   durationMonths Int
   defaultFee     Decimal @db.Decimal(10, 2)
+  // A standing discount auto-applied to every new enrollment in this course
+  // (fed into generateSchedule's discountAmount at admission time — see
+  // students.routes.ts). Distinct from StudentFeeSchedule.discountAmount,
+  // which is a one-off per-student override applied after enrollment.
+  discountAmount Decimal @default(0) @db.Decimal(10, 2)
+  discountReason String?
+  // A course that's never billed to students at all (e.g. a dedicated CSR
+  // program course) — admission into any batch under it skips fee-schedule
+  // generation entirely. Distinct from a CSR-sponsored *batch* under an
+  // otherwise-normal course, which is represented by SponsorshipContract
+  // instead (see students.routes.ts's /admit handler for both checks).
+  isFree Boolean @default(false)
 
   examCategories CourseExamCategory[]
   batches        Batch[]
@@ -442,8 +480,140 @@ model Batch {
   enrollments   Enrollment[]
   classSlots    ClassSlot[]
   classSessions ClassSession[]
+  discountOffers BatchDiscountOffer[]
+  sponsorshipContract SponsorshipContract?
 
   @@map("batches")
+}
+
+// "First N students in this batch get ₹X off" — admin picks exactly one
+// batch per offer (not every batch of a course; a deliberately narrower,
+// more manageable scope than Course.discountAmount's blanket standing
+// discount). Redemption is checked+incremented atomically inside the same
+// transaction as admission (students.routes.ts), mirroring the existing
+// batch-capacity check in enrollments.service.ts — read current count,
+// compare, act, all inside one transaction.
+model BatchDiscountOffer {
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  batchId        String
+  batch          Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  discountAmount Decimal  @db.Decimal(10, 2)
+  maxRedemptions Int
+  redeemedCount  Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("batch_discount_offers")
+}
+
+// ── CSR sponsorship ──────────────────────────────────────────────────────────
+// A company sponsors one specific batch in full (never a mix of sponsored and
+// self-paying students in the same batch — see students.routes.ts's /admit
+// handler, which skips fee-schedule generation entirely for every admission
+// into a batch that has an active SponsorshipContract). The institute still
+// gets paid, just by the sponsor instead of the students, tracked via
+// SponsorPaymentMilestone and invoiced via SponsorInvoice.
+
+model Sponsor {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  gstin         String?
+  stateCode     String? // compared against Tenant.stateCode to decide CGST+SGST vs IGST
+  notes         String?
+  contracts     SponsorshipContract[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("sponsors")
+}
+
+// One contract per batch (batchId is unique) — mirrors BatchDiscountOffer's
+// "one offer per batch, not per course" precedent. contractedStudentCount is
+// informational (shown on the invoice / admin UI); the batch is always fully
+// sponsored, so Batch.capacity — already enforced by createEnrollment's
+// existing active-enrollment count (enrollments.service.ts) — is what
+// actually caps admissions. No separate capacity-enforcement path needed.
+model SponsorshipContract {
+  id                     String    @id @default(uuid())
+  tenantId               String
+  tenant                 Tenant    @relation(fields: [tenantId], references: [id])
+  sponsorId              String
+  sponsor                Sponsor   @relation(fields: [sponsorId], references: [id])
+  batchId                String    @unique
+  batch                  Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  contractedStudentCount Int
+  totalContractAmount    Decimal   @db.Decimal(12, 2)
+  // null = GST-exempt for this contract's invoices. When set, invoice.service.ts
+  // splits it CGST+SGST (sponsor and tenant same stateCode) or IGST (different).
+  gstRate                Decimal?  @db.Decimal(5, 2)
+  startDate              DateTime
+  endDate                DateTime?
+  status                 String    @default("active") // active | completed | cancelled
+  documentUrl            String?   // S3 key — uploaded signed agreement
+  notes                  String?
+  milestones             SponsorPaymentMilestone[]
+  invoices               SponsorInvoice[]
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@map("sponsorship_contracts")
+}
+
+// How the institute actually gets paid by the sponsor — one or more line
+// items (e.g. "Advance" + "On completion"), each invoiced independently via
+// SponsorInvoice once marked ready. A single lump-sum contract is just one
+// milestone.
+model SponsorPaymentMilestone {
+  id             String              @id @default(uuid())
+  contractId     String
+  contract       SponsorshipContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  label          String
+  amount         Decimal             @db.Decimal(12, 2)
+  dueDate        DateTime?
+  status         String              @default("pending") // pending | received
+  receivedAt     DateTime?
+  receivedAmount Decimal?            @db.Decimal(12, 2)
+  notes          String?
+  invoice        SponsorInvoice?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@map("sponsor_payment_milestones")
+}
+
+// One invoice per milestone (milestoneId is unique — v1 doesn't support
+// voiding/reissuing). shareToken is a random, unguessable public lookup key
+// (see sponsors.public.routes.ts) — deliberately not the invoice's own id,
+// so a leaked/guessed row id can't be used to fetch someone else's invoice.
+model SponsorInvoice {
+  id              String                  @id @default(uuid())
+  tenantId        String
+  contractId      String
+  contract        SponsorshipContract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  milestoneId     String                  @unique
+  milestone       SponsorPaymentMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  invoiceNumber   String                  @unique
+  issueDate       DateTime
+  taxableAmount   Decimal                 @db.Decimal(12, 2)
+  gstRate         Decimal?                @db.Decimal(5, 2)
+  cgstAmount      Decimal                 @default(0) @db.Decimal(12, 2)
+  sgstAmount      Decimal                 @default(0) @db.Decimal(12, 2)
+  igstAmount      Decimal                 @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal                 @db.Decimal(12, 2)
+  pdfS3Key        String
+  shareToken      String                  @unique
+  createdAt       DateTime                @default(now())
+
+  @@map("sponsor_invoices")
 }
 
 model Student {
@@ -451,6 +621,11 @@ model Student {
   tenantId           String
   tenant             Tenant    @relation(fields: [tenantId], references: [id])
   studentCode        String
+  // Pre-system paper-register reference number (e.g. a legacy admission
+  // book serial) for students backfilled from historical records — never
+  // generated or validated by this app, purely a display reference back to
+  // the physical record it was transcribed from.
+  legacyId           String?
   centerId           String?
   center             Center?   @relation(fields: [centerId], references: [id])
   fullName           String
@@ -488,6 +663,11 @@ model Student {
   sessionAttendances SessionAttendance[]
 
   @@unique([tenantId, studentCode])
+  // NULLs (a student admitted normally, never in a paper register) don't
+  // collide with each other or with anything else under Postgres unique-
+  // index semantics — this only rejects two non-null legacyIds colliding
+  // within the same tenant.
+  @@unique([tenantId, legacyId])
   @@map("students")
 }
 
@@ -720,6 +900,14 @@ model PaymentTransaction {
   bankName      String?
   upiRef        String?
   notes         String?
+  // Pre-system paper-register receipt number, for payments backfilled via
+  // the legacy student import (see Student.legacyId's own comment — same
+  // idea, same rule: never generated or validated by this app, purely a
+  // display reference back to the physical receipt it was transcribed
+  // from. `receiptNo` above is always this app's own auto-generated one,
+  // even for a backfilled payment — this field is what preserves the
+  // paper trail without needing it to be unique.
+  legacyReceiptNo String?
   createdAt     DateTime             @default(now())
 
   @@unique([tenantId, receiptNo])
@@ -955,20 +1143,16 @@ enum GovOrgType {
   other
 }
 
-model GovOrganization {
-  id              String     @id @default(uuid())
-  name            String
-  shortName       String     @unique
-  type            GovOrgType
-  logoUrl         String?
-  officialWebsite String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-
-  recruitments GovRecruitment[]
-  sources      GovSource[]
-
-  @@map("gov_organizations")
+// Real clock-time scheduling for GovSource/GovJobVacancyPromptTemplate/
+// GovCurrentAffairsPromptTemplate — see lib/schedule.ts and
+// gov-exams-scheduler.ts. "hourly" needs no further fields; daily/weekly/
+// monthly need scheduleTimeOfDay (IST, "HH:MM"); weekly also needs
+// scheduleDayOfWeek; monthly also needs scheduleDayOfMonth.
+enum GovScheduleFrequency {
+  hourly
+  daily
+  weekly
+  monthly
 }
 
 enum GovRecruitmentStatus {
@@ -987,8 +1171,14 @@ enum GovContentSource {
 
 model GovRecruitment {
   id                      String   @id @default(uuid())
-  organizationId          String
-  organization            GovOrganization @relation(fields: [organizationId], references: [id])
+  category                GovOrgType
+  // Plain display text — sourced directly from whatever the extraction/
+  // import/admin form provides. No matching, no lookup entity: an
+  // open-ended, AI-extracted set of organization names doesn't fit a
+  // matched/created directory (see the ADR-style note in the plan this
+  // replaced — gov_organizations table + fuzzy matching was fragile for
+  // this and added no real value beyond display).
+  organization            String?
   title                   String
   slug                    String   @unique
   totalVacancies          Int?
@@ -1063,7 +1253,7 @@ model GovRecruitment {
 
   documents GovDocument[]
 
-  @@index([status, organizationId])
+  @@index([status, category])
   @@index([status, applicationEndDate])
   @@map("gov_recruitments")
 }
@@ -1094,30 +1284,54 @@ model GovDocument {
   @@map("gov_documents")
 }
 
-enum GovCurrentAffairCategory {
-  national
-  international
-  banking
-  economy
-  science
-  technology
-  defence
-  sports
-  awards
-  appointments
-  govt_schemes
-  environment
+enum CurrentAffairCategoryPriority {
+  primary
+  secondary
+}
+
+// Admin-configurable current-affairs categories shown on the public Gov Exam
+// Intelligence portal (apps/exam-portal). Global (no tenantId) — same design
+// as GovCurrentAffair itself: content is shared, write access is gated to
+// SITE_TENANT_SLUG's own admins at the route layer, not by tenant scoping
+// here. "key" is the stable slug used in URLs (?category=...), the
+// scraper's structured-output schema, and the AI assistant tool — never
+// shown to end users directly (labelEn/labelHi are).
+model CurrentAffairCategory {
+  id           String                        @id @default(uuid())
+  key          String                        @unique
+  labelEn      String
+  labelHi      String
+  shortLabelEn String
+  shortLabelHi String
+  priority     CurrentAffairCategoryPriority @default(primary)
+  sortOrder    Int                           @default(0)
+  isVisible    Boolean                       @default(true)
+  // Exactly one row should have isDefault = true — enforced at the service
+  // layer (create/update), not the DB. Used as the scraper's fallback
+  // category when AI extraction can't determine one.
+  isDefault    Boolean                       @default(false)
+  createdAt    DateTime                      @default(now())
+  updatedAt    DateTime                      @updatedAt
+
+  currentAffairs GovCurrentAffair[]
+
+  @@map("current_affair_categories")
 }
 
 model GovCurrentAffair {
   id            String   @id @default(uuid())
   title         String
   slug          String   @unique
-  category      GovCurrentAffairCategory
+  categoryId    String
+  category      CurrentAffairCategory @relation(fields: [categoryId], references: [id])
   whatHappened  String
   keyFacts      Json?    // string[]
   whyImportant  String?
-  examRelevance Json?    // e.g. { ssc: "...", banking: "...", railway: "..." }
+  // e.g. { ssc: true, banking: false, railway: true, upsc: false, ... } —
+  // boolean flags per the prompt-template extraction shape (see
+  // GovCurrentAffairsPromptTemplate). Widened at the app layer from the
+  // older free-text-per-key shape; no migration needed, already Json.
+  examRelevance Json?
   publishedDate DateTime
   status        GovRecruitmentStatus @default(draft)
   source        GovContentSource     @default(manual)
@@ -1125,7 +1339,26 @@ model GovCurrentAffair {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@index([status, category, publishedDate])
+  // ── Rich fields (populated by the prompt-template scraper — see
+  // current-affairs-import-mapper.ts). All optional: current affairs
+  // created through the plain admin form never populate these. Typed
+  // columns cover the frequently-queried essentials; richData carries
+  // everything else the extraction shape returns (numbers, people,
+  // scheme_or_policy, appointment, award, report_or_index, international,
+  // official_links, secondary_sources, subcategory, one_liner, exam_facts,
+  // who_should_remember, etc.) rather than expanding the schema for every
+  // long-tail field. ──────────────────────────────────────────────────────
+  level               String? // "national" | "state" | "union_territory"
+  newsStatus          String? // "current" | "upcoming" | "updated" — distinct from `status` (the publish-state field)
+  importance          String? // "high" | "medium" | "low"
+  organization        String?
+  ministry            String?
+  state               String?
+  eventDate           DateTime?
+  verificationStatus  String? // "verified" | "partially_verified" | "unverified"
+  richData            Json?
+
+  @@index([status, categoryId, publishedDate])
   @@map("gov_current_affairs")
 }
 
@@ -1149,22 +1382,25 @@ enum GovSourceFetchMode {
   search
 }
 
-// Admin-configurable content source, by exam category (step 4). recruitment
-// sources should set organizationId so scraped recruitments attach to the
-// right org automatically; current-affairs sources have no natural
-// organization (e.g. a general daily-current-affairs page) and can leave
-// it unset.
+// Admin-configurable content source, by exam category (step 4). Scraped
+// recruitments carry `category` straight from this row and `organization`
+// as plain extracted text — no matched/created organization entity.
 model GovSource {
   id               String     @id @default(uuid())
   category         GovOrgType
   contentType      GovSourceContentType
   fetchMode        GovSourceFetchMode @default(url)
-  organizationId   String?
-  organization     GovOrganization? @relation(fields: [organizationId], references: [id])
   label            String
   url              String?
   searchQuery      String?
   enabled          Boolean    @default(true)
+  // Independently schedulable per row (see lib/schedule.ts and
+  // gov-exams-scheduler.ts) — no bundled "run every source together" job
+  // anymore.
+  scheduleFrequency  GovScheduleFrequency @default(hourly)
+  scheduleTimeOfDay  String? // "HH:MM", IST — required for daily/weekly/monthly
+  scheduleDayOfWeek  Int? // 0=Sunday..6=Saturday — weekly only
+  scheduleDayOfMonth Int? // 1-31, clamped to the real last day of shorter months — monthly only
   lastScrapedAt    DateTime?
   lastScrapeStatus String? // "success" | "partial" | "error"
   lastScrapeError  String?
@@ -1173,4 +1409,241 @@ model GovSource {
 
   @@index([category, enabled])
   @@map("gov_sources")
+}
+
+// Replaces GovSource's "search" fetchMode entirely: one admin-written
+// prompt per job-vacancy category (not per-source free-text searchQuery).
+// The admin owns the full instruction — the sweep passes it to the AI
+// Gateway's native web search as-is, no system-side query-wrapping — and
+// the LLM returns the same rich { card, details, content } shape the
+// manual JSON-import feature already accepts (see import-mapper.ts,
+// reused unchanged for this). One row per GovOrgType, same "row per key"
+// pattern as AiModelAssignment.purpose.
+model GovJobVacancyPromptTemplate {
+  category           GovOrgType @id
+  prompt             String     @db.Text
+  enabled            Boolean    @default(true)
+  scheduleFrequency  GovScheduleFrequency @default(hourly)
+  scheduleTimeOfDay  String? // "HH:MM", IST — required for daily/weekly/monthly
+  scheduleDayOfWeek  Int? // 0=Sunday..6=Saturday — weekly only
+  scheduleDayOfMonth Int? // 1-31, clamped to the real last day of shorter months — monthly only
+  lastRunAt          DateTime?
+  lastRunStatus      String? // "success" | "partial" | "error"
+  lastRunError       String?
+  // The web search step's raw answer, cached the moment it succeeds —
+  // independent of whether the second (structured-extraction) step that
+  // follows it succeeds. A search can cost real, non-trivial provider spend
+  // (confirmed: one run burned ~116K input tokens) and take minutes to
+  // complete; a bug in extraction alone (schema mismatch, validation
+  // failure) shouldn't mean re-buying that same search again just to test a
+  // fix. lastSearchAt is separate from lastRunAt: a run can fail at
+  // extraction and still have refreshed the cached search just fine.
+  lastSearchContent   String?  @db.Text
+  lastSearchCitations Json?
+  lastSearchAt        DateTime?
+  updatedAt          DateTime   @updatedAt
+
+  @@map("gov_job_vacancy_prompt_templates")
+}
+
+// One shared prompt covers all categories in a single search — each
+// returned item self-tags which exam categories it's relevant to (see
+// GovCurrentAffair.examRelevance), rather than running a separate search
+// per category. Singleton row, same pattern as GovExamsMeta.id.
+model GovCurrentAffairsPromptTemplate {
+  id                 String    @id @default("singleton")
+  prompt             String    @db.Text
+  enabled            Boolean   @default(true)
+  // Defaults to a daily 6 AM IST run — a sensible "ready before the day
+  // starts" time for a news digest.
+  scheduleFrequency  GovScheduleFrequency @default(daily)
+  scheduleTimeOfDay  String?   @default("06:00") // "HH:MM", IST
+  scheduleDayOfWeek  Int? // 0=Sunday..6=Saturday — weekly only
+  scheduleDayOfMonth Int? // 1-31, clamped to the real last day of shorter months — monthly only
+  lastRunAt          DateTime?
+  lastRunStatus      String? // "success" | "partial" | "error"
+  lastRunError       String?
+  // See GovJobVacancyPromptTemplate's identical fields for why this is
+  // cached separately from the run outcome.
+  lastSearchContent   String?  @db.Text
+  lastSearchCitations Json?
+  lastSearchAt        DateTime?
+  updatedAt          DateTime  @updatedAt
+
+  @@map("gov_current_affairs_prompt_template")
+}
+
+// ── AI Assistant (chat sessions) ─────────────────────────────────────────────
+// Generic, surface-agnostic session/message persistence — shared by every AI
+// feature across the product (gov-exams admin assistant today; future admin
+// agentic actions and a student-facing doubt-resolver are expected to reuse
+// these two tables — see apps/api/src/modules/ai-assistant/). `surface`
+// distinguishes which feature a session belongs to; it's a plain String (not
+// a DB enum) so a new surface never needs a migration — same reasoning as
+// JobRun.trigger. Valid values live in ai-assistant.types.ts, not here.
+enum AiAssistantMessageRole {
+  user
+  assistant
+}
+
+model AiAssistantSession {
+  id       String  @id @default(uuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+  // Nullable so a future anonymous/public session (no logged-in staff) can
+  // reuse this same table — every session today always has a staffId.
+  staffId  String?
+  staff    Staff?  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  surface  String // e.g. "gov_exams_admin" — see AssistantSurface in ai-assistant.types.ts
+
+  // Auto-derived from the first question asked in this session (see
+  // appendTurn()); null until the first message is posted. No rename
+  // endpoint in v1.
+  title         String?
+  // Denormalized copy of the latest message's createdAt, same "cheap list
+  // sorting" cache pattern as GovSource.lastScrapedAt.
+  lastMessageAt DateTime?
+  // Opaque per-surface context bag for future use — unused/always null for
+  // gov_exams_admin today. Plain Json? + comment, same convention as every
+  // other JSON field in this schema, no DB-level validation.
+  context       Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  messages AiAssistantMessage[]
+
+  @@index([tenantId, staffId, surface, lastMessageAt])
+  @@map("ai_assistant_sessions")
+}
+
+model AiAssistantMessage {
+  id        String                 @id @default(uuid())
+  sessionId String
+  session   AiAssistantSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      AiAssistantMessageRole
+  content   String @db.Text
+  // Assistant-row-only: structured ResponseBlock[] the answer was rendered
+  // from (see @amarjit_gts/universal-ai-orchestrator's ResponseBlock).
+  // `content` stays the derived markdown string, kept for compatibility;
+  // this is the real render source once present. Null for user rows and
+  // for any assistant row written before this field existed.
+  contentBlocks Json?
+
+  // Set only on role=assistant rows: which user question this answers.
+  // Unique because exactly one assistant reply is ever written per question
+  // (see appendTurn()).
+  replyToId String?             @unique
+  replyTo   AiAssistantMessage? @relation("MessageReply", fields: [replyToId], references: [id])
+  replyFrom AiAssistantMessage? @relation("MessageReply")
+
+  // Assistant-row-only fields, mirroring AssistantAskResult's shape.
+  mechanism String? // "planned" | "reactive" — owned by the SDK's own type, plain String so a future SDK value doesn't need a migration
+  toolCalls Json?   // { toolName: string; status: string }[]
+
+  // Assistant-row-only: cost/token summary for this message, denormalized
+  // directly from OrchestratorRunResult.usage (already computed — no new
+  // AI-core work) for an instant "cost of this message"/"cost per user"
+  // (one join to AiAssistantSession.staffId) read with no cross-database
+  // query. Null when served from cache (no new AI call was made) or for
+  // any assistant row written before this field existed. aiRequestId is
+  // the same requestId passed to ai.run() — it correlates this row to its
+  // full per-call, per-provider breakdown in @amarjit_gts/universal-ai-
+  // database's UsageRecord table (see ADR-002's addendum in
+  // universal-ai-platform), which this app never needs to query directly
+  // unless that breakdown is ever actually needed.
+  aiRequestId      String?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  estimatedCostUsd Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@map("ai_assistant_messages")
+}
+
+// Local, standalone answer cache backing @amarjit_gts/universal-ai-sdk's
+// pluggable CacheStore for the Gov Exams AI Assistant (see
+// lib/ai/prisma-cache-store.ts). `key` is a sha256 hash the SDK computes
+// itself (normalized question + an opaque freshness stamp we supply) — this
+// table never interprets it. Reads filter on expiresAt > now(); an
+// expired-but-present row is treated as a miss, not eagerly deleted.
+model AiAssistantCacheEntry {
+  key       String   @id
+  value     Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("ai_assistant_cache_entries")
+}
+
+// One fixed-id row, upserted — a cheap "has any recruitment/current-affair
+// changed" timestamp, used to build the Gov Exams AI Assistant's cache
+// freshness stamp (see gov-exams.service.ts's bumpGovExamsDataVersion()).
+// Bumping this changes every subsequent cache key downstream, so a stale
+// cached answer is never explicitly deleted — it's just never looked up
+// again and ages out via AiAssistantCacheEntry's own TTL.
+model GovExamsMeta {
+  id               String   @id @default("singleton")
+  lastDataChangeAt DateTime @default(now())
+
+  @@map("gov_exams_meta")
+}
+
+// Platform-wide (no tenantId — matches JobConfig's precedent, not
+// NotificationRoutingRule's tenant-scoped one) AI provider/model routing,
+// admin-configurable without a redeploy. Provider API keys stay in env
+// vars (see lib/env.ts) — this only stores WHICH provider+model serves
+// each purpose; institute-os has no encryption-at-rest utility, and
+// building one is out of scope (see ADR-007 Addendum 5 in
+// universal-ai-platform). Backs PrismaModelConfigProvider (lib/
+// aiModelConfigProvider.ts), which implements @amarjit_gts/universal-ai-
+// ai-core's ModelConfigProvider interface.
+enum AiProviderType {
+  openai
+  groq
+  anthropic
+  google
+}
+
+// Each purpose maps to an ai-core ModelRegistry logical name — see
+// PURPOSE_TO_LOGICAL_NAME in lib/aiModelConfigProvider.ts.
+enum AiModelPurpose {
+  chat // -> "default-chat"
+  reasoning // -> "reasoning-strong" (new; what an important tool's modelHint targets)
+  websearch // -> "web-search-chat" (existing ai-core slot name)
+  embedding // -> "default-embedding"
+}
+
+// Admin-managed catalog of candidate models — enabled/disabled without
+// losing the config, same toggle precedent as GovSource.enabled.
+model AiModelCatalogEntry {
+  id               String              @id @default(uuid())
+  provider         AiProviderType
+  modelId          String // raw provider model id, e.g. "gpt-4o", "openai/gpt-oss-20b"
+  label            String // admin-friendly display name
+  fallbackProvider AiProviderType?
+  fallbackModelId  String?
+  enabled          Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  assignments      AiModelAssignment[]
+
+  @@unique([provider, modelId])
+  @@map("ai_model_catalog_entries")
+}
+
+// One row per purpose — which catalog entry currently serves it. No row =
+// no dynamic override, ai-core's static env-based default keeps serving
+// (see PrismaModelConfigProvider.loadEntries()) — zero forced admin
+// action before this ships, zero behavior change on day one.
+model AiModelAssignment {
+  purpose      AiModelPurpose      @id
+  modelEntryId String
+  modelEntry   AiModelCatalogEntry @relation(fields: [modelEntryId], references: [id])
+  updatedAt    DateTime            @updatedAt
+
+  @@map("ai_model_assignments")
 }

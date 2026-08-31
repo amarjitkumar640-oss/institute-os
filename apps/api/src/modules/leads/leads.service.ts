@@ -22,11 +22,17 @@ export async function convertLead(
       const student = await tx.student.create({
         data: {
           tenantId,
+          // Not previously set here at all — a lead's own centerId (if it
+          // had one) was silently dropped on conversion, leaving the new
+          // student with no center. Carrying it over now, since
+          // generateStudentCode needs it anyway to pick the right
+          // per-center abbreviation/sequence.
+          centerId:      lead.centerId,
           fullName:      lead.name,
           phone:         lead.phone,
           dob:           input.studentDob,
           guardianPhone: input.guardianPhone,
-          studentCode:   await generateStudentCode(tx, tenantId),
+          studentCode:   await generateStudentCode(tx, tenantId, lead.centerId),
         },
       });
 

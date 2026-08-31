@@ -71,12 +71,12 @@ export function JobDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-6">
-      <Badge>{recruitment.organization.shortName}</Badge>
+      {recruitment.organization && <Badge>{recruitment.organization}</Badge>}
       <h1 className="mt-2.5 font-heading text-2xl text-ink">{recruitment.title}</h1>
       {recruitment.summary && <p className="mt-2 text-sm text-ink-soft leading-relaxed">{recruitment.summary}</p>}
 
       <div className="mt-6 bg-white rounded-3xl border border-ink/[0.06] p-5 shadow-card">
-        <InfoRow label={t("infoOrganization")} value={recruitment.organization.name} />
+        <InfoRow label={t("infoOrganization")} value={recruitment.organization} />
         <InfoRow label={t("infoDepartment")} value={recruitment.department} />
         <InfoRow label={t("infoTotalVacancies")} value={recruitment.totalVacancies} />
         <InfoRow label={t("infoQualification")} value={recruitment.qualification} />

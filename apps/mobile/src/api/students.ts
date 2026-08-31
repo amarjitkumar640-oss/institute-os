@@ -44,10 +44,10 @@ export interface AdmitStudentPayload {
   fullName:           string;
   phone:              string;
   email?:             string | null;
-  dob?:               string | null;
-  address?:           string | null;
-  aadhaar?:           string | null;
-  gender?:            Gender | null;
+  dob:                string;
+  address:            string;
+  aadhaar:            string;
+  gender:             Gender;
   fatherName?:        string | null;
   motherName?:        string | null;
   guardianOccupation?: string | null;
@@ -64,6 +64,11 @@ export interface AdmitStudentPayload {
   preferredTiming?:   BatchTiming | null;
   paymentMode?:       PaymentMode | null;
   amountPaid?:        number | null;
+  // Ad-hoc discount for THIS student only, set at admission time — takes
+  // priority over both the batch's "first N" offer and the course's
+  // standing discount when provided. Leave undefined for automatic.
+  discountAmount?:    number | null;
+  discountReason?:    string | null;
   tcAcknowledged?:    boolean;
   centerId?:          string; // only needed when the session has no center pinned
   applicationId?:     string; // set when carried through from a self-service AdmissionApplication
@@ -79,7 +84,16 @@ export type AdmitStudentResponse =
   | { ok: false; batchFull: true; message: string }
   | { ok: false; error: string };
 
-export type UpdateStudentPayload = Partial<Omit<AdmitStudentPayload, "batchId">>;
+// dob/address/aadhaar/gender are required (non-nullable) on AdmitStudentPayload
+// so a new admission can't skip them, but editing an existing student must
+// still be able to explicitly clear a previously-set value — re-widen just
+// these 4 back to nullable for the update path.
+export type UpdateStudentPayload = Partial<Omit<AdmitStudentPayload, "batchId" | "dob" | "address" | "aadhaar" | "gender">> & {
+  dob?:     string | null;
+  address?: string | null;
+  aadhaar?: string | null;
+  gender?:  Gender | null;
+};
 
 export async function listStudents(params?: { batchId?: string; centerId?: string }): Promise<StudentItem[]> {
   const { data } = await apiClient.get<StudentItem[]>("/students", { params });

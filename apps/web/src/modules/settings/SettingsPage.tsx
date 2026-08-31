@@ -1,23 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Settings2, Bell, RefreshCw, Camera, Loader2, X, Building2 } from "lucide-react";
+import { Settings2, Bell, RefreshCw, Camera, Loader2, X, Building2, Sparkles, Plus, Trash2 } from "lucide-react";
 import { getTenantSettings, updateTenantSettings, uploadTenantLogo, deleteTenantLogo } from "@/api/tenants";
 import { getNotificationRouting, updateNotificationRouting } from "@/api/notifications";
 import { listJobs, runJobNow, updateJob, type Job } from "@/api/jobs";
+import { GovExamJobsSettings } from "./GovExamJobsSettings";
+import {
+  getProviderStatus, listProviderModels, listModelCatalog, createModelCatalogEntry, updateModelCatalogEntry, deleteModelCatalogEntry,
+  listModelAssignments, setModelAssignment, PURPOSE_REQUIRED_CAPABILITY,
+  type AiProviderType, type AiModelPurpose, type AiModelCatalogEntry,
+} from "@/api/aiSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { FormField } from "@/components/FormField";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/DataTable";
 import { titleCase, formatDateTime } from "@/lib/utils";
+
+function extractAiSettingsError(err: unknown): string {
+  const msg = (err as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
+  return typeof msg === "string" ? msg : "Something went wrong";
+}
 
 function BrandingSettings() {
   const qc = useQueryClient();
@@ -194,6 +210,57 @@ function BrandingSettings() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Legal &amp; Billing</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-gray-400 -mt-1">
+            Shown on generated invoices for CSR-sponsored courses (Sponsors → Invoices) — the seller details on a
+            tax invoice, alongside the sponsor's own.
+          </p>
+          <FormField label="Registered Legal Name">
+            <Input
+              defaultValue={settings?.legalName ?? ""}
+              onBlur={(e) => mutation.mutate({ legalName: e.target.value || null })}
+              placeholder="Defaults to the institute name above if left blank"
+            />
+          </FormField>
+          <FormField label="Registered Address">
+            <Input
+              defaultValue={settings?.registeredAddress ?? ""}
+              onBlur={(e) => mutation.mutate({ registeredAddress: e.target.value || null })}
+            />
+          </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="GSTIN">
+              <Input
+                defaultValue={settings?.gstin ?? ""}
+                onBlur={(e) => mutation.mutate({ gstin: e.target.value || null })}
+                className="font-mono text-sm"
+                maxLength={20}
+              />
+            </FormField>
+            <FormField label="GST State Code">
+              <Input
+                defaultValue={settings?.stateCode ?? ""}
+                onBlur={(e) => mutation.mutate({ stateCode: e.target.value || null })}
+                placeholder="e.g. 27"
+                className="font-mono text-sm"
+                maxLength={2}
+              />
+            </FormField>
+          </div>
+          <FormField label="Bank Details">
+            <Input
+              defaultValue={settings?.bankDetails ?? ""}
+              onBlur={(e) => mutation.mutate({ bankDetails: e.target.value || null })}
+              placeholder="Account name, number, IFSC — shown in the invoice footer"
+            />
+          </FormField>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -305,6 +372,14 @@ function SystemJobsSettings() {
     mutationFn: runJobNow,
     onSuccess: (_, key) => {
       qc.invalidateQueries({ queryKey: ["jobs"] });
+      // batch-status-sweep changes Batch.status directly — without this,
+      // a page that already had the batch list cached (e.g. Batches,
+      // Batch Detail) keeps showing the pre-sweep status until something
+      // else happens to invalidate it, even though the run succeeded.
+      if (key === "batch-status-sweep") {
+        qc.invalidateQueries({ queryKey: ["batches"] });
+        qc.invalidateQueries({ queryKey: ["batch"] });
+      }
       toast({ title: `${key} completed` });
     },
     onError: (err: any) =>
@@ -403,14 +478,19 @@ function SystemJobsSettings() {
         // to only the job actually running, not every "Run Now" button.
         const isThisJobRunning = runMutation.isPending && runMutation.variables === row.original.key;
         return (
-          <Button
-            size="sm"
-            onClick={() => runMutation.mutate(row.original.key)}
-            disabled={isThisJobRunning || row.original.lastRun?.status === "running"}
-          >
-            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isThisJobRunning ? "animate-spin" : ""}`} />
-            Run Now
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => runMutation.mutate(row.original.key)}
+                disabled={isThisJobRunning || row.original.lastRun?.status === "running"}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isThisJobRunning ? "animate-spin" : ""}`} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Run Now</TooltipContent>
+          </Tooltip>
         );
       },
     },
@@ -425,6 +505,266 @@ function SystemJobsSettings() {
         <DataTable columns={columns} data={jobs ?? []} pageSize={10} />
       </CardContent>
     </Card>
+  );
+}
+
+const PROVIDER_TYPES: AiProviderType[] = ["openai", "groq", "anthropic", "google"];
+const PROVIDER_LABEL: Record<AiProviderType, string> = { openai: "OpenAI", groq: "Groq", anthropic: "Anthropic", google: "Google" };
+const PURPOSES: AiModelPurpose[] = ["chat", "reasoning", "websearch", "embedding"];
+const PURPOSE_LABEL: Record<AiModelPurpose, string> = {
+  chat: "Chat", reasoning: "Reasoning (important tools)", websearch: "Web Search", embedding: "Embedding",
+};
+
+const modelCatalogSchema = z.object({
+  provider: z.enum(["openai", "groq", "anthropic", "google"]),
+  modelId: z.string().min(1, "Required"),
+  label: z.string().min(1, "Required"),
+  fallbackProvider: z.enum(["openai", "groq", "anthropic", "google"]).or(z.literal("")).optional(),
+  fallbackModelId: z.string().optional(),
+});
+type ModelCatalogFormValues = z.infer<typeof modelCatalogSchema>;
+
+function ModelCatalogFormDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<ModelCatalogFormValues>({
+    resolver: zodResolver(modelCatalogSchema),
+    defaultValues: { provider: "groq", modelId: "", label: "", fallbackProvider: "", fallbackModelId: "" },
+  });
+  const provider = watch("provider");
+  const label = watch("label");
+  const fallbackProvider = watch("fallbackProvider");
+
+  const { data: providerModels, isLoading: loadingProviderModels, isError: providerModelsFailed } = useQuery({
+    queryKey: ["ai-provider-models", provider],
+    queryFn: () => listProviderModels(provider),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  function pickProviderModel(id: string) {
+    setValue("modelId", id);
+    if (!label) {
+      const picked = providerModels?.find((m) => m.id === id);
+      if (picked) setValue("label", picked.label);
+    }
+  }
+
+  const mutation = useMutation({
+    mutationFn: (values: ModelCatalogFormValues) =>
+      createModelCatalogEntry({
+        ...values,
+        fallbackProvider: values.fallbackProvider || undefined,
+        fallbackModelId: values.fallbackModelId || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-model-catalog"] });
+      toast({ title: "Model added" });
+      onClose();
+    },
+    onError: (err: unknown) => toast({ variant: "destructive", title: extractAiSettingsError(err) }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Add Model</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
+          <FormField label="Provider" required>
+            <Select value={provider} onValueChange={(v) => setValue("provider", v as AiProviderType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PROVIDER_TYPES.map((p) => <SelectItem key={p} value={p}>{PROVIDER_LABEL[p]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormField>
+          {loadingProviderModels ? (
+            <Skeleton className="h-9 w-full" />
+          ) : providerModelsFailed || !providerModels?.length ? (
+            <p className="text-xs text-gray-400">Live model list unavailable — enter the Model ID manually below.</p>
+          ) : (
+            <FormField label="Pick from live models">
+              <Select value="__pick__" onValueChange={pickProviderModel}>
+                <SelectTrigger><SelectValue placeholder={`${providerModels.length} models from ${PROVIDER_LABEL[provider]}`} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__pick__" disabled>{providerModels.length} models from {PROVIDER_LABEL[provider]}</SelectItem>
+                  {providerModels.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+          <FormField label="Model ID" required error={errors.modelId}>
+            <Input {...register("modelId")} placeholder="e.g. gpt-4o, claude-sonnet-5" />
+          </FormField>
+          <FormField label="Label" required error={errors.label}>
+            <Input {...register("label")} placeholder="e.g. GPT-4o (strong reasoning)" />
+          </FormField>
+          <FormField label="Fallback Provider (optional)">
+            <Select value={fallbackProvider || "__none__"} onValueChange={(v) => setValue("fallbackProvider", v === "__none__" ? "" : (v as AiProviderType))}>
+              <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {PROVIDER_TYPES.map((p) => <SelectItem key={p} value={p}>{PROVIDER_LABEL[p]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormField>
+          {fallbackProvider && (
+            <FormField label="Fallback Model ID">
+              <Input {...register("fallbackModelId")} placeholder="e.g. gpt-4o-mini" />
+            </FormField>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={isSubmitting || mutation.isPending}>Add</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AiModelsSettings() {
+  const qc = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+
+  const { data: providers, isLoading: loadingProviders } = useQuery({ queryKey: ["ai-provider-status"], queryFn: getProviderStatus });
+  const { data: catalog, isLoading: loadingCatalog } = useQuery({ queryKey: ["ai-model-catalog"], queryFn: listModelCatalog });
+  const { data: assignments, isLoading: loadingAssignments } = useQuery({ queryKey: ["ai-model-assignments"], queryFn: listModelAssignments });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => updateModelCatalogEntry(id, { enabled }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-model-catalog"] }),
+    onError: (err: unknown) => toast({ variant: "destructive", title: extractAiSettingsError(err) }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteModelCatalogEntry,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-model-catalog"] });
+      toast({ title: "Deleted" });
+    },
+    onError: (err: unknown) => toast({ variant: "destructive", title: extractAiSettingsError(err) }),
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: ({ purpose, modelEntryId }: { purpose: AiModelPurpose; modelEntryId: string }) => setModelAssignment(purpose, modelEntryId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-model-assignments"] });
+      toast({ title: "Assignment updated" });
+    },
+    onError: (err: unknown) => toast({ variant: "destructive", title: extractAiSettingsError(err) }),
+  });
+
+  const enabledCatalog = (catalog ?? []).filter((m) => m.enabled);
+  const assignmentByPurpose = new Map((assignments ?? []).map((a) => [a.purpose, a]));
+  const providerCapabilitiesByType = new Map((providers ?? []).map((p) => [p.provider, p.capabilities]));
+
+  function catalogForPurpose(purpose: AiModelPurpose) {
+    const requiredCapability = PURPOSE_REQUIRED_CAPABILITY[purpose];
+    return enabledCatalog.filter((entry) => providerCapabilitiesByType.get(entry.provider)?.[requiredCapability]);
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Providers</CardTitle></CardHeader>
+        <CardContent>
+          {loadingProviders ? (
+            <Skeleton className="h-8 w-full" />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {providers?.map((p) => (
+                <Badge key={p.provider} variant={p.configured ? "success" : "outline"}>
+                  {PROVIDER_LABEL[p.provider]} — {p.configured ? "configured" : "not configured"}
+                </Badge>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-gray-400 mt-2">
+            API keys are set via environment variables, not here — this only shows which providers are usable.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-sm">Model Catalog</CardTitle>
+          <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> Add Model</Button>
+        </CardHeader>
+        <CardContent>
+          {loadingCatalog ? (
+            <Skeleton className="h-24 w-full" />
+          ) : !catalog?.length ? (
+            <p className="text-sm text-gray-400">No models added yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {catalog.map((entry: AiModelCatalogEntry) => (
+                <div key={entry.id} className="flex items-center gap-4 bg-gray-50/50 rounded-xl border border-gray-100 p-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-gray-900">{entry.label}</p>
+                      <Badge variant="outline">{PROVIDER_LABEL[entry.provider]}</Badge>
+                    </div>
+                    <p className="text-xs text-gray-400 truncate mt-0.5">{entry.modelId}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Switch
+                      checked={entry.enabled}
+                      onCheckedChange={(v) => toggleMutation.mutate({ id: entry.id, enabled: v })}
+                    />
+                    <Button
+                      size="sm" variant="ghost" className="text-red-600"
+                      onClick={() => { if (confirm(`Delete "${entry.label}"?`)) deleteMutation.mutate(entry.id); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Purpose Assignment</CardTitle></CardHeader>
+        <CardContent>
+          {loadingAssignments ? (
+            <Skeleton className="h-32 w-full" />
+          ) : (
+            <div className="space-y-4">
+              {PURPOSES.map((purpose) => {
+                const current = assignmentByPurpose.get(purpose);
+                const compatibleCatalog = catalogForPurpose(purpose);
+                return (
+                  <FormField key={purpose} label={PURPOSE_LABEL[purpose]}>
+                    <Select
+                      value={current?.modelEntryId ?? "__unassigned__"}
+                      onValueChange={(v) => { if (v !== "__unassigned__") assignMutation.mutate({ purpose, modelEntryId: v }); }}
+                    >
+                      <SelectTrigger className="w-80"><SelectValue placeholder="Using system default" /></SelectTrigger>
+                      <SelectContent>
+                        {!current && <SelectItem value="__unassigned__">Using system default</SelectItem>}
+                        {compatibleCatalog.map((entry) => (
+                          <SelectItem key={entry.id} value={entry.id}>{entry.label} ({PROVIDER_LABEL[entry.provider]})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!compatibleCatalog.length && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        No enabled model supports {PURPOSE_REQUIRED_CAPABILITY[purpose] === "webSearch" ? "web search" : PURPOSE_REQUIRED_CAPABILITY[purpose]} yet
+                        {purpose === "websearch" && " — only OpenAI and Anthropic support native web search today"}.
+                      </p>
+                    )}
+                  </FormField>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {showCreate && <ModelCatalogFormDialog open={showCreate} onClose={() => setShowCreate(false)} />}
+    </div>
   );
 }
 
@@ -449,6 +789,10 @@ export function SettingsPage() {
               <RefreshCw className="mr-2 h-4 w-4" />
               System
             </TabsTrigger>
+            <TabsTrigger value="ai-models">
+              <Sparkles className="mr-2 h-4 w-4" />
+              AI Models
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="mt-4">
@@ -460,7 +804,24 @@ export function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="system" className="mt-4">
-            <SystemJobsSettings />
+            <Tabs defaultValue="background-jobs">
+              <TabsList>
+                <TabsTrigger value="background-jobs">System Background Jobs</TabsTrigger>
+                <TabsTrigger value="gov-exam-jobs">Government Exam Jobs</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="background-jobs" className="mt-4">
+                <SystemJobsSettings />
+              </TabsContent>
+
+              <TabsContent value="gov-exam-jobs" className="mt-4">
+                <GovExamJobsSettings />
+              </TabsContent>
+            </Tabs>
+          </TabsContent>
+
+          <TabsContent value="ai-models" className="mt-4">
+            <AiModelsSettings />
           </TabsContent>
         </Tabs>
       </div>

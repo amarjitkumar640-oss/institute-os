@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, ActivityIndicator,
-  RefreshControl, KeyboardAvoidingView, Platform, Switch, Image,
+  RefreshControl, Switch, Image, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { ms, fs } from "../../utils/responsive";
+import { useKeyboardScrollIntoView } from "../../hooks/useKeyboardScrollIntoView";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SHEET_HEIGHT } from "../../components/ui/BottomSheet";
@@ -28,6 +29,8 @@ import { ROLES, ROLE_META, type Role } from "../../constants/roleMeta";
 import { useAlert } from "../../context/AlertContext";
 import { useRefetchOnReconnect } from "../../hooks/useRefetchOnReconnect";
 import { usePermission } from "../../hooks/usePermission";
+
+const SCREEN_H = Dimensions.get("window").height;
 
 // ── Role chip ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +74,9 @@ function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
 
+  const { scrollRef, recordFieldY, scrollFieldIntoView, onScrollViewLayout, onScroll } =
+    useKeyboardScrollIntoView({ sheetHeight: SCREEN_H * 0.85 });
+
   useEffect(() => {
     if (visible) {
       setFullName(""); setEmail(""); setPhone(""); setRoles(["frontdesk"]);
@@ -103,7 +109,7 @@ function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={md.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={md.overlay}>
         <TouchableOpacity style={md.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={[md.sheet, { maxHeight: SHEET_HEIGHT.standard }]}>
           <View style={md.drag} />
@@ -127,7 +133,15 @@ function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
 
           {/* Only this part scrolls — the Create button below stays pinned to
               the bottom of the sheet regardless of scroll position. */}
-          <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexShrink: 1 }}
+            onLayout={onScrollViewLayout}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <Text style={md.sectionLabel}>Roles</Text>
             <View style={md.roleRow}>
               {ROLES.map((r) => {
@@ -147,18 +161,25 @@ function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
             </View>
 
             <Text style={md.sectionLabel}>Details</Text>
-            <TextInput style={md.input} placeholder="Full name" placeholderTextColor={C.muted} value={fullName} onChangeText={setFullName} />
-            <TextInput style={md.input} placeholder="Email address" placeholderTextColor={C.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-            <TextInput style={md.input} placeholder="Phone number" placeholderTextColor={C.muted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            <View onLayout={recordFieldY("fullName")}>
+              <TextInput style={md.input} placeholder="Full name" placeholderTextColor={C.muted} value={fullName} onChangeText={setFullName} onFocus={() => scrollFieldIntoView("fullName")} />
+            </View>
+            <View onLayout={recordFieldY("email")}>
+              <TextInput style={md.input} placeholder="Email address" placeholderTextColor={C.muted} value={email} onChangeText={setEmail} onFocus={() => scrollFieldIntoView("email")} keyboardType="email-address" autoCapitalize="none" />
+            </View>
+            <View onLayout={recordFieldY("phone")}>
+              <TextInput style={md.input} placeholder="Phone number" placeholderTextColor={C.muted} value={phone} onChangeText={setPhone} onFocus={() => scrollFieldIntoView("phone")} keyboardType="phone-pad" />
+            </View>
 
             <Text style={md.sectionLabel}>Initial Password</Text>
-            <View style={md.pwRow}>
+            <View style={md.pwRow} onLayout={recordFieldY("password")}>
               <TextInput
                 style={[md.input, { flex: 1, marginBottom: 0 }]}
                 placeholder="Min. 6 characters"
                 placeholderTextColor={C.muted}
                 value={password}
                 onChangeText={setPassword}
+                onFocus={() => scrollFieldIntoView("password")}
                 secureTextEntry={!showPw}
               />
               <TouchableOpacity style={md.eyeBtn} onPress={() => setShowPw((v) => !v)}>
@@ -178,7 +199,7 @@ function CreateStaffModal({ visible, onDone, onClose }: CreateModalProps) {
           </TouchableOpacity>
           <View style={{ height: ms(20) }} />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -203,6 +224,9 @@ function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalP
   const [isActive, setIsActive] = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
+
+  const { scrollRef, recordFieldY, scrollFieldIntoView, onScrollViewLayout, onScroll } =
+    useKeyboardScrollIntoView({ sheetHeight: SCREEN_H * 0.65 });
 
   useEffect(() => {
     if (visible && member) {
@@ -235,7 +259,7 @@ function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalP
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={md.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={md.overlay}>
         <TouchableOpacity style={md.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={md.sheet}>
           <View style={md.drag} />
@@ -261,7 +285,15 @@ function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalP
               the bottom of the sheet regardless of scroll position.
               flexShrink lets it give up space to the fixed header/button
               siblings instead of pushing them past the sheet's maxHeight. */}
-          <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexShrink: 1 }}
+            onLayout={onScrollViewLayout}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <Text style={md.sectionLabel}>Roles</Text>
             <View style={md.roleRow}>
               {ROLES.map((r) => {
@@ -281,8 +313,12 @@ function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalP
             </View>
 
             <Text style={md.sectionLabel}>Details</Text>
-            <TextInput style={md.input} placeholder="Full name" placeholderTextColor={C.muted} value={fullName} onChangeText={setFullName} />
-            <TextInput style={md.input} placeholder="Phone number" placeholderTextColor={C.muted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            <View onLayout={recordFieldY("fullName")}>
+              <TextInput style={md.input} placeholder="Full name" placeholderTextColor={C.muted} value={fullName} onChangeText={setFullName} onFocus={() => scrollFieldIntoView("fullName")} />
+            </View>
+            <View onLayout={recordFieldY("phone")}>
+              <TextInput style={md.input} placeholder="Phone number" placeholderTextColor={C.muted} value={phone} onChangeText={setPhone} onFocus={() => scrollFieldIntoView("phone")} keyboardType="phone-pad" />
+            </View>
 
             {!isSelf && (
               <View style={md.toggleRow}>
@@ -310,7 +346,7 @@ function EditStaffModal({ visible, member, isSelf, onDone, onClose }: EditModalP
           </TouchableOpacity>
           <View style={{ height: ms(20) }} />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -333,6 +369,9 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
 
+  const { scrollRef, recordFieldY, scrollFieldIntoView, onScrollViewLayout, onScroll } =
+    useKeyboardScrollIntoView({ sheetHeight: SCREEN_H * 0.65 });
+
   useEffect(() => {
     if (visible) { setPassword(""); setConfirm(""); setError(""); }
   }, [visible]);
@@ -353,7 +392,7 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={md.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={md.overlay}>
         <TouchableOpacity style={md.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={md.sheet}>
           <View style={md.drag} />
@@ -375,12 +414,22 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
             </TouchableOpacity>
           </View>
 
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexShrink: 1 }}
+            onLayout={onScrollViewLayout}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
           <Text style={md.sectionLabel}>New Password</Text>
-          <View style={md.pwRow}>
+          <View style={md.pwRow} onLayout={recordFieldY("password")}>
             <TextInput
               style={[md.input, { flex: 1, marginBottom: 0 }]}
               placeholder="Min. 6 characters"
               placeholderTextColor={C.muted}
+              onFocus={() => scrollFieldIntoView("password")}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPw}
@@ -390,6 +439,7 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
             </TouchableOpacity>
           </View>
 
+          <View onLayout={recordFieldY("confirm")}>
           <Text style={[md.sectionLabel, { marginTop: ms(12) }]}>Confirm Password</Text>
           <TextInput
             style={md.input}
@@ -397,10 +447,13 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
             placeholderTextColor={C.muted}
             value={confirm}
             onChangeText={setConfirm}
+            onFocus={() => scrollFieldIntoView("confirm")}
             secureTextEntry={!showPw}
           />
+          </View>
 
           {!!error && <Text style={md.errorT}>{error}</Text>}
+          </ScrollView>
 
           <TouchableOpacity style={[md.btn, saving && md.btnDim]} onPress={save} disabled={saving}>
             {saving
@@ -410,7 +463,7 @@ function ResetPasswordModal({ visible, member, onDone, onClose }: ResetPwModalPr
           </TouchableOpacity>
           <View style={{ height: ms(28) }} />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

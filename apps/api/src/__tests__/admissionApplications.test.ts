@@ -47,7 +47,10 @@ describe("public admission applications", () => {
   beforeEach(resetDb);
   afterAll(async () => prisma.$disconnect());
 
-  const VALID_SUBMISSION = { fullName: "Prospective Student", phone: "9876543210", tcAccepted: true };
+  const VALID_SUBMISSION = {
+    fullName: "Prospective Student", phone: "9876543210", tcAccepted: true,
+    dob: "2000-01-01", address: "123 Main St", gender: "male",
+  };
 
   it("creates a pending application via the public unauthenticated endpoint", async () => {
     await ensureTestTenant();
@@ -290,6 +293,10 @@ describe("admitting a student from a self-service application", () => {
       .send({
         fullName: "Prospective Student",
         phone: "9876543210",
+        dob: "2000-01-01",
+        address: "123 Main St",
+        aadhaar: "123456789012",
+        gender: "male",
         tcAcknowledged: true,
         applicationId: application.id,
       });
@@ -312,7 +319,11 @@ describe("admitting a student from a self-service application", () => {
     const res = await request(app)
       .post("/api/students/admit")
       .set("Authorization", `Bearer ${token}`)
-      .send({ fullName: "Prospective Student", phone: "9876543210", tcAcknowledged: true, applicationId: application.id });
+      .send({
+        fullName: "Prospective Student", phone: "9876543210",
+        dob: "2000-01-01", address: "123 Main St", aadhaar: "123456789012", gender: "male",
+        tcAcknowledged: true, applicationId: application.id,
+      });
 
     expect(res.status).toBe(409);
     expect(await prisma.student.count()).toBe(0);
@@ -329,7 +340,11 @@ describe("admitting a student from a self-service application", () => {
     const res = await request(app)
       .post("/api/students/admit")
       .set("Authorization", `Bearer ${token}`)
-      .send({ fullName: "Prospective Student", phone: "9876543210", tcAcknowledged: true, applicationId: application.id });
+      .send({
+        fullName: "Prospective Student", phone: "9876543210",
+        dob: "2000-01-01", address: "123 Main St", aadhaar: "123456789012", gender: "male",
+        tcAcknowledged: true, applicationId: application.id,
+      });
 
     expect(res.status).toBe(404);
   });

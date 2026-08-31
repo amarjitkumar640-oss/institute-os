@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, TextInput, ActivityIndicator,
+  View, Text, StyleSheet,
+  TouchableOpacity, TextInput, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import type { RootStackParamList } from "../../navigation/types";
 import { getFeeTemplate, upsertFeeTemplate } from "../../api/fees";
 import { ms, fs } from "../../utils/responsive";
@@ -361,13 +362,31 @@ export function FeeStructureScreen({ route, navigation }: Props) {
           <Text style={s.loaderT}>Loading template…</Text>
         </View>
       ) : (
-        <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView
-            style={s.scroll}
-            contentContainerStyle={s.body}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <KeyboardAvoidingScroll
+          style={s.scroll}
+          contentContainerStyle={s.body}
+          footer={
+            <View style={s.footer}>
+              <TouchableOpacity
+                style={[s.saveBtn, saving && { opacity: 0.65 }]}
+                onPress={handleSave}
+                disabled={saving}
+                activeOpacity={0.85}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={ms(18)} color="#fff" />
+                    <Text style={s.saveBtnT}>
+                      {hasTemplate ? "Update Structure" : "Save Structure"}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          }
+        >
             {/* Course summary card */}
             <View style={s.courseCard}>
               <View style={s.courseLeft}>
@@ -448,28 +467,7 @@ export function FeeStructureScreen({ route, navigation }: Props) {
               />
             </View>
 
-            {/* Save */}
-            <TouchableOpacity
-              style={[s.saveBtn, saving && { opacity: 0.65 }]}
-              onPress={handleSave}
-              disabled={saving}
-              activeOpacity={0.85}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="save-outline" size={ms(18)} color="#fff" />
-                  <Text style={s.saveBtnT}>
-                    {hasTemplate ? "Update Structure" : "Save Structure"}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <View style={{ height: ms(32) }} />
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingScroll>
       )}
     </SafeAreaView>
   );
@@ -520,4 +518,5 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
   // Save button
   saveBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: ms(8), backgroundColor: colors.primary, borderRadius: ms(16), paddingVertical: ms(16) },
   saveBtnT: { ...T.buttonText, color: "#fff" },
+  footer:   { paddingHorizontal: ms(16), paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
 });

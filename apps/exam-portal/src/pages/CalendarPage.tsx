@@ -10,7 +10,7 @@ interface CalendarEvent {
   recruitmentId: string;
   slug: string;
   title: string;
-  orgShortName: string;
+  organization: string | null;
   date: string;
   label: "applicationCloses" | "examDateLabel";
 }
@@ -24,10 +24,10 @@ export function CalendarPage() {
     const out: CalendarEvent[] = [];
     for (const r of data.data) {
       if (r.applicationEndDate) {
-        out.push({ recruitmentId: r.id, slug: r.slug, title: r.title, orgShortName: r.organization.shortName, date: r.applicationEndDate, label: "applicationCloses" });
+        out.push({ recruitmentId: r.id, slug: r.slug, title: r.title, organization: r.organization, date: r.applicationEndDate, label: "applicationCloses" });
       }
       if (r.examDate) {
-        out.push({ recruitmentId: r.id, slug: r.slug, title: r.title, orgShortName: r.organization.shortName, date: r.examDate, label: "examDateLabel" });
+        out.push({ recruitmentId: r.id, slug: r.slug, title: r.title, organization: r.organization, date: r.examDate, label: "examDateLabel" });
       }
     }
     return out.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());

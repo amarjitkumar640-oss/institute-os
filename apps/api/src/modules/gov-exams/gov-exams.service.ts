@@ -1,6 +1,5 @@
 import type {
   GovContentSource,
-  GovCurrentAffairCategory,
   GovDocumentType,
   GovOrgType,
   GovRecruitmentStatus,
@@ -8,83 +7,34 @@ import type {
 } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 
-// ── Organizations ────────────────────────────────────────────────────────────
+const GOV_EXAMS_META_ID = "singleton";
 
-export async function listOrganizations() {
-  return prisma.govOrganization.findMany({ orderBy: { name: "asc" } });
-}
-
-export interface CreateOrganizationInput {
-  name: string;
-  shortName: string;
-  type: GovOrgType;
-  logoUrl?: string;
-  officialWebsite?: string;
-}
-
-export type CreateOrganizationResult =
-  | { ok: true; organization: Prisma.GovOrganizationGetPayload<object> }
-  | { ok: false; conflict: true };
-
-export async function createOrganization(data: CreateOrganizationInput): Promise<CreateOrganizationResult> {
-  const clash = await prisma.govOrganization.findUnique({ where: { shortName: data.shortName } });
-  if (clash) return { ok: false, conflict: true };
-  const organization = await prisma.govOrganization.create({ data });
-  return { ok: true, organization };
-}
-
-export type UpdateOrganizationResult =
-  | { ok: true; organization: Prisma.GovOrganizationGetPayload<object> }
-  | { ok: false; notFound: true }
-  | { ok: false; conflict: true };
-
-export async function updateOrganization(
-  id: string,
-  data: Partial<CreateOrganizationInput>,
-): Promise<UpdateOrganizationResult> {
-  const existing = await prisma.govOrganization.findUnique({ where: { id } });
-  if (!existing) return { ok: false, notFound: true };
-
-  if (data.shortName !== undefined && data.shortName !== existing.shortName) {
-    const clash = await prisma.govOrganization.findUnique({ where: { shortName: data.shortName } });
-    if (clash) return { ok: false, conflict: true };
-  }
-
-  const organization = await prisma.govOrganization.update({ where: { id }, data });
-  return { ok: true, organization };
-}
-
-export type DeleteOrganizationResult =
-  | { ok: true }
-  | { ok: false; notFound: true }
-  | { ok: false; hasData: true; recruitmentCount: number };
-
-export async function deleteOrganization(id: string): Promise<DeleteOrganizationResult> {
-  const organization = await prisma.govOrganization.findUnique({
-    where: { id },
-    include: { _count: { select: { recruitments: true } } },
+// Bumps GovExamsMeta.lastDataChangeAt — the freshness stamp the Gov Exams
+// AI Assistant folds into its cache key (see lib/aiCacheStore.ts and
+// gov-exams-assistant.routes.ts). Called from every recruitment/current-
+// affair write below so a stale cached answer is never explicitly deleted —
+// it just stops being the key any subsequent request looks up.
+export async function bumpGovExamsDataVersion(): Promise<void> {
+  await prisma.govExamsMeta.upsert({
+    where: { id: GOV_EXAMS_META_ID },
+    create: { id: GOV_EXAMS_META_ID },
+    update: { lastDataChangeAt: new Date() },
   });
-  if (!organization) return { ok: false, notFound: true };
-  if (organization._count.recruitments > 0) {
-    return { ok: false, hasData: true, recruitmentCount: organization._count.recruitments };
-  }
-  await prisma.govOrganization.delete({ where: { id } });
-  return { ok: true };
 }
 
 // ── Recruitments ─────────────────────────────────────────────────────────────
 
 export interface ListRecruitmentsParams {
-  organizationId?: string;
+  category?: GovOrgType;
   status?: GovRecruitmentStatus | GovRecruitmentStatus[];
   page: number;
   limit: number;
 }
 
 export async function listRecruitments(params: ListRecruitmentsParams) {
-  const { organizationId, status, page, limit } = params;
+  const { category, status, page, limit } = params;
   const where: Prisma.GovRecruitmentWhereInput = {
-    ...(organizationId ? { organizationId } : {}),
+    ...(category ? { category } : {}),
     ...(status ? { status: Array.isArray(status) ? { in: status } : status } : {}),
   };
 
@@ -92,7 +42,6 @@ export async function listRecruitments(params: ListRecruitmentsParams) {
     prisma.govRecruitment.count({ where }),
     prisma.govRecruitment.findMany({
       where,
-      include: { organization: true },
       orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * limit,
       take: limit,
@@ -102,19 +51,40 @@ export async function listRecruitments(params: ListRecruitmentsParams) {
   return { data, total, page, limit, pages: Math.ceil(total / limit) };
 }
 
+// Free-text search — used by the Gov Exams AI Assistant tool, no other
+// caller needs this today (listRecruitments only filters by
+// category/status). Matches title OR organization — title-only missed real
+// recruitments when the keyword was an org name/abbreviation ("SBI") not
+// literally present in the title text itself (caught live: "Recruitment of
+// Junior Associates..." doesn't contain "SBI" even though it belongs to
+// State Bank of India).
+export async function searchRecruitments(keyword: string, limit = 8) {
+  return prisma.govRecruitment.findMany({
+    where: {
+      OR: [
+        { title: { contains: keyword, mode: "insensitive" } },
+        { organization: { contains: keyword, mode: "insensitive" } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
 export async function getRecruitmentBySlug(slug: string, opts: { includeAllStatuses?: boolean } = {}) {
   return prisma.govRecruitment.findFirst({
     where: { slug, ...(opts.includeAllStatuses ? {} : { status: "published" }) },
-    include: { organization: true, documents: true },
+    include: { documents: true },
   });
 }
 
 export async function getRecruitmentById(id: string) {
-  return prisma.govRecruitment.findUnique({ where: { id }, include: { organization: true, documents: true } });
+  return prisma.govRecruitment.findUnique({ where: { id }, include: { documents: true } });
 }
 
 export interface RecruitmentInput {
-  organizationId: string;
+  category: GovOrgType;
+  organization?: string;
   title: string;
   slug: string;
   totalVacancies?: number;
@@ -167,7 +137,7 @@ export interface RecruitmentInput {
 }
 
 export type CreateRecruitmentResult =
-  | { ok: true; recruitment: Prisma.GovRecruitmentGetPayload<{ include: { organization: true } }> }
+  | { ok: true; recruitment: Prisma.GovRecruitmentGetPayload<object> }
   | { ok: false; conflict: true };
 
 export async function createRecruitment(data: RecruitmentInput): Promise<CreateRecruitmentResult> {
@@ -188,13 +158,13 @@ export async function createRecruitment(data: RecruitmentInput): Promise<CreateR
       postsByCategory: data.postsByCategory ?? undefined,
       postsByState: data.postsByState ?? undefined,
     },
-    include: { organization: true },
   });
+  await bumpGovExamsDataVersion();
   return { ok: true, recruitment };
 }
 
 export type UpdateRecruitmentResult =
-  | { ok: true; recruitment: Prisma.GovRecruitmentGetPayload<{ include: { organization: true } }> }
+  | { ok: true; recruitment: Prisma.GovRecruitmentGetPayload<object> }
   | { ok: false; notFound: true }
   | { ok: false; conflict: true };
 
@@ -210,16 +180,13 @@ export async function updateRecruitment(
     if (clash) return { ok: false, conflict: true };
   }
 
-  const recruitment = await prisma.govRecruitment.update({
-    where: { id },
-    data,
-    include: { organization: true },
-  });
+  const recruitment = await prisma.govRecruitment.update({ where: { id }, data });
+  await bumpGovExamsDataVersion();
   return { ok: true, recruitment };
 }
 
 export type SetRecruitmentStatusResult =
-  | { ok: true; recruitment: Prisma.GovRecruitmentGetPayload<{ include: { organization: true } }> }
+  | { ok: true; recruitment: Prisma.GovRecruitmentGetPayload<object> }
   | { ok: false; notFound: true };
 
 export async function setRecruitmentStatus(
@@ -232,8 +199,8 @@ export async function setRecruitmentStatus(
   const recruitment = await prisma.govRecruitment.update({
     where: { id },
     data: { status, publishedAt: status === "published" && !existing.publishedAt ? new Date() : existing.publishedAt },
-    include: { organization: true },
   });
+  await bumpGovExamsDataVersion();
   return { ok: true, recruitment };
 }
 
@@ -277,23 +244,34 @@ export async function deleteDocument(id: string): Promise<{ ok: true } | { ok: f
 // ── Current affairs ──────────────────────────────────────────────────────────
 
 export interface ListCurrentAffairsParams {
-  category?: GovCurrentAffairCategory;
+  categoryId?: string;
   status?: GovRecruitmentStatus | GovRecruitmentStatus[];
+  /** A single calendar day (UTC), YYYY-MM-DD — matches against publishedDate. */
+  date?: string;
   page: number;
   limit: number;
 }
 
+function dayRange(date: string): { gte: Date; lt: Date } {
+  const start = new Date(`${date}T00:00:00.000Z`);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { gte: start, lt: end };
+}
+
 export async function listCurrentAffairs(params: ListCurrentAffairsParams) {
-  const { category, status, page, limit } = params;
+  const { categoryId, status, date, page, limit } = params;
   const where: Prisma.GovCurrentAffairWhereInput = {
-    ...(category ? { category } : {}),
+    ...(categoryId ? { categoryId } : {}),
     ...(status ? { status: Array.isArray(status) ? { in: status } : status } : {}),
+    ...(date ? { publishedDate: dayRange(date) } : {}),
   };
 
   const [total, data] = await prisma.$transaction([
     prisma.govCurrentAffair.count({ where }),
     prisma.govCurrentAffair.findMany({
       where,
+      include: { category: true },
       orderBy: { publishedDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -303,27 +281,75 @@ export async function listCurrentAffairs(params: ListCurrentAffairsParams) {
   return { data, total, page, limit, pages: Math.ceil(total / limit) };
 }
 
+// Powers the exam-portal's date strip: which calendar days actually have
+// published content (never show a chip for an empty day), most recent
+// first, plus resolving "the latest date with content" for the page's
+// default view. Fetches a bounded window of recent published rows and
+// reduces to distinct calendar days in application code — current-affairs
+// volume is modest (one daily batch) so this stays cheap; a raw DISTINCT-
+// on-date SQL query isn't worth the departure from Prisma's query builder
+// at this scale.
+const RECENT_ROWS_FOR_DATE_LIST = 500;
+
+export async function listCurrentAffairDates(params: { categoryId?: string; limit?: number }): Promise<string[]> {
+  const { categoryId, limit = 14 } = params;
+  const rows = await prisma.govCurrentAffair.findMany({
+    where: { status: "published", ...(categoryId ? { categoryId } : {}) },
+    select: { publishedDate: true },
+    orderBy: { publishedDate: "desc" },
+    take: RECENT_ROWS_FOR_DATE_LIST,
+  });
+
+  const dates: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const day = row.publishedDate.toISOString().slice(0, 10);
+    if (!seen.has(day)) {
+      seen.add(day);
+      dates.push(day);
+      if (dates.length >= limit) break;
+    }
+  }
+  return dates;
+}
+
 export async function getCurrentAffairBySlug(slug: string, opts: { includeAllStatuses?: boolean } = {}) {
   return prisma.govCurrentAffair.findFirst({
     where: { slug, ...(opts.includeAllStatuses ? {} : { status: "published" }) },
+    include: { category: true },
   });
 }
 
 export async function getCurrentAffairById(id: string) {
-  return prisma.govCurrentAffair.findUnique({ where: { id } });
+  return prisma.govCurrentAffair.findUnique({ where: { id }, include: { category: true } });
 }
 
 export interface CurrentAffairInput {
   title: string;
   slug: string;
-  category: GovCurrentAffairCategory;
+  categoryId: string;
   whatHappened: string;
   keyFacts?: string[];
   whyImportant?: string;
-  examRelevance?: Record<string, string>;
+  // Widened from the older free-text-per-key shape to the boolean-flag
+  // shape the prompt-template extraction (and manual JSON import) actually
+  // produce — e.g. { ssc: true, banking: false, ... }. Still just Json at
+  // the DB layer, no migration needed.
+  examRelevance?: Record<string, boolean | string[]>;
   publishedDate: Date;
   source?: GovContentSource;
   sourceUrl?: string;
+  // ── Rich fields (populated by the prompt-template scraper / manual JSON
+  // import) — see current-affairs-import-mapper.ts. All optional. ─────────
+  level?: string;
+  newsStatus?: string;
+  importance?: string;
+  organization?: string;
+  ministry?: string;
+  state?: string;
+  eventDate?: Date;
+  verificationStatus?: string;
+  richData?: Prisma.InputJsonValue;
 }
 
 export type CreateCurrentAffairResult =
@@ -331,11 +357,20 @@ export type CreateCurrentAffairResult =
   | { ok: false; conflict: true };
 
 export async function createCurrentAffair(data: CurrentAffairInput): Promise<CreateCurrentAffairResult> {
-  const clash = await prisma.govCurrentAffair.findUnique({ where: { slug: data.slug } });
-  if (clash) return { ok: false, conflict: true };
+  const slugClash = await prisma.govCurrentAffair.findUnique({ where: { slug: data.slug } });
+  if (slugClash) return { ok: false, conflict: true };
+  // A repeated web search for "today's current affairs" is far more likely
+  // to reproduce the same cited source URL for a real-world event than an
+  // exact title (the LLM paraphrases titles slightly on every run) —
+  // sourceUrl is a second, more reliable dedup signal on top of slug.
+  if (data.sourceUrl) {
+    const sourceClash = await prisma.govCurrentAffair.findFirst({ where: { sourceUrl: data.sourceUrl } });
+    if (sourceClash) return { ok: false, conflict: true };
+  }
   const currentAffair = await prisma.govCurrentAffair.create({
     data: { ...data, keyFacts: data.keyFacts ?? undefined, examRelevance: data.examRelevance ?? undefined },
   });
+  await bumpGovExamsDataVersion();
   return { ok: true, currentAffair };
 }
 
@@ -357,6 +392,7 @@ export async function updateCurrentAffair(
   }
 
   const currentAffair = await prisma.govCurrentAffair.update({ where: { id }, data });
+  await bumpGovExamsDataVersion();
   return { ok: true, currentAffair };
 }
 
@@ -371,6 +407,7 @@ export async function setCurrentAffairStatus(
   const existing = await prisma.govCurrentAffair.findUnique({ where: { id } });
   if (!existing) return { ok: false, notFound: true };
   const currentAffair = await prisma.govCurrentAffair.update({ where: { id }, data: { status } });
+  await bumpGovExamsDataVersion();
   return { ok: true, currentAffair };
 }
 
@@ -396,7 +433,6 @@ export interface EligibilityCheckInput {
 export async function checkEligibility(input: EligibilityCheckInput) {
   const recruitments = await prisma.govRecruitment.findMany({
     where: { status: "published" },
-    include: { organization: true },
   });
 
   return recruitments.filter((recruitment) => {

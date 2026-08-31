@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TextInput, Animated, Keyboard,
+  View, Text, StyleSheet, TextInput, Animated,
   ActivityIndicator, TouchableOpacity,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,6 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { KeyboardAvoidingScroll } from "../../components/ui/KeyboardAvoidingScroll";
 import { FormField } from "../../components/ui/FormField";
 import { PrimaryButton } from "../../components/ui/PrimaryButton";
 import { CenterPickerSheet } from "../../components/ui/CenterPickerSheet";
@@ -195,17 +195,6 @@ export function CreateFacultyScreen({ navigation }: Props) {
   const { showConfirm } = useAlert();
   const colors = useThemeColors();
   const s = useThemedStyles(makeSStyles);
-  const scrollRef = useRef<ScrollView>(null);
-
-  // RN auto-scrolls to keep a focused field visible above the keyboard but
-  // never scrolls back on dismiss — undo that so the form returns to its
-  // original scroll position once the keyboard is fully gone.
-  useEffect(() => {
-    const sub = Keyboard.addListener("keyboardDidHide", () => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    });
-    return () => sub.remove();
-  }, []);
 
   const [form, setForm]       = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors]   = useState<FormErrors>({});
@@ -329,8 +318,15 @@ export function CreateFacultyScreen({ navigation }: Props) {
     <SafeAreaView style={s.safe} edges={["bottom"]}>
       <ScreenHeader title="Add Faculty" onBack={handleBack} />
 
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingScroll
+        style={s.scroll}
+        contentContainerStyle={s.scrollContent}
+        footer={
+          <View style={s.footer}>
+            <PrimaryButton label="Add Faculty" onPress={() => handleSubmit()} loading={loading} disabled={loading} icon="person-add-outline" />
+          </View>
+        }
+      >
 
           {/* ── Personal Info ── */}
           <View style={s.section}>
@@ -385,11 +381,7 @@ export function CreateFacultyScreen({ navigation }: Props) {
             </View>
           )}
 
-          <View style={s.buttonGroup}>
-            <PrimaryButton label="Add Faculty" onPress={() => handleSubmit()} loading={loading} disabled={loading} icon="person-add-outline" />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScroll>
 
       {/* Full-screen loader */}
       {loading && (
@@ -502,7 +494,7 @@ const makeSStyles = (colors: ThemeColors) => StyleSheet.create({
 
   submitError:   { backgroundColor: C.red + "0F", borderRadius: ms(12), borderWidth: 1, borderColor: C.red + "30", padding: ms(14), marginBottom: ms(16) },
   submitErrorT:  { ...T.body, color: C.red },
-  buttonGroup:   { gap: ms(12) },
+  footer:        { gap: ms(12), paddingHorizontal: ms(20), paddingTop: ms(12), paddingBottom: ms(14), backgroundColor: colors.screenBg, borderTopWidth: 1, borderTopColor: C.border },
 
   loaderOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg + "EE", justifyContent: "center", alignItems: "center" },
   loaderCard:    { alignItems: "center", gap: ms(16), backgroundColor: C.card, borderRadius: ms(24), paddingHorizontal: ms(40), paddingVertical: ms(36), shadowColor: C.text, shadowOffset: { width: 0, height: ms(8) }, shadowOpacity: 0.12, shadowRadius: ms(20), elevation: 10 },

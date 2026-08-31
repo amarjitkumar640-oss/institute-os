@@ -126,8 +126,8 @@ function CourseCard({
         </View>
         <View style={cs.statDivider} />
         <View style={cs.statItem}>
-          <Ionicons name="wallet-outline" size={ms(13)} color={meta.color} />
-          <Text style={cs.statLabel}>₹{course.defaultFee.toLocaleString("en-IN")}</Text>
+          <Ionicons name={course.discountAmount > 0 ? "pricetag-outline" : "wallet-outline"} size={ms(13)} color={course.discountAmount > 0 ? C.orange : meta.color} />
+          <Text style={cs.statLabel}>₹{(course.defaultFee - course.discountAmount).toLocaleString("en-IN")}</Text>
         </View>
         <View style={cs.statDivider} />
         <View style={cs.statItem}>
