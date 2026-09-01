@@ -567,6 +567,8 @@ export const createSponsorshipContractSchema = z.object({
   totalContractAmount:    z.number().positive(),
   // null/omitted = GST-exempt for this contract's invoices.
   gstRate:                z.number().min(0).max(100).nullable().optional(),
+  // null/omitted = no TDS deducted for this contract's invoices.
+  tdsRate:                z.number().min(0).max(100).nullable().optional(),
   startDate:              z.coerce.date(),
   endDate:                z.coerce.date().nullable().optional(),
   notes:                  z.string().max(1000).optional(),
@@ -577,6 +579,7 @@ export const updateSponsorshipContractSchema = z.object({
   contractedStudentCount: z.number().int().positive().optional(),
   totalContractAmount:    z.number().positive().optional(),
   gstRate:                z.number().min(0).max(100).nullable().optional(),
+  tdsRate:                z.number().min(0).max(100).nullable().optional(),
   startDate:              z.coerce.date().optional(),
   endDate:                z.coerce.date().nullable().optional(),
   status:                 z.enum(["active", "completed", "cancelled"]).optional(),
@@ -585,12 +588,28 @@ export const updateSponsorshipContractSchema = z.object({
 export type UpdateSponsorshipContractInput = z.infer<typeof updateSponsorshipContractSchema>;
 
 export const createMilestoneSchema = z.object({
-  label:   z.string().min(1).max(120),
-  amount:  z.number().positive(),
-  dueDate: z.coerce.date().nullable().optional(),
-  notes:   z.string().max(500).optional(),
+  label:      z.string().min(1).max(120),
+  amount:     z.number().positive(),
+  dueDate:    z.coerce.date().nullable().optional(),
+  // Both set = the calendar period this milestone bills for (e.g. one month
+  // of a recurring per-student rate) — used to pull attendance onto the
+  // invoice as supporting documentation. Omit both for a one-off milestone.
+  periodStart: z.coerce.date().optional(),
+  periodEnd:   z.coerce.date().optional(),
+  notes:      z.string().max(500).optional(),
 });
 export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
+
+// Generates one milestone per calendar month for a recurring per-student
+// contract (e.g. ₹1,200/student × 60 students × 10 months) instead of
+// creating each month's milestone by hand.
+export const generateMonthlyMilestonesSchema = z.object({
+  monthlyAmount:   z.number().positive(),
+  numberOfMonths:  z.number().int().positive().max(36),
+  startMonth:      z.coerce.date(), // any date within the first month to bill
+  labelPrefix:     z.string().max(80).optional(), // default "Month"
+});
+export type GenerateMonthlyMilestonesInput = z.infer<typeof generateMonthlyMilestonesSchema>;
 
 export const markMilestoneReceivedSchema = z.object({
   receivedAmount: z.number().positive(),

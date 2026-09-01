@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Trash2, FileText, ClipboardList, Upload } from "lucide-react";
+import { Plus, Trash2, FileText, ClipboardList, Upload, Pencil, CheckCircle2, Archive } from "lucide-react";
 import {
   listRecruitments, createRecruitment, updateRecruitment,
   setRecruitmentStatus, deleteRecruitment, createDocument, deleteDocument,
@@ -21,6 +21,8 @@ import { FormField } from "@/components/FormField";
 import { EmptyState } from "@/components/EmptyState";
 import { DataTable } from "@/components/DataTable";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate, slugify } from "@/lib/utils";
 
@@ -456,9 +458,9 @@ export function RecruitmentsTab() {
       accessorKey: "title",
       header: "Recruitment",
       cell: ({ row }) => (
-        <div>
-          <p className="font-semibold text-gray-900 text-sm">{row.original.title}</p>
-          <p className="text-xs text-gray-400">{row.original.organization ?? ORG_TYPE_LABEL[row.original.category]}</p>
+        <div className="min-w-0 max-w-[240px]">
+          <TruncatedText text={row.original.title} className="font-semibold text-gray-900 text-sm" />
+          <TruncatedText text={row.original.organization ?? ORG_TYPE_LABEL[row.original.category]} className="text-xs text-gray-400" />
         </div>
       ),
     },
@@ -490,22 +492,20 @@ export function RecruitmentsTab() {
         return (
           <div className="flex items-center gap-2 flex-wrap">
             {r.status !== "published" && (
-              <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={() => statusMutation.mutate({ id: r.id, status: "published" })}>
-                Publish
-              </Button>
+              <IconAction
+                label="Publish" icon={<CheckCircle2 className="h-3.5 w-3.5" />} className="text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                onClick={() => statusMutation.mutate({ id: r.id, status: "published" })}
+              />
             )}
             {r.status === "published" && (
-              <Button size="sm" variant="outline" onClick={() => statusMutation.mutate({ id: r.id, status: "archived" })}>
-                Archive
-              </Button>
+              <IconAction label="Archive" icon={<Archive className="h-3.5 w-3.5" />} onClick={() => statusMutation.mutate({ id: r.id, status: "archived" })} />
             )}
-            <Button size="sm" variant="outline" onClick={() => setManagingDocs(r)}>
-              <ClipboardList className="h-3.5 w-3.5 mr-1" /> Docs
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setEditing(r)}>Edit</Button>
-            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Delete this recruitment?")) deleteMutation.mutate(r.id); }}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <IconAction label="Documents" icon={<ClipboardList className="h-3.5 w-3.5" />} onClick={() => setManagingDocs(r)} />
+            <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(r)} />
+            <IconAction
+              label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              onClick={() => { if (confirm("Delete this recruitment?")) deleteMutation.mutate(r.id); }}
+            />
           </div>
         );
       },

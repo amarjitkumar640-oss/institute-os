@@ -6,6 +6,7 @@ import {
   Plus, Search, Users, CheckCircle2, Users2,
   GraduationCap, Phone, Building2, Sun, Sunset, Moon,
   Banknote, CreditCard, ArrowLeft, ArrowRight, Camera, Loader2,
+  Eye, Pencil,
 } from "lucide-react";
 import { listStudents, admitStudent, uploadStudentPhoto, type Student } from "@/api/students";
 import { getAdmissionApplication, type AdmissionApplication } from "@/api/admissionApplications";
@@ -22,6 +23,8 @@ import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate, initials } from "@/lib/utils";
@@ -739,10 +742,11 @@ export function StudentsPage() {
           >
             {initials(row.original.fullName)}
           </div>
-          <div>
-            <p className="font-semibold text-gray-900 text-sm hover:text-[var(--color-primary,#7C3AED)] transition-colors">
-              {row.original.fullName}
-            </p>
+          <div className="min-w-0 max-w-[180px]">
+            <TruncatedText
+              text={row.original.fullName}
+              className="font-semibold text-gray-900 text-sm hover:text-[var(--color-primary,#7C3AED)] transition-colors"
+            />
             <p className="text-xs text-gray-400">{row.original.phone}</p>
           </div>
         </button>
@@ -774,8 +778,8 @@ export function StudentsPage() {
       header: "",
       cell: ({ row }) => (
         <div className="flex gap-2">
-          <Button size="sm" variant="ghost" onClick={() => navigate(`/students/${row.original.id}`)}>View</Button>
-          <Button size="sm" variant="outline" onClick={() => setEditingStudent(row.original)}>Edit</Button>
+          <IconAction label="View" icon={<Eye className="h-3.5 w-3.5" />} variant="ghost" onClick={() => navigate(`/students/${row.original.id}`)} />
+          <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditingStudent(row.original)} />
         </div>
       ),
     },

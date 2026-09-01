@@ -33,6 +33,16 @@ export async function deletePhoto(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
 }
 
+// Fetches an object's actual bytes (not a signed URL) — for server-side use
+// like embedding a tenant's logo into a generated PDF, where a browser-facing
+// URL is useless. Same key-shape as getSignedPhotoUrl.
+export async function getPhotoBuffer(key: string): Promise<Buffer> {
+  const obj = await s3.send(new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+  const chunks: Buffer[] = [];
+  for await (const chunk of obj.Body as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks);
+}
+
 // Freshly minted per request, never a stored link (same private-bucket
 // reasoning as resolveLogoUrl). 30 minutes, not the 1hr photo default —
 // long enough to complete a 50-100MB APK download even on slow mobile

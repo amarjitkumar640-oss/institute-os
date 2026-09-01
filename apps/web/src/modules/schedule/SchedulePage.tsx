@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
 import { usePermission } from "@/hooks/usePermission";
@@ -112,17 +113,17 @@ export function SchedulePage() {
     {
       id: "subject",
       header: "Subject",
-      cell: ({ row }) => row.original.subject?.name ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.subject?.name} className="max-w-[140px]" />,
     },
     {
       id: "faculty",
       header: "Faculty",
-      cell: ({ row }) => row.original.faculty?.fullName ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.faculty?.fullName} className="max-w-[140px]" />,
     },
     {
       id: "room",
       header: "Room",
-      cell: ({ row }) => row.original.room ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.room} className="max-w-[100px]" />,
     },
     {
       id: "actions",

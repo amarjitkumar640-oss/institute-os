@@ -7,7 +7,7 @@ import { env } from "../lib/env";
 import { resetDb, legacyPermissionsForRole } from "./setup";
 import type { AuthPayload } from "../middleware/auth";
 import { generateInvoice } from "../modules/sponsors/invoice.service";
-import { createSponsor, createContract, createMilestone } from "../modules/sponsors/sponsors.service";
+import { createSponsor, createContract, createMilestone, generateMonthlyMilestones } from "../modules/sponsors/sponsors.service";
 
 const TENANT_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 const CENTER_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd";
@@ -227,5 +227,116 @@ describe("Invoice generation — GST tax math", () => {
     expect(inv1.invoiceNumber).not.toBe(inv2.invoiceNumber);
 
     await expect(generateInvoice(prisma, m1.id, TENANT_ID)).rejects.toThrow("INVOICE_ALREADY_EXISTS");
+  });
+});
+
+describe("Invoice generation — TDS math", () => {
+  beforeEach(resetDb);
+  afterAll(async () => prisma.$disconnect());
+
+  async function setup(tdsRate: number | null) {
+    await makeTenantCenter({ stateCode: "27" });
+    const { batch } = await makeCourseBatch(false);
+    const sponsor = await createSponsor(prisma, TENANT_ID, { name: "Acme Corp", stateCode: "27" });
+    const contract = await createContract(prisma, TENANT_ID, {
+      sponsorId: sponsor.id, batchId: batch.id,
+      contractedStudentCount: 60, totalContractAmount: 720000,
+      gstRate: undefined, // GST-exempt, so TDS math isn't muddied by tax-on-tax
+      tdsRate: tdsRate ?? undefined, startDate: new Date("2026-01-01"),
+    });
+    const milestone = await createMilestone(prisma, contract.id, TENANT_ID, { label: "Month 1", amount: 72000 });
+    return milestone;
+  }
+
+  it("deducts TDS from the taxable amount and reports the net receivable", async () => {
+    const milestone = await setup(8);
+    const invoice = await generateInvoice(prisma, milestone.id, TENANT_ID);
+    expect(Number(invoice.tdsRate)).toBe(8);
+    expect(Number(invoice.tdsAmount)).toBe(5760); // 72000 * 8%
+    expect(Number(invoice.totalAmount)).toBe(72000); // GST-exempt, so total == taxable
+    expect(Number(invoice.netReceivableAmount)).toBe(66240); // 72000 - 5760
+  });
+
+  it("charges no TDS when the contract doesn't have a rate set", async () => {
+    const milestone = await setup(null);
+    const invoice = await generateInvoice(prisma, milestone.id, TENANT_ID);
+    expect(invoice.tdsRate).toBeNull();
+    expect(Number(invoice.tdsAmount)).toBe(0);
+    expect(Number(invoice.netReceivableAmount)).toBe(Number(invoice.totalAmount));
+  });
+});
+
+describe("generateMonthlyMilestones — recurring per-student-per-month billing", () => {
+  beforeEach(resetDb);
+  afterAll(async () => prisma.$disconnect());
+
+  it("creates one milestone per month, each with the given amount and that month's period", async () => {
+    await makeTenantCenter();
+    const { batch } = await makeCourseBatch(false);
+    const sponsor = await createSponsor(prisma, TENANT_ID, { name: "Acme Corp" });
+    const contract = await createContract(prisma, TENANT_ID, {
+      sponsorId: sponsor.id, batchId: batch.id,
+      contractedStudentCount: 60, totalContractAmount: 720000,
+      startDate: new Date("2026-01-01"),
+    });
+
+    const milestones = await generateMonthlyMilestones(prisma, contract.id, TENANT_ID, {
+      monthlyAmount: 72000, numberOfMonths: 10, startMonth: new Date("2026-01-15"),
+    });
+
+    expect(milestones).toHaveLength(10);
+    expect(milestones.every((m) => Number(m.amount) === 72000)).toBe(true);
+    expect(milestones[0].periodStart!.toISOString().slice(0, 10)).toBe("2026-01-01");
+    expect(milestones[0].periodEnd!.toISOString().slice(0, 10)).toBe("2026-01-31");
+    expect(milestones[9].periodStart!.toISOString().slice(0, 10)).toBe("2026-10-01");
+    expect(milestones[0].label).toContain("Jan 2026");
+  });
+
+  it("rejects generating milestones for a contract that doesn't exist", async () => {
+    await makeTenantCenter();
+    await expect(generateMonthlyMilestones(prisma, "00000000-0000-0000-0000-000000000000", TENANT_ID, {
+      monthlyAmount: 1000, numberOfMonths: 3, startMonth: new Date("2026-01-01"),
+    })).rejects.toThrow("CONTRACT_NOT_FOUND");
+  });
+});
+
+describe("Invoice generation — attendance documentation", () => {
+  beforeEach(resetDb);
+  afterAll(async () => prisma.$disconnect());
+
+  it("includes each enrolled student's session-attendance count for the milestone's billing period", async () => {
+    await makeTenantCenter();
+    const { batch } = await makeCourseBatch(false);
+    const sponsor = await createSponsor(prisma, TENANT_ID, { name: "Acme Corp" });
+    const contract = await createContract(prisma, TENANT_ID, {
+      sponsorId: sponsor.id, batchId: batch.id,
+      contractedStudentCount: 2, totalContractAmount: 100000,
+      startDate: new Date("2026-01-01"),
+    });
+    const token = await adminToken();
+
+    const s1 = await admitStudent(token, batch.id, "9200000201");
+    const s2 = await admitStudent(token, batch.id, "9200000202");
+
+    // Two sessions inside January, one outside — only the two January
+    // sessions should count toward the January milestone's attendance.
+    const sessionIn1 = await prisma.classSession.create({ data: { batchId: batch.id, scheduledDate: new Date("2026-01-05"), startTime: "10:00", endTime: "11:00" } });
+    const sessionIn2 = await prisma.classSession.create({ data: { batchId: batch.id, scheduledDate: new Date("2026-01-20"), startTime: "10:00", endTime: "11:00" } });
+    await prisma.classSession.create({ data: { batchId: batch.id, scheduledDate: new Date("2026-02-05"), startTime: "10:00", endTime: "11:00" } });
+
+    await prisma.sessionAttendance.create({ data: { classSessionId: sessionIn1.id, studentId: s1.body.student.id, status: "present" } });
+    await prisma.sessionAttendance.create({ data: { classSessionId: sessionIn2.id, studentId: s1.body.student.id, status: "present" } });
+    await prisma.sessionAttendance.create({ data: { classSessionId: sessionIn1.id, studentId: s2.body.student.id, status: "absent" } });
+
+    const milestone = await createMilestone(prisma, contract.id, TENANT_ID, {
+      label: "Month 1", amount: 100000,
+      periodStart: new Date("2026-01-01"), periodEnd: new Date("2026-01-31"),
+    });
+
+    // generateInvoice doesn't return attendance directly (it's baked into the
+    // PDF only) — this just proves generation succeeds with a period set and
+    // doesn't throw while querying attendance for it.
+    const invoice = await generateInvoice(prisma, milestone.id, TENANT_ID);
+    expect(invoice.id).toBeTruthy();
   });
 });

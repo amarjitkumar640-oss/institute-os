@@ -2,10 +2,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Search, DollarSign } from "lucide-react";
+import { Search, DollarSign, Eye } from "lucide-react";
 import { listFeeSchedules, getFeeSummary, type ScheduleListItem } from "@/api/fees";
 import { useAuth } from "@/context/AuthContext";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/DataTable";
@@ -13,6 +12,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { formatCurrency } from "@/lib/utils";
 import { CollectionTab } from "./CollectionTab";
 
@@ -53,8 +54,8 @@ export function FeesPage() {
       id: "student",
       header: "Student",
       cell: ({ row }) => (
-        <div>
-          <p className="font-medium">{row.original.student?.fullName ?? "—"}</p>
+        <div className="min-w-0 max-w-[160px]">
+          <TruncatedText text={row.original.student?.fullName} className="font-medium" />
           <p className="text-xs text-gray-500">{row.original.student?.phone ?? ""}</p>
         </div>
       ),
@@ -62,7 +63,7 @@ export function FeesPage() {
     {
       id: "batch",
       header: "Batch",
-      cell: ({ row }) => <span className="text-sm">{row.original.batch?.name ?? "—"}</span>,
+      cell: ({ row }) => <TruncatedText text={row.original.batch?.name} className="text-sm max-w-[140px]" />,
     },
     ...(isAllCenters ? [centerColumn] : []),
     {
@@ -96,9 +97,7 @@ export function FeesPage() {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button size="sm" variant="outline" onClick={() => navigate(`/fees/${row.original.enrollmentId}`)}>
-          Details
-        </Button>
+        <IconAction label="View Details" icon={<Eye className="h-3.5 w-3.5" />} onClick={() => navigate(`/fees/${row.original.enrollmentId}`)} />
       ),
     },
   ];
