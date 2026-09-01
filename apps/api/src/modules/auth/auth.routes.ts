@@ -1,13 +1,44 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { loginSchema } from "@institute-os/shared";
 import type { StaffRole } from "@prisma/client";
 import { validateBody } from "../../middleware/validate";
 import { requireAuth } from "../../middleware/auth";
+import { env } from "../../lib/env";
 import {
   login, selectCenter, selectRole, refreshAccessToken,
   requestPasswordReset, resetPassword, validateResetCode,
 } from "./auth.service";
+
+// Derives the web app's own base URL from the request that's asking for a
+// password reset, instead of a manually-configured env var — this is exactly
+// how WEB_APP_URL's default silently pointing at localhost broke password
+// reset in production; nobody had set it for that deploy.
+//
+// Referer (not Origin) is the primary signal: QA and production share the
+// same domain and differ only by a path prefix baked in at build time
+// (thesuccess.in/login for prod, thesuccess.in/qa/login for QA — see
+// apps/web's BASE_PATH) — Origin never carries a path, so it can't tell
+// those apart, but Referer carries the full page URL the reset request was
+// submitted from. The forgot-password form only ever lives on the login
+// page itself (no separate /reset-password route), so stripping a trailing
+// "/login" off the referer's path recovers exactly the right base for
+// whichever deployment sent the request.
+// Origin is kept as a fallback for the (rarer) case where Referer is
+// stripped by the browser's referrer-policy but Origin still comes through;
+// env.WEB_APP_URL is the last resort for a non-browser caller with neither.
+export function resolveWebAppUrl(req: Request): string {
+  const referer = req.headers.referer;
+  if (referer) {
+    try {
+      const u = new URL(referer);
+      const base = u.pathname.replace(/\/login\/?$/, "");
+      return `${u.origin}${base}`;
+    } catch { /* malformed referer — fall through */ }
+  }
+  if (req.headers.origin) return req.headers.origin;
+  return env.WEB_APP_URL;
+}
 
 const VALID_ROLES: StaffRole[] = ["admin", "teacher", "frontdesk"];
 
@@ -58,7 +89,7 @@ const forgotPasswordSchema = z.object({
 // swallowing it strands a real user checking an inbox that was never going
 // to receive anything (see auth.service.ts's requestPasswordReset comment).
 authRouter.post("/forgot-password", validateBody(forgotPasswordSchema), async (req, res) => {
-  const result = await requestPasswordReset(req.body.tenantId, req.body.identifier);
+  const result = await requestPasswordReset(req.body.tenantId, req.body.identifier, resolveWebAppUrl(req));
   if (result === "delivery-failed") {
     // Deliberately doesn't say "try again" — a config problem (unverified
     // sending domain, bad credentials, etc., see the server log for which)
