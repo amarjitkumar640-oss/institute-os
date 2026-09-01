@@ -54,7 +54,9 @@ import { BatchOffersScreen } from "../screens/batches/BatchOffersScreen";
 import { SponsorshipDetailScreen } from "../screens/batches/SponsorshipDetailScreen";
 import { SponsorsScreen } from "../screens/sponsors/SponsorsScreen";
 import { SponsorDetailScreen } from "../screens/sponsors/SponsorDetailScreen";
+import { CreateSponsorScreen } from "../screens/sponsors/CreateSponsorScreen";
 import { SessionDetailScreen } from "../screens/schedule/SessionDetailScreen";
+import { TakeAttendanceScreen } from "../screens/schedule/TakeAttendanceScreen";
 import { NotificationsScreen } from "../screens/notifications/NotificationsScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -153,10 +155,12 @@ function RootNavigatorInner({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen name="BatchSchedule" component={BatchScheduleScreen} />
         <Stack.Screen name="BatchOffers" component={BatchOffersScreen} />
         <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
+        <Stack.Screen name="TakeAttendance" component={TakeAttendanceScreen} options={{ animation: "slide_from_bottom" }} />
 
         {/* CSR Sponsorship */}
         <Stack.Screen name="SponsorshipDetail" component={SponsorshipDetailScreen} />
         <Stack.Screen name="Sponsors" component={SponsorsScreen} />
+        <Stack.Screen name="CreateSponsor" component={CreateSponsorScreen} options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="SponsorDetail" component={SponsorDetailScreen} />
 
         {/* Notifications */}

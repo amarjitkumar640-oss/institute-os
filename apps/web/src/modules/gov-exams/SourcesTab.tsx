@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2, Globe } from "lucide-react";
+import { Plus, Trash2, Globe, Pencil } from "lucide-react";
 import {
   listSources, createSource, updateSource, deleteSource,
   type GovSource, type GovOrgType, type GovSourceContentType, type GovSourceFetchMode,
@@ -17,6 +17,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { FormField } from "@/components/FormField";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 
 const ORG_TYPE_LABEL: Record<GovOrgType, string> = { ssc: "SSC", banking: "Banking", railway: "Railway", other: "Other" };
@@ -164,21 +166,19 @@ export function SourcesTab() {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 truncate mt-0.5">{source.url}</p>
-                {source.lastScrapeError && <p className="text-xs text-red-500 truncate mt-0.5">{source.lastScrapeError}</p>}
+                <TruncatedText text={source.url} className="text-xs text-gray-400 mt-0.5" />
+                {source.lastScrapeError && <TruncatedText text={source.lastScrapeError} className="text-xs text-red-500 mt-0.5" />}
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <Switch
                   checked={source.enabled}
                   onCheckedChange={(v) => toggleMutation.mutate({ id: source.id, enabled: v })}
                 />
-                <Button size="sm" variant="outline" onClick={() => setEditing(source)}>Edit</Button>
-                <Button
-                  size="sm" variant="ghost" className="text-red-600"
+                <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(source)} />
+                <IconAction
+                  label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   onClick={() => { if (confirm(`Delete "${source.label}"?`)) deleteMutation.mutate(source.id); }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                />
               </div>
             </div>
           ))}

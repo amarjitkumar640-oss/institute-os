@@ -670,7 +670,7 @@ export async function getFeeSummary(db: PrismaClient, tenantId: string, centerId
 
   const [collectedThisMonth, schedulesForPending, overdueCount, activeSchedules] = await Promise.all([
     db.paymentTransaction.aggregate({
-      where: { schedule: scopeFilter, type: "payment", paidAt: { gte: som } },
+      where: { schedule: scopeFilter, type: "payment", paidAt: { gte: som, lte: now } },
       _sum:  { amount: true },
     }),
     // Fetched per-schedule (not aggregated at the installment level) because
@@ -743,10 +743,10 @@ export async function getCollectionSummary(db: PrismaClient, tenantId: string, c
   const scopeFilter = { enrollment: { batch: { tenantId, centerId: { in: centerIds } } } };
 
   const [today, week, month, year, schedulesForPending, overdueCount] = await Promise.all([
-    db.paymentTransaction.aggregate({ where: { schedule: scopeFilter, type: "payment", paidAt: { gte: startOfToday(now) } }, _sum: { amount: true } }),
-    db.paymentTransaction.aggregate({ where: { schedule: scopeFilter, type: "payment", paidAt: { gte: startOfWeek(now) } },  _sum: { amount: true } }),
-    db.paymentTransaction.aggregate({ where: { schedule: scopeFilter, type: "payment", paidAt: { gte: startOfMonth(now) } }, _sum: { amount: true } }),
-    db.paymentTransaction.aggregate({ where: { schedule: scopeFilter, type: "payment", paidAt: { gte: startOfYear(now) } },  _sum: { amount: true } }),
+    db.paymentTransaction.aggregate({ where: { schedule: scopeFilter, type: "payment", paidAt: { gte: startOfToday(now), lte: now } }, _sum: { amount: true } }),
+    db.paymentTransaction.aggregate({ where: { schedule: scopeFilter, type: "payment", paidAt: { gte: startOfWeek(now),  lte: now } }, _sum: { amount: true } }),
+    db.paymentTransaction.aggregate({ where: { schedule: scopeFilter, type: "payment", paidAt: { gte: startOfMonth(now), lte: now } }, _sum: { amount: true } }),
+    db.paymentTransaction.aggregate({ where: { schedule: scopeFilter, type: "payment", paidAt: { gte: startOfYear(now),  lte: now } }, _sum: { amount: true } }),
     // See getFeeSummary's identical comment: per-schedule so creditBalance
     // is folded in correctly, sidestepping the stale-status problem too.
     db.studentFeeSchedule.findMany({
@@ -801,7 +801,7 @@ export async function getCollectionByBatch(
   const [payments, schedules] = await Promise.all([
     db.paymentTransaction.findMany({
       where: {
-        type: "payment", paidAt: { gte: since },
+        type: "payment", paidAt: { gte: since, lte: now },
         schedule: { enrollment: { batch: { tenantId, centerId: { in: centerIds } } } },
       },
       select: { amount: true, schedule: { select: { enrollment: { select: { batchId: true } } } } },

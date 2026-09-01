@@ -9,6 +9,7 @@ import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { formatCurrency } from "@/lib/utils";
 import { Layers } from "lucide-react";
 
@@ -26,7 +27,11 @@ export function CollectionTab() {
   });
 
   const columns: ColumnDef<BatchCollectionRow>[] = [
-    { accessorKey: "batchName", header: "Batch" },
+    {
+      accessorKey: "batchName",
+      header: "Batch",
+      cell: ({ row }) => <TruncatedText text={row.original.batchName} className="max-w-[200px]" />,
+    },
     {
       id: "collected",
       header: `Collected (${PERIOD_LABEL[period]})`,

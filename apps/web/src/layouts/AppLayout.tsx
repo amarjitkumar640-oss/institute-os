@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Users, UserPlus, BookOpen, Layers,
-  Calendar, GraduationCap, UserCog, DollarSign, Settings,
+  Calendar, GraduationCap, UserCog, IndianRupee, Settings,
   LogOut, Building2, ChevronDown, Bell, ChevronRight, Globe, FileText, ShieldCheck,
   UserCircle, CheckCircle2, Landmark,
 } from "lucide-react";
@@ -63,7 +63,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     module: "Finance",
     items: [
-      { label: "Fees", to: "/fees", icon: DollarSign, screenKey: "fees" },
+      { label: "Fees", to: "/fees", icon: IndianRupee, screenKey: "fees" },
       { label: "Sponsors", to: "/sponsors", icon: Landmark, screenKey: "sponsors" },
     ],
   },

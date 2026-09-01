@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
-import { FileText } from "lucide-react";
+import { FileText, Eye, XCircle } from "lucide-react";
 import {
   listAdmissionApplications, rejectAdmissionApplication, type AdmissionApplication,
 } from "@/api/admissionApplications";
@@ -14,6 +14,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
 
@@ -87,17 +89,21 @@ export function AdmissionApplicationsPage() {
   });
 
   const columns: ColumnDef<AdmissionApplication>[] = [
-    { accessorKey: "fullName", header: "Name" },
+    {
+      accessorKey: "fullName",
+      header: "Name",
+      cell: ({ row }) => <TruncatedText text={row.original.fullName} className="max-w-[160px]" />,
+    },
     { accessorKey: "phone", header: "Phone" },
     {
       id: "course",
       header: "Course",
-      cell: ({ row }) => row.original.course?.name ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.course?.name} className="max-w-[140px]" />,
     },
     {
       id: "center",
       header: "Preferred Center",
-      cell: ({ row }) => row.original.center?.name ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.center?.name} className="max-w-[140px]" />,
     },
     {
       accessorKey: "status",
@@ -121,12 +127,11 @@ export function AdmissionApplicationsPage() {
         if (app.status !== "pending") return null;
         return (
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => navigate(`/students?applicationId=${app.id}`)}>
-              Review
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setRejecting(app)}>
-              Reject
-            </Button>
+            <IconAction label="Review" icon={<Eye className="h-3.5 w-3.5" />} variant="default" onClick={() => navigate(`/students?applicationId=${app.id}`)} />
+            <IconAction
+              label="Reject" icon={<XCircle className="h-3.5 w-3.5" />} className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              onClick={() => setRejecting(app)}
+            />
           </div>
         );
       },

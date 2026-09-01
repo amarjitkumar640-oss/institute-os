@@ -555,6 +555,10 @@ model SponsorshipContract {
   // null = GST-exempt for this contract's invoices. When set, invoice.service.ts
   // splits it CGST+SGST (sponsor and tenant same stateCode) or IGST (different).
   gstRate                Decimal?  @db.Decimal(5, 2)
+  // null = no TDS deducted for this contract's invoices — the sponsor pays the
+  // full invoiced amount. When set, invoice.service.ts computes tdsAmount off
+  // the taxable amount (GST is never subject to TDS) and shows netReceivableAmount.
+  tdsRate                Decimal?  @db.Decimal(5, 2)
   startDate              DateTime
   endDate                DateTime?
   status                 String    @default("active") // active | completed | cancelled
@@ -579,6 +583,13 @@ model SponsorPaymentMilestone {
   label          String
   amount         Decimal             @db.Decimal(12, 2)
   dueDate        DateTime?
+  // The calendar period this milestone bills for (e.g. one month of a
+  // recurring per-student-per-month contract) — both null for a one-off
+  // milestone like "Advance". When set, invoice.service.ts pulls each
+  // enrolled student's attendance for this range onto the invoice as
+  // supporting documentation; it never changes the billed amount.
+  periodStart    DateTime?
+  periodEnd      DateTime?
   status         String              @default("pending") // pending | received
   receivedAt     DateTime?
   receivedAmount Decimal?            @db.Decimal(12, 2)
@@ -609,6 +620,11 @@ model SponsorInvoice {
   sgstAmount      Decimal                 @default(0) @db.Decimal(12, 2)
   igstAmount      Decimal                 @default(0) @db.Decimal(12, 2)
   totalAmount     Decimal                 @db.Decimal(12, 2)
+  // Snapshotted from the contract at generation time so a later change to
+  // the contract's tdsRate never retroactively alters an issued invoice.
+  tdsRate         Decimal?                @db.Decimal(5, 2)
+  tdsAmount       Decimal                 @default(0) @db.Decimal(12, 2)
+  netReceivableAmount Decimal             @db.Decimal(12, 2)
   pdfS3Key        String
   shareToken      String                  @unique
   createdAt       DateTime                @default(now())

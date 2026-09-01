@@ -3,6 +3,7 @@ import type {
   CreateSponsorInput, UpdateSponsorInput,
   CreateSponsorshipContractInput, UpdateSponsorshipContractInput,
   CreateMilestoneInput, MarkMilestoneReceivedInput,
+  GenerateMonthlyMilestonesInput,
 } from "@institute-os/shared";
 
 // ── Sponsors ───────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ export async function createContract(db: PrismaClient, tenantId: string, input: 
       contractedStudentCount: input.contractedStudentCount,
       totalContractAmount: input.totalContractAmount,
       gstRate: input.gstRate ?? null,
+      tdsRate: input.tdsRate ?? null,
       startDate: input.startDate,
       endDate: input.endDate ?? null,
       notes: input.notes,
@@ -82,7 +84,50 @@ export async function createMilestone(db: PrismaClient, contractId: string, tena
   const contract = await db.sponsorshipContract.findFirst({ where: { id: contractId, tenantId } });
   if (!contract) throw new Error("CONTRACT_NOT_FOUND");
   return db.sponsorPaymentMilestone.create({
-    data: { contractId, label: input.label, amount: input.amount, dueDate: input.dueDate ?? null, notes: input.notes },
+    data: {
+      contractId, label: input.label, amount: input.amount, dueDate: input.dueDate ?? null,
+      periodStart: input.periodStart ?? null, periodEnd: input.periodEnd ?? null,
+      notes: input.notes,
+    },
+  });
+}
+
+// One milestone per calendar month, each carrying that month's [periodStart,
+// periodEnd) — see createMilestone's comment on why the period matters (it
+// drives the attendance section on that month's invoice, not the amount).
+// dueDate defaults to the period's last day; the admin can still edit it via
+// no dedicated route today, matching createMilestone's own lack of an update path.
+export async function generateMonthlyMilestones(
+  db: PrismaClient, contractId: string, tenantId: string, input: GenerateMonthlyMilestonesInput,
+) {
+  const contract = await db.sponsorshipContract.findFirst({ where: { id: contractId, tenantId } });
+  if (!contract) throw new Error("CONTRACT_NOT_FOUND");
+
+  const label = input.labelPrefix ?? "Month";
+  // Built with Date.UTC (not the local-timezone 3-arg constructor) so the
+  // stored instant is always the actual calendar-day boundary regardless of
+  // the server's local timezone — see fees.service.ts's periodStart/
+  // startOfToday for the exact same class of bug this avoids.
+  const rows = Array.from({ length: input.numberOfMonths }, (_, i) => {
+    const year = input.startMonth.getUTCFullYear();
+    const month = input.startMonth.getUTCMonth() + i;
+    const periodStart = new Date(Date.UTC(year, month, 1));
+    const periodEnd = new Date(Date.UTC(year, month + 1, 0)); // last day of month
+    return {
+      contractId,
+      label: `${label} ${i + 1} (${periodStart.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" })})`,
+      amount: input.monthlyAmount,
+      dueDate: periodEnd,
+      periodStart,
+      periodEnd,
+    };
+  });
+
+  await db.sponsorPaymentMilestone.createMany({ data: rows });
+  return db.sponsorPaymentMilestone.findMany({
+    where: { contractId, periodStart: { gte: rows[0].periodStart } },
+    orderBy: { periodStart: "asc" },
+    take: input.numberOfMonths,
   });
 }
 
