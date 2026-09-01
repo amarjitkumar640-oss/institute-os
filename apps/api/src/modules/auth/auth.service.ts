@@ -134,7 +134,7 @@ function hashResetCode(code: string): string {
 // oracle. "delivery-failed" is safe to surface distinctly: it only happens
 // AFTER we've already confirmed the account exists, so distinguishing it
 // leaks a fact about the mail/SMS provider's health, never about identity.
-export async function requestPasswordReset(tenantId: string, identifier: string): Promise<"sent" | "not-found" | "delivery-failed"> {
+export async function requestPasswordReset(tenantId: string, identifier: string, webAppUrl: string): Promise<"sent" | "not-found" | "delivery-failed"> {
   const staff = await findStaffByIdentifier(tenantId, identifier);
   if (!staff || !staff.isActive || !staff.tenant.isActive) return "not-found";
 
@@ -163,7 +163,7 @@ export async function requestPasswordReset(tenantId: string, identifier: string)
     // LoginPage reads these three params on mount and jumps straight into
     // the "enter new password" step, pre-filled — there's no separate
     // /reset-password route, this is intentionally the same page.
-    const link = `${env.WEB_APP_URL}/login?resetTenantId=${tenantId}&resetIdentifier=${encodeURIComponent(identifier.trim())}&resetCode=${code}`;
+    const link = `${webAppUrl}/login?resetTenantId=${tenantId}&resetIdentifier=${encodeURIComponent(identifier.trim())}&resetCode=${code}`;
     const html = await renderEmail(createElement(PasswordResetEmail, {
       firstName:    staff.fullName.split(" ")[0],
       resetUrl:     link,
