@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Building2 } from "lucide-react";
+import { Plus, Building2, Settings } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,6 +15,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 
 const createCenterSchema = z.object({
@@ -76,17 +78,17 @@ export function CentersPage() {
       header: "Center Name",
       cell: ({ row }) => (
         <button
-          className="font-medium text-gray-900 hover:text-[var(--color-primary,#C0392B)]"
+          className="block max-w-[160px] text-left font-medium text-gray-900 hover:text-[var(--color-primary,#C0392B)]"
           onClick={() => navigate(`/centers/${row.original.id}`)}
         >
-          {row.original.name}
+          <TruncatedText text={row.original.name} />
         </button>
       ),
     },
     {
       accessorKey: "address",
       header: "Address",
-      cell: ({ row }) => row.original.address ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.address} className="max-w-[220px]" />,
     },
     {
       accessorKey: "phone",
@@ -113,9 +115,7 @@ export function CentersPage() {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button size="sm" variant="outline" onClick={() => navigate(`/centers/${row.original.id}`)}>
-          Manage
-        </Button>
+        <IconAction label="Manage" icon={<Settings className="h-3.5 w-3.5" />} onClick={() => navigate(`/centers/${row.original.id}`)} />
       ),
     },
   ];

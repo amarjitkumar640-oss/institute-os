@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormField } from "@/components/FormField";
 import { DataTable } from "@/components/DataTable";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 import { type ColumnDef } from "@tanstack/react-table";
 
@@ -136,8 +138,16 @@ export function CenterDetailPage() {
   }
 
   const staffColumns: ColumnDef<CenterStaffMember>[] = [
-    { accessorKey: "fullName", header: "Name", cell: ({ row }) => <span className="font-medium">{row.original.fullName}</span> },
-    { accessorKey: "email", header: "Email" },
+    {
+      accessorKey: "fullName",
+      header: "Name",
+      cell: ({ row }) => <TruncatedText text={row.original.fullName} className="font-medium max-w-[160px]" />,
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+      cell: ({ row }) => <TruncatedText text={row.original.email} className="max-w-[180px]" />,
+    },
     { accessorKey: "phone", header: "Phone" },
     {
       id: "roles",
@@ -159,9 +169,10 @@ export function CenterDetailPage() {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Remove from center?")) removeMutation.mutate(row.original.staffId); }}>
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <IconAction
+          label="Remove from Center" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          onClick={() => { if (confirm("Remove from center?")) removeMutation.mutate(row.original.staffId); }}
+        />
       ),
     },
   ];

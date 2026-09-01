@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, ImageOff, Megaphone, Trophy, Images, type LucideIcon } from "lucide-react";
+import { Plus, Trash2, ImageOff, Megaphone, Trophy, Images, Pencil, type LucideIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import {
   listSiteHighlights, createSiteHighlight, updateSiteHighlight, deleteSiteHighlight,
@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { FormField } from "@/components/FormField";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 
 const TYPE_META: Record<SiteHighlightType, { label: string; singular: string; icon: LucideIcon }> = {
@@ -174,18 +176,16 @@ export function SiteContentPage() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{h.title}</p>
-                  {h.description && <p className="text-xs text-gray-400 truncate">{h.description}</p>}
+                  <TruncatedText text={h.title} className="text-sm font-medium text-gray-900" />
+                  {h.description && <TruncatedText text={h.description} className="text-xs text-gray-400" />}
                   <Badge variant={h.isActive ? "success" : "default"} className="mt-1">{h.isActive ? "Visible" : "Hidden"}</Badge>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <Button size="sm" variant="outline" onClick={() => setEditing(h)}>Edit</Button>
-                  <Button
-                    size="sm" variant="ghost" className="text-red-600"
+                  <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(h)} />
+                  <IconAction
+                    label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
                     onClick={() => { if (confirm("Delete this item?")) deleteMutation.mutate(h.id); }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  />
                 </div>
               </div>
             ))}

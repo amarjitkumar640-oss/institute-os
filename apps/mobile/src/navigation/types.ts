@@ -3,6 +3,7 @@ import type { FacultyItem } from "../api/faculty";
 import type { SubjectItem } from "../api/subjects";
 import type { StudentItem } from "../api/students";
 import type { BatchItem } from "../api/batches";
+import type { SessionAttendanceRow } from "../api/classSchedule";
 
 export type RootStackParamList = {
   Dashboard: undefined;
@@ -39,6 +40,8 @@ export type RootStackParamList = {
   SponsorshipDetail: { batchId: string; batchName: string };
   SponsorDetail: { sponsorId: string };
   Sponsors: undefined;
+  CreateSponsor: undefined;
   SessionDetail: { sessionId: string; batchId: string; batchName: string };
+  TakeAttendance: { sessionId: string; sessionDate: string; roster: SessionAttendanceRow[] };
   Notifications: undefined;
 };

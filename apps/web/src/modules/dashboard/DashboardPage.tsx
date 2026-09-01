@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Users, Layers, GraduationCap, TrendingUp,
-  DollarSign, Calendar, ArrowUpRight, ArrowRight, ChevronDown,
+  IndianRupee, Calendar, ArrowUpRight, ArrowRight, ChevronDown,
   Bell, AlertTriangle, Clock, FileText, UserPlus, UserX, Wallet,
   Sparkles,
 } from "lucide-react";
@@ -311,7 +311,7 @@ function AdminDashboard() {
         <StatCard icon={Users}         label="Total Students"     value={data.totalStudents.toLocaleString()} countTo={data.totalStudents}  iconClass="bg-violet-100 text-violet-600" delay={0} />
         <StatCard icon={Layers}        label="Active Batches"     value={data.activeBatches}                  countTo={data.activeBatches}   sub={`${data.totalBatches} total`} trend={batchesTrend} iconClass="bg-blue-100 text-blue-600" delay={80} />
         <StatCard icon={GraduationCap} label="Faculty"            value={data.totalFaculty}                   countTo={data.totalFaculty}    iconClass="bg-emerald-100 text-emerald-600" delay={160} />
-        <StatCard icon={DollarSign}    label="Fees Collected"     value={formatCurrency(data.feesCollected)}  trend={feesTrend}              iconClass="bg-amber-100 text-amber-600" delay={240} />
+        <StatCard icon={IndianRupee}   label="Fees Collected"     value={formatCurrency(data.feesCollected)}  trend={feesTrend}              iconClass="bg-amber-100 text-amber-600" delay={240} />
       </div>
 
       {/* Today */}

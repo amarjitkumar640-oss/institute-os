@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Search, UserPlus } from "lucide-react";
+import { Plus, Search, UserPlus, UserCheck } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,6 +19,8 @@ import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -191,14 +193,22 @@ export function LeadsPage() {
   };
 
   const columns: ColumnDef<Lead>[] = [
-    { accessorKey: "name", header: "Name" },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <TruncatedText text={row.original.name} className="font-medium text-gray-900 max-w-[160px]" />,
+    },
     { accessorKey: "phone", header: "Phone" },
     {
       id: "exam",
       header: "Target Exam",
       cell: ({ row }) => <Badge variant="info">{row.original.targetExam.label}</Badge>,
     },
-    { accessorKey: "source", header: "Source" },
+    {
+      accessorKey: "source",
+      header: "Source",
+      cell: ({ row }) => <TruncatedText text={row.original.source} className="text-sm max-w-[140px]" />,
+    },
     ...(isAllCenters ? [centerColumn] : []),
     {
       accessorKey: "status",
@@ -218,9 +228,7 @@ export function LeadsPage() {
       id: "actions",
       header: "",
       cell: ({ row }) => row.original.status !== "converted" ? (
-        <Button size="sm" variant="outline" onClick={() => setConvertingLead(row.original)}>
-          Convert
-        </Button>
+        <IconAction label="Convert to Student" icon={<UserCheck className="h-3.5 w-3.5" />} onClick={() => setConvertingLead(row.original)} />
       ) : null,
     },
   ];

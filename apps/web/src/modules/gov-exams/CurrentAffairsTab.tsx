@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Trash2, Newspaper, Upload } from "lucide-react";
+import { Plus, Trash2, Newspaper, Upload, Pencil, CheckCircle2, Archive } from "lucide-react";
 import {
   listCurrentAffairs, createCurrentAffair, updateCurrentAffair,
   setCurrentAffairStatus, deleteCurrentAffair, listCurrentAffairCategories,
@@ -21,6 +21,8 @@ import { FormField } from "@/components/FormField";
 import { EmptyState } from "@/components/EmptyState";
 import { DataTable } from "@/components/DataTable";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate, slugify } from "@/lib/utils";
 
@@ -312,7 +314,7 @@ export function CurrentAffairsTab() {
     {
       accessorKey: "title",
       header: "Title",
-      cell: ({ row }) => <p className="font-semibold text-gray-900 text-sm">{row.original.title}</p>,
+      cell: ({ row }) => <TruncatedText text={row.original.title} className="font-semibold text-gray-900 text-sm max-w-[240px]" />,
     },
     {
       id: "category",
@@ -342,19 +344,19 @@ export function CurrentAffairsTab() {
         return (
           <div className="flex items-center gap-2 flex-wrap">
             {ca.status !== "published" && (
-              <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={() => statusMutation.mutate({ id: ca.id, status: "published" })}>
-                Publish
-              </Button>
+              <IconAction
+                label="Publish" icon={<CheckCircle2 className="h-3.5 w-3.5" />} className="text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                onClick={() => statusMutation.mutate({ id: ca.id, status: "published" })}
+              />
             )}
             {ca.status === "published" && (
-              <Button size="sm" variant="outline" onClick={() => statusMutation.mutate({ id: ca.id, status: "archived" })}>
-                Archive
-              </Button>
+              <IconAction label="Archive" icon={<Archive className="h-3.5 w-3.5" />} onClick={() => statusMutation.mutate({ id: ca.id, status: "archived" })} />
             )}
-            <Button size="sm" variant="outline" onClick={() => setEditing(ca)}>Edit</Button>
-            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm("Delete this current affair?")) deleteMutation.mutate(ca.id); }}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(ca)} />
+            <IconAction
+              label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              onClick={() => { if (confirm("Delete this current affair?")) deleteMutation.mutate(ca.id); }}
+            />
           </div>
         );
       },

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Search, Layers, Clock, Calendar, BookOpen, Lock, Activity, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Layers, Clock, Calendar, BookOpen, Lock, Activity, Pencil, Trash2, Eye } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createBatchSchema } from "@institute-os/shared";
@@ -20,6 +20,8 @@ import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
@@ -736,17 +738,17 @@ export function BatchesPage() {
       header: "Batch Name",
       cell: ({ row }) => (
         <button
-          className="font-medium text-gray-900 hover:text-[var(--color-primary,#C0392B)] transition-colors"
+          className="block max-w-[180px] text-left font-medium text-gray-900 hover:text-[var(--color-primary,#C0392B)] transition-colors"
           onClick={() => navigate(`/batches/${row.original.id}`)}
         >
-          {row.original.name}
+          <TruncatedText text={row.original.name} />
         </button>
       ),
     },
     {
       id: "course",
       header: "Course",
-      cell: ({ row }) => <span className="text-sm">{row.original.course.name}</span>,
+      cell: ({ row }) => <TruncatedText text={row.original.course.name} className="text-sm max-w-[160px]" />,
     },
     ...(isAllCenters ? [centerColumn] : []),
     {
@@ -776,22 +778,13 @@ export function BatchesPage() {
       header: "",
       cell: ({ row }) => (
         <div className="flex gap-2">
-          <Button
-            size="sm" variant="outline"
-            onClick={() => setEditing(row.original)}
-          >
-            <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => navigate(`/batches/${row.original.id}`)}>
-            View
-          </Button>
+          <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(row.original)} />
+          <IconAction label="View" icon={<Eye className="h-3.5 w-3.5" />} variant="ghost" onClick={() => navigate(`/batches/${row.original.id}`)} />
           {canDelete && (
-            <Button
-              size="sm" variant="ghost" className="text-red-600"
+            <IconAction
+              label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
               onClick={() => handleDelete(row.original)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            />
           )}
         </div>
       ),

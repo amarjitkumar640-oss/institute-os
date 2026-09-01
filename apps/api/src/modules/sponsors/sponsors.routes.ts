@@ -3,7 +3,7 @@ import multer from "multer";
 import {
   createSponsorSchema, updateSponsorSchema,
   createSponsorshipContractSchema, updateSponsorshipContractSchema,
-  createMilestoneSchema, markMilestoneReceivedSchema,
+  createMilestoneSchema, markMilestoneReceivedSchema, generateMonthlyMilestonesSchema,
 } from "@institute-os/shared";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/auth";
@@ -104,6 +104,22 @@ sponsorsRouter.post(
   async (req, res) => {
     try {
       res.status(201).json(await sponsorsService.createMilestone(prisma, req.params.contractId, req.auth!.tenantId, req.body));
+    } catch (err) {
+      if (err instanceof Error && err.message === "CONTRACT_NOT_FOUND") return res.status(404).json({ error: "Contract not found" });
+      throw err;
+    }
+  },
+);
+
+sponsorsRouter.post(
+  "/contracts/:contractId/milestones/generate-monthly",
+  requireAuth,
+  requirePermission("sponsors", "write"),
+  validateUuidParam("contractId"),
+  validateBody(generateMonthlyMilestonesSchema),
+  async (req, res) => {
+    try {
+      res.status(201).json(await sponsorsService.generateMonthlyMilestones(prisma, req.params.contractId, req.auth!.tenantId, req.body));
     } catch (err) {
       if (err instanceof Error && err.message === "CONTRACT_NOT_FOUND") return res.status(404).json({ error: "Contract not found" });
       throw err;

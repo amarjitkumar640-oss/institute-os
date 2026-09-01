@@ -15,8 +15,8 @@ import {
   listSessions, patchSession,
   type ClassSession, type SessionStatus,
   fmtTimeRange,
-  getSessionAttendance, setSessionAttendance as apiSetSessionAttendance,
-  type SessionAttendanceRow, type AttendanceStatus,
+  getSessionAttendance,
+  type SessionAttendanceRow,
 } from "../../api/classSchedule";
 import { listFaculty, type FacultyItem } from "../../api/faculty";
 import { listSubjects, type SubjectItem } from "../../api/subjects";
@@ -126,10 +126,6 @@ export function SessionDetailScreen({ route, navigation }: Props) {
 
   // Attendance
   const [roster, setRoster]                       = useState<SessionAttendanceRow[] | null>(null);
-  const [showAttendanceSheet, setShowAttendanceSheet] = useState(false);
-  const [pendingMarks, setPendingMarks]           = useState<Record<string, AttendanceStatus>>({});
-  const [savingAttendance, setSavingAttendance]   = useState(false);
-  const [attendanceError, setAttendanceError]     = useState<string | null>(null);
 
   useEffect(() => {
     if (!showFacultyPicker) return;
@@ -385,15 +381,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
             <TouchableOpacity
               style={sd.attendanceBtn}
               activeOpacity={0.75}
-              onPress={() => {
-                setPendingMarks(
-                  Object.fromEntries(
-                    roster.filter((r) => r.status !== null).map((r) => [r.studentId, r.status as AttendanceStatus]),
-                  ),
-                );
-                setAttendanceError(null);
-                setShowAttendanceSheet(true);
-              }}
+              onPress={() => navigation.navigate("TakeAttendance", { sessionId, sessionDate: session.scheduledDate, roster })}
             >
               <Ionicons
                 name={roster.every((r) => r.status === null) ? "people-outline" : "create-outline"}
@@ -696,87 +684,6 @@ export function SessionDetailScreen({ route, navigation }: Props) {
           </View>
       </BottomSheet>
 
-      {/* Attendance sheet — tall, since a roster can run long */}
-      <BottomSheet
-        visible={showAttendanceSheet}
-        onClose={() => setShowAttendanceSheet(false)}
-        maxHeight={SHEET_HEIGHT.tall}
-      >
-        <View style={sd.pickerSheet}>
-          <View style={sd.pickerHeader}>
-            <Text style={sd.pickerTitle}>Take Attendance</Text>
-            <TouchableOpacity onPress={() => setShowAttendanceSheet(false)} style={sd.pickerClose}>
-              <Ionicons name="close" size={ms(20)} color={C.text} />
-            </TouchableOpacity>
-          </View>
-
-          {attendanceError && (
-            <View style={[sd.errorBox, { marginHorizontal: ms(12), marginTop: ms(8) }]}>
-              <Ionicons name="alert-circle-outline" size={ms(14)} color={C.red} />
-              <Text style={sd.errorT}>{attendanceError}</Text>
-            </View>
-          )}
-
-          <FlatList
-            data={roster ?? []}
-            keyExtractor={(r) => r.studentId}
-            contentContainerStyle={{ padding: ms(12), gap: ms(8) }}
-            renderItem={({ item }) => {
-              const mark     = pendingMarks[item.studentId];
-              const color    = avatarColor(item.fullName, colors);
-              const initials = getInitials(item.fullName);
-              return (
-                <View style={sd.attendanceRow}>
-                  <View style={[sd.facultyAvatar, { backgroundColor: color + "22" }]}>
-                    <Text style={[sd.facultyInitials, { color }]}>{initials}</Text>
-                  </View>
-                  <Text style={sd.attendanceRowName} numberOfLines={1}>{item.fullName}</Text>
-                  <View style={sd.attendanceToggle}>
-                    <TouchableOpacity
-                      style={[sd.attendanceToggleBtn, mark === "present" && { backgroundColor: C.green, borderColor: C.green }]}
-                      onPress={() => setPendingMarks((p) => ({ ...p, [item.studentId]: "present" }))}
-                    >
-                      <Text style={[sd.attendanceToggleT, mark === "present" && { color: "#fff" }]}>Present</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[sd.attendanceToggleBtn, mark === "absent" && { backgroundColor: C.red, borderColor: C.red }]}
-                      onPress={() => setPendingMarks((p) => ({ ...p, [item.studentId]: "absent" }))}
-                    >
-                      <Text style={[sd.attendanceToggleT, mark === "absent" && { color: "#fff" }]}>Absent</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            }}
-          />
-
-          <View style={sd.attendanceSaveWrap}>
-            <TouchableOpacity
-              style={[sd.attendanceSaveBtn, savingAttendance && { opacity: 0.6 }]}
-              disabled={savingAttendance}
-              onPress={async () => {
-                setSavingAttendance(true);
-                setAttendanceError(null);
-                try {
-                  const marks = Object.entries(pendingMarks).map(([studentId, status]) => ({ studentId, status }));
-                  const updated = await apiSetSessionAttendance(sessionId, marks);
-                  setRoster(updated);
-                  setShowAttendanceSheet(false);
-                } catch {
-                  setAttendanceError("Could not save attendance");
-                } finally {
-                  setSavingAttendance(false);
-                }
-              }}
-            >
-              {savingAttendance
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={sd.attendanceSaveBtnT}>Save Attendance</Text>
-              }
-            </TouchableOpacity>
-          </View>
-        </View>
-      </BottomSheet>
     </SafeAreaView>
   );
 }
@@ -943,22 +850,4 @@ const makeSdStyles = (colors: ThemeColors) => StyleSheet.create({
   // for full-width primary CTAs; this is a small tinted pill button, so it
   // belongs in the "compact action-row button label" bucket → chipText.
   attendanceBtnT: { ...T.chipText, color: colors.primary },
-  attendanceRow: {
-    flexDirection: "row", alignItems: "center", gap: ms(10),
-    padding: ms(10), borderRadius: ms(12),
-    borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
-  },
-  attendanceRowName: { flex: 1, ...T.body, color: C.text },
-  attendanceToggle:  { flexDirection: "row", gap: ms(6) },
-  attendanceToggleBtn: {
-    paddingHorizontal: ms(10), paddingVertical: ms(7), borderRadius: ms(8),
-    borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg,
-  },
-  attendanceToggleT: { ...T.chipText, color: C.muted },
-  attendanceSaveWrap: { padding: ms(14), borderTopWidth: 1, borderTopColor: C.border },
-  attendanceSaveBtn: {
-    height: ms(48), borderRadius: ms(12), backgroundColor: colors.primary,
-    alignItems: "center", justifyContent: "center",
-  },
-  attendanceSaveBtnT: { ...T.buttonText, color: "#fff" },
 });

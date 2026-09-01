@@ -8,6 +8,7 @@ import { T } from "./typography";
 
 interface Props {
   title:             string;
+  subtitle?:         string;
   count?:            number;
   countLabel?:       string;
   onBack:            () => void;
@@ -17,7 +18,7 @@ interface Props {
   heroIllustration?: React.ReactNode;
 }
 
-export function ScreenHeader({ title, count, countLabel = "total", onBack, rightIcon, onRight, right }: Props) {
+export function ScreenHeader({ title, subtitle, count, countLabel = "total", onBack, rightIcon, onRight, right }: Props) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
 
@@ -43,7 +44,10 @@ export function ScreenHeader({ title, count, countLabel = "total", onBack, right
         <Ionicons name="arrow-back" size={ms(20)} color={iconColor} />
       </TouchableOpacity>
 
-      <Text style={[s.title, { color: iconColor }]} numberOfLines={1}>{title}</Text>
+      <View style={s.titleWrap}>
+        <Text style={[s.title, { color: iconColor }]} numberOfLines={1}>{title}</Text>
+        {subtitle && <Text style={[s.subtitle, { color: iconColor }]} numberOfLines={1}>{subtitle}</Text>}
+      </View>
 
       {count !== undefined && (
         <View style={[s.badge, { backgroundColor: iconColor + "18" }]}>
@@ -83,10 +87,17 @@ const s = StyleSheet.create({
     alignItems:     "center",
     flexShrink:     0,
   },
-  title: {
-    ...T.screenTitle,
+  titleWrap: {
     flex:     1,
     minWidth: 0,
+  },
+  title: {
+    ...T.screenTitle,
+  },
+  subtitle: {
+    ...T.caption,
+    opacity:  0.85,
+    marginTop: ms(1),
   },
   badge: {
     borderRadius:      ms(20),
