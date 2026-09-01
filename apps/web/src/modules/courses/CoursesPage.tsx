@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
 import {
   Plus, Search, BookOpen, Trash2, Clock, Wallet,
-  LayoutList, ChevronUp, ChevronDown, PlusCircle,
+  LayoutList, ChevronUp, ChevronDown, PlusCircle, Pencil,
 } from "lucide-react";
 import { listCourses, createCourse, updateCourse, deleteCourse, type Course } from "@/api/courses";
 import { listExamCategories } from "@/api/subjects";
@@ -20,6 +20,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { formatCurrency } from "@/lib/utils";
@@ -718,8 +720,8 @@ export function CoursesPage() {
       accessorKey: "name",
       header: "Course Name",
       cell: ({ row }) => (
-        <div>
-          <p className="font-semibold text-gray-900 text-sm">{row.original.name}</p>
+        <div className="min-w-0 max-w-[220px]">
+          <TruncatedText text={row.original.name} className="font-semibold text-gray-900 text-sm" />
           {row.original.examCategories.length === 0 && (
             <p className="text-xs text-gray-400">General</p>
           )}
@@ -774,28 +776,18 @@ export function CoursesPage() {
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
+          <IconAction
+            label="Fee Structure" icon={<LayoutList className="h-3.5 w-3.5" />}
             className="text-green-700 border-green-200 hover:bg-green-50 hover:border-green-300"
             onClick={() => setFeeStructureCourse(row.original)}
-          >
-            <LayoutList className="h-3.5 w-3.5 mr-1" />
-            Fee Structure
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setEditing(row.original)}>
-            Edit
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-red-600 hover:bg-red-50"
+          />
+          <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(row.original)} />
+          <IconAction
+            label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
             onClick={() => {
               if (confirm("Delete this course?")) deleteMutation.mutate(row.original.id);
             }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          />
         </div>
       ),
     },

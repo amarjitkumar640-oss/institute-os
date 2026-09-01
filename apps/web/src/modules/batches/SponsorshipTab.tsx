@@ -26,6 +26,8 @@ function LinkSponsorForm({ batchId, sponsors, invalidateKey }: { batchId: string
   const [totalContractAmount, setTotalContractAmount] = useState("");
   const [gstRate, setGstRate] = useState("18");
   const [gstExempt, setGstExempt] = useState(false);
+  const [tdsRate, setTdsRate] = useState("8");
+  const [tdsExempt, setTdsExempt] = useState(true);
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState<string | undefined>();
 
@@ -36,6 +38,7 @@ function LinkSponsorForm({ batchId, sponsors, invalidateKey }: { batchId: string
       contractedStudentCount: Number(contractedStudentCount),
       totalContractAmount: Number(totalContractAmount),
       gstRate: gstExempt ? null : Number(gstRate),
+      tdsRate: tdsExempt ? null : Number(tdsRate),
       startDate,
     }),
     onSuccess: () => {
@@ -89,6 +92,18 @@ function LinkSponsorForm({ batchId, sponsors, invalidateKey }: { batchId: string
           GST exempt
         </label>
       </div>
+      <div className="grid grid-cols-2 gap-4 items-end">
+        <FormField label="TDS Rate (%)">
+          <Input type="number" min={0} max={100} value={tdsRate} disabled={tdsExempt} onChange={(e) => setTdsRate(e.target.value)} />
+        </FormField>
+        <label className="flex items-center gap-2 text-sm text-gray-600 pb-2">
+          <input type="checkbox" checked={tdsExempt} onChange={(e) => setTdsExempt(e.target.checked)} />
+          No TDS deducted
+        </label>
+      </div>
+      <p className="text-xs text-gray-400 -mt-2">
+        If the sponsor deducts TDS before paying, set the rate here — every invoice will show the deduction and the net amount you'll actually receive.
+      </p>
       <FormField label="Start Date" required>
         <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
       </FormField>
@@ -132,6 +147,7 @@ export function SponsorshipTab({ batchId }: { batchId: string }) {
             <p className="text-xs text-gray-400 mt-0.5">
               {contract.contractedStudentCount} students · {formatCurrency(contract.totalContractAmount)} contract
               {contract.gstRate ? ` · ${contract.gstRate}% GST` : " · GST exempt"}
+              {contract.tdsRate ? ` · ${contract.tdsRate}% TDS` : ""}
             </p>
           </div>
           <Badge variant={contract.status === "active" ? "success" : contract.status === "cancelled" ? "danger" : "default"}>

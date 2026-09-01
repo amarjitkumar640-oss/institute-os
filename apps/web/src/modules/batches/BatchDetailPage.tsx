@@ -34,6 +34,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FormField } from "@/components/FormField";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { type ColumnDef } from "@tanstack/react-table";
@@ -51,10 +53,6 @@ const STATUS_COLORS: Record<string, "default" | "success" | "info" | "warning"> 
 };
 
 const DAY_OPTIONS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
-const DAY_LABELS: Record<string, string> = {
-  monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu",
-  friday: "Fri", saturday: "Sat", sunday: "Sun",
-};
 
 // ── Edit Batch ─────────────────────────────────────────────────────────────────
 
@@ -263,19 +261,20 @@ interface SlotFormData {
 }
 
 function SlotFormDialog({
-  batchId, slot, open, onClose,
+  batchId, slot, open, onClose, defaultDay,
 }: {
   batchId: string;
   slot?: ClassSlot;
   open: boolean;
   onClose: () => void;
+  defaultDay?: string;
 }) {
   const qc = useQueryClient();
   const isEdit = !!slot;
   const today = new Date().toISOString().slice(0, 10);
 
   const [form, setForm] = useState<SlotFormData>(() => ({
-    dayOfWeek: slot?.dayOfWeek ?? "monday",
+    dayOfWeek: slot?.dayOfWeek ?? defaultDay ?? "monday",
     startTime: slot?.startTime ?? "09:00",
     endTime:   slot?.endTime   ?? "10:30",
     subjectId: slot?.subject?.id ?? "",
@@ -526,7 +525,7 @@ function ScheduleTab({ batchId }: { batchId: string }) {
   const [to,             setTo]             = useState(thirtyDaysLater);
   const [genFrom,        setGenFrom]        = useState(today);
   const [genTo,          setGenTo]          = useState(thirtyDaysLater);
-  const [slotDialog,     setSlotDialog]     = useState<{ open: boolean; slot?: ClassSlot }>({ open: false });
+  const [slotDialog,     setSlotDialog]     = useState<{ open: boolean; slot?: ClassSlot; defaultDay?: string }>({ open: false });
   const [showAddSession, setShowAddSession] = useState(false);
   const [deletingSlotId, setDeletingSlotId] = useState<string | null>(null);
   const [reassignTarget, setReassignTarget] = useState<ClassSession | null>(null);
@@ -602,17 +601,17 @@ function ScheduleTab({ batchId }: { batchId: string }) {
     {
       id: "subject",
       header: "Subject",
-      cell: ({ row }) => row.original.subject?.name ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.subject?.name} className="max-w-[140px]" />,
     },
     {
       id: "faculty",
       header: "Faculty",
-      cell: ({ row }) => row.original.faculty?.fullName ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.faculty?.fullName} className="max-w-[140px]" />,
     },
     {
       id: "room",
       header: "Room",
-      cell: ({ row }) => row.original.room ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.room} className="max-w-[100px]" />,
     },
     {
       id: "actions",
@@ -682,28 +681,42 @@ function ScheduleTab({ batchId }: { batchId: string }) {
           </div>
         ) : (
           <div className="rounded-lg border border-gray-100 divide-y divide-gray-100 overflow-hidden">
-            {(slots ?? []).map((slot) => (
-              <div key={slot.id} className="flex items-center gap-4 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
-                <span className="w-10 text-xs font-bold text-gray-500 uppercase">{DAY_LABELS[slot.dayOfWeek]}</span>
-                <span className="text-sm font-medium text-gray-800 w-32">{slot.startTime} – {slot.endTime}</span>
-                <span className="text-sm text-gray-500 flex-1">
-                  {slot.subject?.name && <span className="mr-3">{slot.subject.name}</span>}
-                  {slot.faculty?.fullName && <span className="text-gray-400">{slot.faculty.fullName}</span>}
-                  {slot.room && <span className="ml-3 text-gray-400">· {slot.room}</span>}
-                  {!slot.subject?.name && !slot.faculty?.fullName && !slot.room && <span className="text-gray-300">No subject or faculty</span>}
-                </span>
-                {!slot.isActive && <Badge variant="default">Inactive</Badge>}
-                <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => setSlotDialog({ open: true, slot })}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    size="sm" variant="ghost" className="text-red-500 hover:text-red-700"
-                    disabled={deletingSlotId === slot.id}
-                    onClick={() => handleDeleteSlot(slot.id)}
+            {DAY_OPTIONS.filter((day) => (slots ?? []).some((s) => s.dayOfWeek === day)).map((day) => (
+              <div key={day} className="flex items-center gap-3 px-4 py-3 bg-white flex-wrap">
+                <span className="w-24 shrink-0 text-sm font-semibold text-gray-800 capitalize">{day}</span>
+                <div className="flex items-center gap-2 flex-wrap flex-1">
+                  {(slots ?? []).filter((s) => s.dayOfWeek === day).map((slot) => (
+                    <div
+                      key={slot.id}
+                      className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 pl-3 pr-1.5 py-1.5"
+                    >
+                      <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                      <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{slot.startTime} – {slot.endTime}</span>
+                      {slot.room && <span className="text-xs text-gray-400 whitespace-nowrap">{slot.room}</span>}
+                      {(slot.subject?.name || slot.faculty?.fullName) && (
+                        <span className="text-xs text-gray-400 truncate max-w-[140px]">
+                          {[slot.subject?.name, slot.faculty?.fullName].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
+                      {!slot.isActive && <Badge variant="default">Inactive</Badge>}
+                      <div className="flex gap-0.5 ml-1">
+                        <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} variant="ghost" onClick={() => setSlotDialog({ open: true, slot })} />
+                        <IconAction
+                          label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          disabled={deletingSlotId === slot.id}
+                          onClick={() => handleDeleteSlot(slot.id)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSlotDialog({ open: true, defaultDay: day })}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors"
+                    title={`Add a slot on ${day}`}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -758,6 +771,7 @@ function ScheduleTab({ batchId }: { batchId: string }) {
         <SlotFormDialog
           batchId={batchId}
           slot={slotDialog.slot}
+          defaultDay={slotDialog.defaultDay}
           open={slotDialog.open}
           onClose={() => setSlotDialog({ open: false })}
         />
@@ -826,8 +840,8 @@ export function BatchDetailPage() {
       accessorKey: "fullName",
       header: "Name",
       cell: ({ row }) => (
-        <button className="font-medium text-gray-900 hover:text-[var(--color-primary,#C0392B)]" onClick={() => navigate(`/students/${row.original.id}`)}>
-          {row.original.fullName}
+        <button className="block max-w-[180px] text-left font-medium text-gray-900 hover:text-[var(--color-primary,#C0392B)]" onClick={() => navigate(`/students/${row.original.id}`)}>
+          <TruncatedText text={row.original.fullName} />
         </button>
       ),
     },

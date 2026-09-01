@@ -36,6 +36,7 @@ export interface SponsorshipContract {
   contractedStudentCount: number;
   totalContractAmount: number;
   gstRate: number | null;
+  tdsRate: number | null;
   startDate: string;
   endDate: string | null;
   status: "active" | "completed" | "cancelled";
@@ -56,6 +57,7 @@ export interface CreateContractPayload {
   contractedStudentCount: number;
   totalContractAmount: number;
   gstRate?: number | null;
+  tdsRate?: number | null;
   startDate: string;
   endDate?: string | null;
   notes?: string;
@@ -67,6 +69,8 @@ export interface Milestone {
   label: string;
   amount: number;
   dueDate: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
   status: "pending" | "received";
   receivedAt: string | null;
   receivedAmount: number | null;
@@ -82,6 +86,13 @@ export interface CreateMilestonePayload {
   notes?: string;
 }
 
+export interface GenerateMonthlyMilestonesPayload {
+  monthlyAmount: number;
+  numberOfMonths: number;
+  startMonth: string;
+  labelPrefix?: string;
+}
+
 export interface SponsorInvoice {
   id: string;
   contractId: string;
@@ -94,6 +105,9 @@ export interface SponsorInvoice {
   sgstAmount: number;
   igstAmount: number;
   totalAmount: number;
+  tdsRate: number | null;
+  tdsAmount: number;
+  netReceivableAmount: number;
   shareToken: string;
   createdAt: string;
 }
@@ -144,6 +158,11 @@ export async function uploadContractDocument(contractId: string, file: File): Pr
 
 export async function createMilestone(contractId: string, payload: CreateMilestonePayload): Promise<Milestone> {
   const { data } = await apiClient.post<Milestone>(`/api/sponsors/contracts/${contractId}/milestones`, payload);
+  return data;
+}
+
+export async function generateMonthlyMilestones(contractId: string, payload: GenerateMonthlyMilestonesPayload): Promise<Milestone[]> {
+  const { data } = await apiClient.post<Milestone[]>(`/api/sponsors/contracts/${contractId}/milestones/generate-monthly`, payload);
   return data;
 }
 

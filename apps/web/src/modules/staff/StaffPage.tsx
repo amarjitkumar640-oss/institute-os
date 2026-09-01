@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Search, UserCog, Key, Building2, X } from "lucide-react";
+import { Plus, Search, UserCog, Key, Building2, X, Pencil } from "lucide-react";
 import { useForm, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,6 +17,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toast } from "@/components/ui/use-toast";
 import { formatDate, initials } from "@/lib/utils";
 
@@ -401,8 +403,8 @@ export function StaffPage() {
               {initials(row.original.fullName)}
             </div>
           )}
-          <div>
-            <p className="font-semibold text-gray-900 text-sm">{row.original.fullName}</p>
+          <div className="min-w-0 max-w-[160px]">
+            <TruncatedText text={row.original.fullName} className="font-semibold text-gray-900 text-sm" />
             <p className="text-xs text-gray-400">{row.original.phone}</p>
           </div>
         </div>
@@ -423,9 +425,9 @@ export function StaffPage() {
       id: "centers",
       header: "Centers",
       cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 max-w-[160px]">
           {row.original.centerAssignments.slice(0, 2).map((ca, i) => (
-            <span key={i} className="text-xs text-gray-500">{ca.center.name}</span>
+            <TruncatedText key={i} text={ca.center.name} className="text-xs text-gray-500 max-w-[150px]" />
           ))}
           {row.original.centerAssignments.length === 0 && <span className="text-xs text-gray-400">None</span>}
         </div>
@@ -451,13 +453,9 @@ export function StaffPage() {
       header: "",
       cell: ({ row }) => (
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setEditing(row.original)}>Edit</Button>
-          <Button size="sm" variant="ghost" onClick={() => setManagingCenters(row.original)} title="Manage Centers">
-            <Building2 className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setResettingPassword(row.original.id)} title="Reset Password">
-            <Key className="h-4 w-4" />
-          </Button>
+          <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(row.original)} />
+          <IconAction label="Manage Centers" icon={<Building2 className="h-3.5 w-3.5" />} variant="ghost" onClick={() => setManagingCenters(row.original)} />
+          <IconAction label="Reset Password" icon={<Key className="h-3.5 w-3.5" />} variant="ghost" onClick={() => setResettingPassword(row.original.id)} />
         </div>
       ),
     },

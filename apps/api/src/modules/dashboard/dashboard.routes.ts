@@ -251,6 +251,10 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
       where: {
         classSession: {
           scheduledDate: { gte: todayStart, lte: todayEnd },
+          // Cancelling a session doesn't purge any marks already recorded
+          // against it (patchSession is a plain field update) — exclude it
+          // here so a holiday/cancelled class can never skew this stat.
+          status: { not: "cancelled" },
           batch: { tenantId: cFilter.tenantId, centerId: cFilter.centerId },
         },
       },
@@ -260,6 +264,7 @@ dashboardRouter.get("/", requireAuth, async (req, res) => {
         status: "present",
         classSession: {
           scheduledDate: { gte: todayStart, lte: todayEnd },
+          status: { not: "cancelled" },
           batch: { tenantId: cFilter.tenantId, centerId: cFilter.centerId },
         },
       },

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2, GripVertical, Star, Tags } from "lucide-react";
+import { Plus, Trash2, GripVertical, Star, Tags, Pencil } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { FormField } from "@/components/FormField";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
 import { toast } from "@/components/ui/use-toast";
 
 function extractError(err: unknown): string {
@@ -164,10 +165,8 @@ function SortableRow({
       <Badge variant={category.priority === "primary" ? "default" : "outline"}>{category.priority}</Badge>
       {!category.isVisible && <Badge variant="warning">hidden</Badge>}
 
-      <Button size="sm" variant="outline" onClick={onEdit}>Edit</Button>
-      <Button size="sm" variant="ghost" className="text-red-600" onClick={onDelete}>
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={onEdit} />
+      <IconAction label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={onDelete} />
     </div>
   );
 }

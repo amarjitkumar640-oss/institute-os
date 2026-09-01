@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Search, GraduationCap, Trash2, CheckCircle, Eye, EyeOff } from "lucide-react";
+import { Plus, Search, GraduationCap, Trash2, CheckCircle, Eye, EyeOff, Pencil } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createFacultySchema } from "@institute-os/shared";
@@ -16,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { DataTable } from "@/components/DataTable";
+import { IconAction } from "@/components/ui/icon-action";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -380,23 +382,30 @@ export function FacultyPage() {
           >
             {initials(row.original.fullName)}
           </div>
-          <div>
-            <p className="font-semibold text-gray-900 text-sm">{row.original.fullName}</p>
-            <p className="text-xs text-gray-400">{row.original.email}</p>
+          <div className="min-w-0 max-w-[180px]">
+            <TruncatedText text={row.original.fullName} className="font-semibold text-gray-900 text-sm" />
+            <TruncatedText text={row.original.email} className="text-xs text-gray-400" />
           </div>
         </div>
       ),
     },
     { accessorKey: "phone", header: "Phone" },
-    { accessorKey: "qualification", header: "Qualification" },
+    {
+      accessorKey: "qualification",
+      header: "Qualification",
+      cell: ({ row }) => <TruncatedText text={row.original.qualification} className="text-sm max-w-[160px]" />,
+    },
     {
       id: "subjects",
       header: "Subjects",
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1">
-          {(row.original.subjects ?? []).slice(0, 2).map((s) => (
-            <Badge key={s.id} variant="info">{s.name}</Badge>
-          ))}
+          {(row.original.subjects ?? []).slice(0, 2).map((s) => {
+            const color = s.examCategories?.[0]?.color ?? "#6B7280";
+            return (
+              <Badge key={s.id} style={{ background: color + "18", color }}>{s.name}</Badge>
+            );
+          })}
           {(row.original.subjects ?? []).length > 2 && (
             <Badge variant="default">+{row.original.subjects.length - 2}</Badge>
           )}
@@ -435,13 +444,11 @@ export function FacultyPage() {
       header: "",
       cell: ({ row }) => (
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setEditing(row.original)}>Edit</Button>
-          <Button
-            size="sm" variant="ghost" className="text-red-600"
+          <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(row.original)} />
+          <IconAction
+            label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
             onClick={() => { if (confirm("Remove this faculty?")) deleteMutation.mutate(row.original.id); }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          />
         </div>
       ),
     },

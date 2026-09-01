@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Plus, Search, GraduationCap, Trash2 } from "lucide-react";
+import { Plus, Search, GraduationCap, Trash2, Pencil } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createSubjectSchema } from "@institute-os/shared";
@@ -9,13 +9,13 @@ import { type z } from "zod";
 import { listSubjects, createSubject, updateSubject, deleteSubject, listExamCategories, type Subject } from "@/api/subjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconAction } from "@/components/ui/icon-action";
 import { toast } from "@/components/ui/use-toast";
 
 type SubjectForm = z.infer<typeof createSubjectSchema>;
@@ -114,7 +114,13 @@ export function SubjectsPage() {
         return (
           <div className="flex flex-wrap gap-1">
             {cats.length === 0 ? "—" : cats.map((ec) => (
-              <Badge key={ec.id} variant="info">{ec.label}</Badge>
+              <span
+                key={ec.id}
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
+                style={{ background: ec.color + "18", color: ec.color }}
+              >
+                {ec.label}
+              </span>
             ))}
           </div>
         );
@@ -130,13 +136,11 @@ export function SubjectsPage() {
       header: "",
       cell: ({ row }) => (
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setEditing(row.original)}>Edit</Button>
-          <Button
-            size="sm" variant="ghost" className="text-red-600"
+          <IconAction label="Edit" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(row.original)} />
+          <IconAction
+            label="Delete" icon={<Trash2 className="h-3.5 w-3.5" />} variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50"
             onClick={() => { if (confirm("Delete this subject?")) deleteMutation.mutate(row.original.id); }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          />
         </div>
       ),
     },
