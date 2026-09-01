@@ -6,9 +6,17 @@ import { resetDb } from "./setup";
 import { normalizePhone } from "@institute-os/shared";
 import { login } from "../modules/auth/auth.service";
 import { requestPasswordReset, resetPassword, validateResetCode } from "../modules/auth/auth.service";
+import { resolveWebAppUrl } from "../modules/auth/auth.routes";
+import { env } from "../lib/env";
 
 const TENANT_ID = "33333333-3333-3333-3333-333333333333";
 const PASSWORD = "oldpassword123";
+// Passed explicitly everywhere below instead of relying on env.WEB_APP_URL's
+// default (see auth.routes.ts's resolveWebAppUrl) — production once shipped
+// with that default silently pointing at localhost because the real value
+// was never configured; the fix derives it from the request's Origin header
+// instead, so tests exercise that same explicit-argument shape.
+const WEB_APP_URL = "https://app.test.example";
 
 async function seedTenant(loginMethod: "phone" | "email_username") {
   return prisma.tenant.upsert({
@@ -42,7 +50,7 @@ describe("password reset", () => {
     await seedTenant("email_username");
     await seedStaff();
 
-    await requestPasswordReset(TENANT_ID, "reset@test.com");
+    await requestPasswordReset(TENANT_ID, "reset@test.com", WEB_APP_URL);
     const token = await prisma.passwordResetToken.findFirst({ where: { channel: "email" } });
     expect(token).not.toBeNull();
     expect(token!.usedAt).toBeNull();
@@ -55,14 +63,14 @@ describe("password reset", () => {
     await seedTenant("phone");
     await seedStaff();
 
-    await requestPasswordReset(TENANT_ID, "9876500000");
+    await requestPasswordReset(TENANT_ID, "9876500000", WEB_APP_URL);
     const token = await prisma.passwordResetToken.findFirst({ where: { channel: "sms" } });
     expect(token).not.toBeNull();
   });
 
   it("does nothing and never throws for an unknown identifier", async () => {
     await seedTenant("email_username");
-    await expect(requestPasswordReset(TENANT_ID, "nobody@nowhere.com")).resolves.toBe("not-found");
+    await expect(requestPasswordReset(TENANT_ID, "nobody@nowhere.com", WEB_APP_URL)).resolves.toBe("not-found");
     const count = await prisma.passwordResetToken.count();
     expect(count).toBe(0);
   });
@@ -72,7 +80,7 @@ describe("password reset", () => {
     // exercising the exact "account exists, but delivery broke" path.
     await seedTenant("email_username");
     await seedStaff();
-    const result = await requestPasswordReset(TENANT_ID, "reset@test.com");
+    const result = await requestPasswordReset(TENANT_ID, "reset@test.com", WEB_APP_URL);
     expect(result).toBe("delivery-failed");
     const token = await prisma.passwordResetToken.findFirst();
     expect(token).not.toBeNull();
@@ -81,7 +89,7 @@ describe("password reset", () => {
   it("rejects reset with a wrong code", async () => {
     await seedTenant("email_username");
     await seedStaff();
-    await requestPasswordReset(TENANT_ID, "reset@test.com");
+    await requestPasswordReset(TENANT_ID, "reset@test.com", WEB_APP_URL);
 
     const ok = await resetPassword(TENANT_ID, "reset@test.com", "not-the-real-code", "newpassword123");
     expect(ok).toBe(false);
@@ -147,6 +155,51 @@ describe("password reset", () => {
       .send({ tenantId: TENANT_ID, identifier: "reset@test.com" });
     expect(res.status).toBe(502);
     expect(res.body.error).toBeTruthy();
+  });
+
+  // Regression coverage for the production incident this fixed: WEB_APP_URL's
+  // default silently pointed at localhost because nobody had configured the
+  // real value for that deploy. The reset link is now derived from the
+  // request's own Referer/Origin instead, so it's automatically correct for
+  // whichever environment actually sent the request — nothing to configure.
+  // Tested directly against the pure helper rather than through the full
+  // route + email pipeline, since @react-email/render is mocked to a fixed
+  // string in tests (see __mocks__/@react-email/render.ts) and can't be used
+  // to observe what URL was actually passed in.
+  describe("resolveWebAppUrl", () => {
+    function reqWith(headers: Record<string, string | undefined>) {
+      return { headers } as unknown as import("express").Request;
+    }
+
+    it("prefers Referer over Origin, since Referer carries the path a shared-domain deployment needs", () => {
+      const req = reqWith({ origin: "https://thesuccess.in", referer: "https://thesuccess.in/qa/login" });
+      expect(resolveWebAppUrl(req)).toBe("https://thesuccess.in/qa");
+    });
+
+    it("strips a trailing /login off the Referer's path (prod: no prefix)", () => {
+      const req = reqWith({ referer: "https://thesuccess.in/login" });
+      expect(resolveWebAppUrl(req)).toBe("https://thesuccess.in");
+    });
+
+    it("strips a trailing /login off the Referer's path (QA: /qa prefix, same domain as prod)", () => {
+      const req = reqWith({ referer: "https://thesuccess.in/qa/login" });
+      expect(resolveWebAppUrl(req)).toBe("https://thesuccess.in/qa");
+    });
+
+    it("falls back to the Origin header when there's no Referer", () => {
+      const req = reqWith({ origin: "https://the-real-production-domain.example" });
+      expect(resolveWebAppUrl(req)).toBe("https://the-real-production-domain.example");
+    });
+
+    it("falls back to env.WEB_APP_URL when neither Referer nor Origin is present (e.g. a non-browser caller)", () => {
+      const req = reqWith({});
+      expect(resolveWebAppUrl(req)).toBe(env.WEB_APP_URL);
+    });
+
+    it("falls back to Origin when the Referer is malformed", () => {
+      const req = reqWith({ referer: "not a url", origin: "https://thesuccess.in" });
+      expect(resolveWebAppUrl(req)).toBe("https://thesuccess.in");
+    });
   });
 
   it("POST /api/auth/reset-password 400s on an invalid code", async () => {
