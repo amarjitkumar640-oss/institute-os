@@ -271,12 +271,20 @@ export function ApplyPage() {
     <div className="min-h-screen bg-[#F9F8FE] py-6 sm:py-10 px-3 sm:px-4">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-5 px-1">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-2xl text-white font-bold text-sm shrink-0"
-            style={{ background: `linear-gradient(135deg, ${primary}, ${primary}cc)` }}
-          >
-            {tenant.name.slice(0, 2).toUpperCase()}
-          </div>
+          {tenant.branding.logoUrl ? (
+            <img
+              src={tenant.branding.logoUrl}
+              alt={tenant.name}
+              className="h-10 w-10 rounded-2xl object-cover shrink-0 border border-black/5"
+            />
+          ) : (
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-2xl text-white font-bold text-sm shrink-0"
+              style={{ background: `linear-gradient(135deg, ${primary}, ${primary}cc)` }}
+            >
+              {tenant.name.slice(0, 2).toUpperCase()}
+            </div>
+          )}
           <div>
             <p className="text-sm font-bold text-gray-900 leading-tight">{tenant.name}</p>
             <p className="text-xs text-gray-400 leading-tight">Admission Application</p>
