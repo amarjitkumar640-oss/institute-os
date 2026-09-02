@@ -60,6 +60,11 @@ function burstConfetti(originEl: HTMLElement, colors: string[]) {
 export function DownloadPage() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [downloading, setDownloading] = useState(false);
+  // Percent while the total size is known from Content-Length; null while
+  // not downloading; "indeterminate" for the rare case a proxy strips that
+  // header, so the bar can still say *something* is happening.
+  const [downloadProgress, setDownloadProgress] = useState<number | "indeterminate" | null>(null);
+  const [downloadError, setDownloadError] = useState(false);
   const downloadBtnRef = useRef<HTMLButtonElement>(null);
   // Staff (Admin/Teacher/Frontdesk) is the only build that exists today —
   // Student is future scope, selecting it just surfaces the same "Coming
@@ -107,17 +112,58 @@ export function DownloadPage() {
 
   async function handleDownload() {
     setDownloading(true);
+    setDownloadError(false);
+    setDownloadProgress(0);
     try {
       // The signed URL expires (30 min server-side) — get a fresh one right
       // before downloading rather than trusting whatever was fetched when
       // the page first loaded, in case the visitor sat on this page a while.
       const { data: fresh } = await refetch();
-      if (fresh) {
-        if (downloadBtnRef.current) burstConfetti(downloadBtnRef.current, [primary, secondary, accent]);
-        window.location.href = fresh.downloadUrl;
+      if (!fresh) return;
+
+      if (downloadBtnRef.current) burstConfetti(downloadBtnRef.current, [primary, secondary, accent]);
+
+      // fetch() + a streamed reader (instead of a plain navigation) is what
+      // lets us show real percentage progress for a ~120MB file — the S3
+      // bucket already allows cross-origin GETs (Access-Control-Allow-Origin: *),
+      // so this works without a proxy. The tradeoff: the whole file is held
+      // in memory as a Blob before it can be saved, unlike a native download
+      // which streams straight to disk. Acceptable at this file size.
+      const res = await fetch(fresh.downloadUrl);
+      if (!res.ok || !res.body) throw new Error(`Download failed: ${res.status}`);
+
+      const totalStr = res.headers.get("Content-Length");
+      const total = totalStr ? Number(totalStr) : 0;
+      if (!total) setDownloadProgress("indeterminate");
+
+      const reader = res.body.getReader();
+      const chunks: BlobPart[] = [];
+      let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.byteLength;
+        if (total) setDownloadProgress(Math.min(99, Math.round((received / total) * 100)));
       }
+      setDownloadProgress(100);
+
+      const blob = new Blob(chunks, { type: "application/vnd.android.package-archive" });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${tenantSlug}-v${release?.versionName ?? "latest"}.apk`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Give the browser's save dialog a moment to pick up the blob before
+      // the URL is revoked out from under it.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+    } catch {
+      setDownloadError(true);
     } finally {
       setDownloading(false);
+      setTimeout(() => setDownloadProgress(null), 1500);
     }
   }
 
@@ -285,12 +331,37 @@ export function DownloadPage() {
                   ref={downloadBtnRef}
                   onClick={handleDownload}
                   disabled={downloading}
-                  className="w-full h-12 rounded-2xl font-bold text-white flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-[0.98] disabled:opacity-70"
+                  className="relative w-full h-12 rounded-2xl font-bold text-white flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-[0.98] disabled:opacity-100 overflow-hidden"
                   style={{ background: `linear-gradient(135deg, ${primary}, color-mix(in srgb, ${primary} 70%, black))` }}
                 >
-                  {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                  Download APK
+                  {typeof downloadProgress === "number" && (
+                    <span
+                      className="absolute inset-y-0 left-0 bg-white/25 transition-[width] duration-200 ease-out"
+                      style={{ width: `${downloadProgress}%` }}
+                    />
+                  )}
+                  <span className="relative flex items-center justify-center gap-2">
+                    {downloading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {downloadProgress === "indeterminate"
+                          ? "Downloading…"
+                          : `Downloading… ${downloadProgress ?? 0}%`}
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        Download APK
+                      </>
+                    )}
+                  </span>
                 </button>
+
+                {downloadError && (
+                  <p className="text-center text-xs text-red-500 mt-2 font-semibold">
+                    Download failed — check your connection and try again.
+                  </p>
+                )}
 
                 <p className="text-center text-xs text-gray-400 mt-4 leading-relaxed">
                   After downloading, open the file to install. Android will ask permission to
