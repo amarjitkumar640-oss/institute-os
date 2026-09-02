@@ -12,9 +12,10 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   pageSize?: number;
+  onRowClick?: (row: TData) => void;
 }
 
-export function DataTable<TData, TValue>({ columns, data, pageSize = 20 }: DataTableProps<TData, TValue>) {
+export function DataTable<TData, TValue>({ columns, data, pageSize = 20, onRowClick }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -51,7 +52,8 @@ export function DataTable<TData, TValue>({ columns, data, pageSize = 20 }: DataT
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className={`border-b border-purple-50/50 transition-all duration-200 table-row-hover hover:translate-x-0.5 animate-slide-up ${idx % 2 === 1 ? "bg-gray-50/30" : ""}`}
+                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                  className={`border-b border-purple-50/50 transition-all duration-200 table-row-hover hover:translate-x-0.5 animate-slide-up ${idx % 2 === 1 ? "bg-gray-50/30" : ""} ${onRowClick ? "cursor-pointer hover:bg-violet-50/40" : ""}`}
                   style={{ animationDelay: `${Math.min(idx, 14) * 35}ms` }}
                 >
                   {row.getVisibleCells().map((cell) => (
