@@ -1,11 +1,13 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Receipt } from "lucide-react";
+import { Receipt, Search } from "lucide-react";
 import { listPayments, type CollectionPeriod, type PaymentRow } from "@/api/fees";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -29,11 +31,25 @@ interface PaymentDetailsDialogProps {
 }
 
 export function PaymentDetailsDialog({ open, onOpenChange, period, batchId, title }: PaymentDetailsDialogProps) {
+  const [search, setSearch] = useState("");
+
   const { data: payments, isLoading } = useQuery({
     queryKey: ["fee-payments", period, batchId],
     queryFn:  () => listPayments({ period, batchId }),
     enabled:  open,
   });
+
+  const filtered = useMemo(() => {
+    if (!payments) return payments;
+    const q = search.trim().toLowerCase();
+    if (!q) return payments;
+    return payments.filter((p) =>
+      p.schedule.enrollment.student.fullName.toLowerCase().includes(q) ||
+      p.schedule.enrollment.batch.name.toLowerCase().includes(q) ||
+      (p.collectedBy?.fullName.toLowerCase().includes(q) ?? false) ||
+      p.receiptNo.toLowerCase().includes(q)
+    );
+  }, [payments, search]);
 
   const columns: ColumnDef<PaymentRow>[] = [
     {
@@ -64,11 +80,12 @@ export function PaymentDetailsDialog({ open, onOpenChange, period, batchId, titl
     {
       id: "collectedBy",
       header: "Collected By",
-      cell: ({ row }) => row.original.collectedBy?.fullName ?? "—",
+      cell: ({ row }) => <TruncatedText text={row.original.collectedBy?.fullName ?? "—"} className="max-w-[140px]" />,
     },
     {
       accessorKey: "receiptNo",
       header: "Receipt No",
+      cell: ({ row }) => <TruncatedText text={row.original.receiptNo} className="max-w-[120px]" />,
     },
     {
       id: "source",
@@ -83,7 +100,7 @@ export function PaymentDetailsDialog({ open, onOpenChange, period, batchId, titl
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-6xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -95,7 +112,23 @@ export function PaymentDetailsDialog({ open, onOpenChange, period, batchId, titl
         )}
 
         {!isLoading && payments && payments.length > 0 && (
-          <DataTable columns={columns} data={payments} pageSize={10} />
+          <>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                className="pl-9"
+                placeholder="Search by student, batch, receipt no, or collected by..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            {filtered && filtered.length === 0 ? (
+              <EmptyState icon={Search} title="No matching payments" description="Try a different search term." />
+            ) : (
+              <DataTable columns={columns} data={filtered ?? []} pageSize={10} />
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>

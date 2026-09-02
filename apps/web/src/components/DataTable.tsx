@@ -39,7 +39,7 @@ export function DataTable<TData, TValue>({ columns, data, pageSize = 20, onRowCl
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id} className="hover:bg-transparent border-b border-purple-50 bg-violet-50/50">
                 {hg.headers.map((h) => (
-                  <TableHead key={h.id} className="text-[11px] font-bold uppercase tracking-wider text-gray-400 py-3.5">
+                  <TableHead key={h.id} className="text-[11px] font-bold uppercase tracking-wider text-gray-400 py-3.5 whitespace-nowrap">
                     {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
                   </TableHead>
                 ))}
