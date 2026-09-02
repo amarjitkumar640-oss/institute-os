@@ -15,7 +15,8 @@ export const appReleasesRouter = Router();
 appReleasesRouter.get("/:tenantId/latest", async (req, res) => {
   const tenant = await prisma.tenant.findUnique({ where: { id: req.params.tenantId } });
   if (!tenant || !tenant.isActive) return res.status(404).json({ error: "Organization not found" });
-  const payload = await latestReleasePayload(tenant.id);
+  const audience = req.query.audience === "student" ? "student" : "staff";
+  const payload = await latestReleasePayload(tenant.id, audience);
   if (!payload) return res.status(404).json({ error: "No release available" });
   res.json(payload);
 });
@@ -27,14 +28,15 @@ appReleasesRouter.get("/:tenantId/latest", async (req, res) => {
 appReleasesRouter.get("/slug/:slug/latest", async (req, res) => {
   const tenant = await prisma.tenant.findUnique({ where: { slug: req.params.slug } });
   if (!tenant || !tenant.isActive) return res.status(404).json({ error: "Organization not found" });
-  const payload = await latestReleasePayload(tenant.id);
+  const audience = req.query.audience === "student" ? "student" : "staff";
+  const payload = await latestReleasePayload(tenant.id, audience);
   if (!payload) return res.status(404).json({ error: "No release available" });
   res.json(payload);
 });
 
-async function latestReleasePayload(tenantId: string) {
+async function latestReleasePayload(tenantId: string, audience: "staff" | "student") {
   const release = await prisma.appRelease.findFirst({
-    where:   { tenantId, platform: "android", isActive: true },
+    where:   { tenantId, platform: "android", audience, isActive: true },
     orderBy: { versionCode: "desc" },
   });
   if (!release) return null;
@@ -60,6 +62,7 @@ appReleasesRouter.post("/", requireAuth, requireRole("admin"), validateBody(crea
   const release = await prisma.appRelease.create({
     data: {
       tenantId:    req.auth!.tenantId,
+      audience:    req.body.audience,
       versionName: req.body.versionName,
       versionCode: req.body.versionCode,
       s3Key:       req.body.s3Key,

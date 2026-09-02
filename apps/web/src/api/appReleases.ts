@@ -7,7 +7,9 @@ export interface LatestRelease {
   downloadUrl: string;
 }
 
-export async function getLatestReleaseBySlug(slug: string): Promise<LatestRelease> {
-  const { data } = await apiClient.get<LatestRelease>(`/api/app-releases/slug/${slug}/latest`);
+export type AppReleaseAudience = "staff" | "student";
+
+export async function getLatestReleaseBySlug(slug: string, audience: AppReleaseAudience): Promise<LatestRelease> {
+  const { data } = await apiClient.get<LatestRelease>(`/api/app-releases/slug/${slug}/latest`, { params: { audience } });
   return data;
 }
