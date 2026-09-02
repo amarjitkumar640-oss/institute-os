@@ -8,8 +8,11 @@
 //   S3_ENDPOINT=... S3_ACCESS_KEY=... S3_SECRET_KEY=... S3_BUCKET=... \
 //   TENANT_ID=<uuid> VERSION_NAME=1.1.0 VERSION_CODE=2 \
 //   ADMIN_IDENTIFIER=<phone/email/username> ADMIN_PASSWORD=<password> \
-//   CHANGELOG="Fixes X, adds Y" \
+//   CHANGELOG="Fixes X, adds Y" AUDIENCE=staff \
 //   npx tsx scripts/publish-release.ts ./build.apk
+//
+// AUDIENCE defaults to "staff" (Admin/Teacher/Frontdesk, the only build that
+// exists today) — pass AUDIENCE=student once a student build exists.
 //
 // Uploads the APK straight to S3/MinIO (never through the API server —
 // buffering a 50-100MB file in the API's Express process is the wrong call,
@@ -47,6 +50,10 @@ async function main() {
   const identifier   = requireEnv("ADMIN_IDENTIFIER");
   const password      = requireEnv("ADMIN_PASSWORD");
   const changelog    = process.env.CHANGELOG ?? undefined;
+  // "staff" (Admin/Teacher/Frontdesk, the only build that exists today) or
+  // "student" (future scope) — keeps staff and student builds in separate
+  // release lines so the download page can offer them independently.
+  const audience = process.env.AUDIENCE === "student" ? "student" : "staff";
 
   if (!Number.isInteger(versionCode) || versionCode <= 0) {
     console.error("VERSION_CODE must be a positive integer");
@@ -60,7 +67,7 @@ async function main() {
     credentials: { accessKeyId: s3AccessKey, secretAccessKey: s3SecretKey },
     forcePathStyle: true,
   });
-  const s3Key = `releases/${tenantId}/${versionCode}.apk`;
+  const s3Key = `releases/${tenantId}/${audience}/${versionCode}.apk`;
   await s3.send(new PutObjectCommand({
     Bucket: s3Bucket,
     Key: s3Key,
@@ -88,14 +95,14 @@ async function main() {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ tenantId, versionName, versionCode, s3Key, changelog }),
+    body: JSON.stringify({ tenantId, audience, versionName, versionCode, s3Key, changelog }),
   });
   if (!releaseRes.ok) {
     console.error(`Release registration failed: ${releaseRes.status} ${await releaseRes.text()}`);
     process.exit(1);
   }
 
-  console.log(`Published version ${versionName} (code ${versionCode}) for tenant ${tenantId}.`);
+  console.log(`Published ${audience} version ${versionName} (code ${versionCode}) for tenant ${tenantId}.`);
 }
 
 main().catch((e) => {

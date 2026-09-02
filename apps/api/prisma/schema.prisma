@@ -243,6 +243,11 @@ model AppRelease {
   id          String   @id @default(uuid())
   tenantId    String
   platform    String   @default("android")
+  // "staff" (Admin/Teacher/Frontdesk — the app that exists today) or
+  // "student" (future scope, no build yet). Same plain-string convention as
+  // `platform` rather than a Prisma enum, so a third audience never needs a
+  // migration to add.
+  audience    String   @default("staff")
   versionName String
   versionCode Int
   s3Key       String
@@ -252,7 +257,7 @@ model AppRelease {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
-  @@index([tenantId, platform, isActive, versionCode])
+  @@index([tenantId, platform, audience, isActive, versionCode])
   @@map("app_releases")
 }
 

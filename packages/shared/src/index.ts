@@ -533,6 +533,7 @@ export type SetFacultyAttendanceInput = z.infer<typeof setFacultyAttendanceSchem
 
 export const createAppReleaseSchema = z.object({
   tenantId:    z.string().uuid(),
+  audience:    z.enum(["staff", "student"]).default("staff"),
   versionName: z.string().min(1),
   versionCode: z.number().int().positive(),
   s3Key:       z.string().min(1),
