@@ -33,6 +33,9 @@ export function FeesPage() {
   // URL afterwards (the Select below is the source of truth from then on).
   const [searchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<string | undefined>(searchParams.get("status") ?? undefined);
+  // Same deep-linking, for the dashboard's "Fees Collected" card
+  // (/fees?tab=collection) — read once on mount, same as statusFilter above.
+  const initialTab = searchParams.get("tab") === "collection" ? "collection" : "schedules";
 
   const { data: schedules, isLoading } = useQuery({
     queryKey: ["fee-schedules", search, statusFilter],
@@ -111,7 +114,7 @@ export function FeesPage() {
         </div>
       </div>
       <div className="flex-1 p-7 space-y-5">
-        <Tabs defaultValue="schedules">
+        <Tabs defaultValue={initialTab}>
           <TabsList>
             <TabsTrigger value="schedules">Schedules</TabsTrigger>
             <TabsTrigger value="collection">Collection</TabsTrigger>

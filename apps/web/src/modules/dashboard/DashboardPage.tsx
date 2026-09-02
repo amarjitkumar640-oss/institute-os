@@ -53,15 +53,19 @@ interface StatCardProps {
   iconClass: string;
   countTo?: number;
   delay?: number;
+  onClick?: () => void;
 }
 
-function StatCard({ icon: Icon, label, value, sub, trend, iconClass, countTo, delay = 0 }: StatCardProps) {
+function StatCard({ icon: Icon, label, value, sub, trend, iconClass, countTo, delay = 0, onClick }: StatCardProps) {
   const counted = useCountUp(countTo ?? 0, 1100);
   const displayValue = countTo !== undefined ? counted.toLocaleString() : value;
+  const Wrapper = onClick ? "button" : "div";
 
   return (
-    <div
-      className="bg-white rounded-2xl p-5 border border-purple-50 shadow-stat card-hover shimmer-hover cursor-default animate-slide-up"
+    <Wrapper
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`w-full text-left bg-white rounded-2xl p-5 border border-purple-50 shadow-stat card-hover shimmer-hover animate-slide-up ${onClick ? "cursor-pointer hover:scale-[1.02] transition-transform" : "cursor-default"}`}
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex items-start justify-between mb-4">
@@ -79,7 +83,7 @@ function StatCard({ icon: Icon, label, value, sub, trend, iconClass, countTo, de
         <p className="text-sm text-gray-400">{label}</p>
         {trend && <span className="text-[11px] font-semibold text-emerald-600 shrink-0">{trend}</span>}
       </div>
-    </div>
+    </Wrapper>
   );
 }
 
@@ -308,10 +312,10 @@ function AdminDashboard() {
       {/* Overview — the headline numbers, the one thing on this page that
           gets the large-tile treatment. */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard icon={Users}         label="Total Students"     value={data.totalStudents.toLocaleString()} countTo={data.totalStudents}  iconClass="bg-violet-100 text-violet-600" delay={0} />
-        <StatCard icon={Layers}        label="Active Batches"     value={data.activeBatches}                  countTo={data.activeBatches}   sub={`${data.totalBatches} total`} trend={batchesTrend} iconClass="bg-blue-100 text-blue-600" delay={80} />
-        <StatCard icon={GraduationCap} label="Faculty"            value={data.totalFaculty}                   countTo={data.totalFaculty}    iconClass="bg-emerald-100 text-emerald-600" delay={160} />
-        <StatCard icon={IndianRupee}   label="Fees Collected"     value={formatCurrency(data.feesCollected)}  trend={feesTrend}              iconClass="bg-amber-100 text-amber-600" delay={240} />
+        <StatCard icon={Users}         label="Total Students"     value={data.totalStudents.toLocaleString()} countTo={data.totalStudents}  iconClass="bg-violet-100 text-violet-600" delay={0}   onClick={() => navigate("/students")} />
+        <StatCard icon={Layers}        label="Active Batches"     value={data.activeBatches}                  countTo={data.activeBatches}   sub={`${data.totalBatches} total`} trend={batchesTrend} iconClass="bg-blue-100 text-blue-600" delay={80}  onClick={() => navigate("/batches")} />
+        <StatCard icon={GraduationCap} label="Faculty"            value={data.totalFaculty}                   countTo={data.totalFaculty}    iconClass="bg-emerald-100 text-emerald-600" delay={160} onClick={() => navigate("/faculty")} />
+        <StatCard icon={IndianRupee}   label="Fees Collected"     value={formatCurrency(data.feesCollected)}  trend={feesTrend}              iconClass="bg-amber-100 text-amber-600" delay={240} onClick={() => navigate("/fees?tab=collection")} />
       </div>
 
       {/* Today */}
@@ -401,9 +405,11 @@ function AdminDashboard() {
           <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-3">Centers</p>
           <div className="grid grid-cols-3 gap-4">
             {data.perCenter.map((c, idx) => (
-              <div
+              <button
                 key={c.id}
-                className={`relative rounded-2xl p-5 overflow-hidden text-white bg-gradient-to-br ${CARD_GRADIENTS[idx % CARD_GRADIENTS.length]} batch-card-hover shimmer-hover cursor-default animate-slide-up`}
+                type="button"
+                onClick={() => navigate(`/centers/${c.id}`)}
+                className={`relative rounded-2xl p-5 overflow-hidden text-white bg-gradient-to-br ${CARD_GRADIENTS[idx % CARD_GRADIENTS.length]} batch-card-hover shimmer-hover cursor-pointer text-left animate-slide-up`}
                 style={{ animationDelay: `${idx * 80 + 400}ms` }}
               >
                 <div className="absolute -right-6 -bottom-6 opacity-10">
@@ -418,7 +424,7 @@ function AdminDashboard() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -428,6 +434,7 @@ function AdminDashboard() {
 }
 
 function TeacherDashboard() {
+  const navigate = useNavigate();
   const { data, isLoading } = useQuery({ queryKey: ["teacher-dashboard"], queryFn: getTeacherDashboard });
   if (isLoading) return <DashboardSkeleton />;
   if (!data) return null;
@@ -449,9 +456,9 @@ function TeacherDashboard() {
   return (
     <div className="space-y-6 animate-slide-up">
       <div className="grid grid-cols-3 gap-4">
-        <StatCard icon={Layers}   label="My Batches"     value={data.totalBatches}       countTo={data.totalBatches}       iconClass="bg-violet-100 text-violet-600"  delay={0} />
-        <StatCard icon={Users}    label="Total Students" value={data.totalStudents}       countTo={data.totalStudents}       iconClass="bg-blue-100 text-blue-600"      delay={80} />
-        <StatCard icon={Calendar} label="Classes Today"  value={data.classesToday.length} countTo={data.classesToday.length} iconClass="bg-emerald-100 text-emerald-600" delay={160} />
+        <StatCard icon={Layers}   label="My Batches"     value={data.totalBatches}       countTo={data.totalBatches}       iconClass="bg-violet-100 text-violet-600"  delay={0}   onClick={() => navigate("/batches")} />
+        <StatCard icon={Users}    label="Total Students" value={data.totalStudents}       countTo={data.totalStudents}       iconClass="bg-blue-100 text-blue-600"      delay={80}  onClick={() => navigate("/students")} />
+        <StatCard icon={Calendar} label="Classes Today"  value={data.classesToday.length} countTo={data.classesToday.length} iconClass="bg-emerald-100 text-emerald-600" delay={160} onClick={() => navigate("/schedule")} />
       </div>
 
       <div className="grid grid-cols-2 gap-5">
@@ -462,15 +469,17 @@ function TeacherDashboard() {
           <CardContent className="space-y-2">
             {data.myBatches.length === 0 && <p className="text-sm text-gray-400 text-center py-6">No active batches</p>}
             {data.myBatches.map((b) => (
-              <div
+              <button
                 key={b.id}
-                className="flex items-center gap-3 rounded-xl bg-violet-50 px-4 py-3 hover:bg-violet-100 transition-colors group stagger-item"
+                type="button"
+                onClick={() => navigate(`/batches/${b.id}`)}
+                className="w-full flex items-center gap-3 rounded-xl bg-violet-50 px-4 py-3 hover:bg-violet-100 transition-colors group stagger-item text-left"
               >
                 <div className="h-7 w-7 rounded-xl flex items-center justify-center bg-violet-100 group-hover:bg-violet-200 group-hover:scale-110 transition-all">
                   <Layers className="h-3.5 w-3.5 text-violet-600" />
                 </div>
                 <span className="text-sm text-gray-700 font-medium">{b.name}</span>
-              </div>
+              </button>
             ))}
           </CardContent>
         </Card>
