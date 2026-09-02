@@ -729,7 +729,7 @@ function startOfYear(now: Date): Date {
   return new Date(now.getFullYear(), 0, 1);
 }
 
-function periodStart(period: CollectionPeriod, now: Date): Date {
+export function periodStart(period: CollectionPeriod, now: Date): Date {
   switch (period) {
     case "today": return startOfToday(now);
     case "week":  return startOfWeek(now);

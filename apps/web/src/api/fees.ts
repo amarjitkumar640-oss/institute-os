@@ -134,6 +134,29 @@ export async function getCollectionByBatch(period: CollectionPeriod): Promise<{ 
   return data;
 }
 
+export interface PaymentRow {
+  id: string;
+  amount: number;
+  mode: "cash" | "upi" | "card" | "bank_transfer" | "cheque";
+  paidAt: string;
+  receiptNo: string;
+  legacyReceiptNo: string | null;
+  notes: string | null;
+  collectedBy: { id: string; fullName: string } | null;
+  installment: { id: string; label: string } | null;
+  schedule: {
+    enrollment: {
+      student: { id: string; fullName: string };
+      batch:   { id: string; name: string };
+    };
+  };
+}
+
+export async function listPayments(params: { period: CollectionPeriod; batchId?: string }): Promise<PaymentRow[]> {
+  const { data } = await apiClient.get<PaymentRow[]>("/api/fees/payments", { params });
+  return data;
+}
+
 export type TemplateLineType = "fixed" | "percentage" | "equal_split" | "remaining";
 export type TemplateTrigger = "on_admission" | "days_after_admission" | "days_after_previous" | "monthly_recurring";
 

@@ -18,6 +18,8 @@ import {
   getCollectionSummary,
   getCollectionByBatch,
   computeScheduleOutstanding,
+  periodStart,
+  type CollectionPeriod,
 } from "./fees.service";
 import {
   upsertFeeTemplateSchema,
@@ -209,15 +211,32 @@ feesRouter.get(
   validateQuery(
     z.object({
       scheduleId: z.string().uuid().optional(),
+      period:     z.enum(["today", "week", "month", "year"]).optional(),
+      batchId:    z.string().uuid().optional(),
     }),
   ),
   async (req, res) => {
-    const { scheduleId } = req.query as { scheduleId?: string };
+    const { scheduleId, batchId } = req.query as { scheduleId?: string; batchId?: string };
+    const period = (req.query.period as CollectionPeriod | undefined) ?? "today";
+
+    // scheduleId scopes to one student's history; otherwise this is a
+    // period-based drill-down (from a Collection-tab card or batch row) —
+    // reuses fees.service.ts's own periodStart() so the list's total can
+    // never disagree with the summary number the user clicked into.
     const where = scheduleId
       ? { scheduleId, tenantId: req.auth!.tenantId }
       : {
           tenantId: req.auth!.tenantId,
-          schedule: { enrollment: { batch: { centerId: { in: await assignedCenterIds(req) } } } },
+          type:     "payment" as const,
+          paidAt:   { gte: periodStart(period, new Date()), lte: new Date() },
+          schedule: {
+            enrollment: {
+              batch: {
+                centerId: { in: await assignedCenterIds(req) },
+                ...(batchId ? { id: batchId } : {}),
+              },
+            },
+          },
         };
 
     const payments = await prisma.paymentTransaction.findMany({
@@ -225,8 +244,12 @@ feesRouter.get(
       orderBy: { paidAt: "desc" },
       take:    200,
       include: {
-        collectedBy:  { select: { id: true, fullName: true } },
-        installment:  { select: { id: true, label: true } },
+        collectedBy: { select: { id: true, fullName: true } },
+        installment: { select: { id: true, label: true } },
+        schedule:    { select: { enrollment: { select: {
+          student: { select: { id: true, fullName: true } },
+          batch:   { select: { id: true, name: true } },
+        } } } },
       },
     });
     res.json(payments);
