@@ -31,7 +31,10 @@ export function AppUpdateProvider({ children }: { children: React.ReactNode }) {
   const refetchLatest = useCallback(async (): Promise<LatestRelease | null> => {
     if (!TENANT_ID) return null;
     try {
-      const { data } = await apiClient.get<LatestRelease>(`/app-releases/${TENANT_ID}/latest`);
+      // Explicit ?audience=staff — this installed app is always the staff
+      // build today, so it only ever checks the staff release line, not
+      // relying on the server's default (which could change later).
+      const { data } = await apiClient.get<LatestRelease>(`/app-releases/${TENANT_ID}/latest?audience=staff`);
       setRelease(data);
       return data;
     } catch {

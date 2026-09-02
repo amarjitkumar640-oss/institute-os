@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Loader2, PackageX, Rocket, PenLine, Star, BookOpen, GraduationCap, Sparkles } from "lucide-react";
 import { getTenantBySlug } from "@/api/auth";
-import { getLatestReleaseBySlug } from "@/api/appReleases";
+import { getLatestReleaseBySlug, type AppReleaseAudience } from "@/api/appReleases";
 import { initials } from "@/lib/utils";
 
 // Fixed positions/sizes (not random) so the layout is stable across
@@ -61,6 +61,10 @@ export function DownloadPage() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [downloading, setDownloading] = useState(false);
   const downloadBtnRef = useRef<HTMLButtonElement>(null);
+  // Staff (Admin/Teacher/Frontdesk) is the only build that exists today —
+  // Student is future scope, selecting it just surfaces the same "Coming
+  // Soon" empty state below since no release is registered for it yet.
+  const [audience, setAudience] = useState<AppReleaseAudience>("staff");
 
   const { data: tenant, isLoading: tenantLoading, isError: tenantError } = useQuery({
     queryKey: ["public-tenant", tenantSlug],
@@ -70,8 +74,8 @@ export function DownloadPage() {
   });
 
   const { data: release, isLoading: releaseLoading, isError: releaseError, refetch } = useQuery({
-    queryKey: ["public-latest-release", tenantSlug],
-    queryFn:  () => getLatestReleaseBySlug(tenantSlug!),
+    queryKey: ["public-latest-release", tenantSlug, audience],
+    queryFn:  () => getLatestReleaseBySlug(tenantSlug!, audience),
     enabled:  !!tenant,
     retry:    false,
   });
@@ -207,7 +211,31 @@ export function DownloadPage() {
             </div>
 
             <h1 className="text-center text-2xl font-extrabold tracking-tight text-gray-900 mb-1">{tenant.name}</h1>
-            <p className="text-center text-sm font-semibold text-gray-500 mb-7">Get the app for Android</p>
+            <p className="text-center text-sm font-semibold text-gray-500 mb-5">Get the app for Android</p>
+
+            <div className="flex justify-center gap-1.5 mb-7">
+              {([
+                { value: "staff" as const,   label: "Staff App" },
+                { value: "student" as const, label: "Student App" },
+              ]).map((opt) => {
+                const active = audience === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAudience(opt.value)}
+                    className="px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors"
+                    style={
+                      active
+                        ? { background: primary, color: "#fff" }
+                        : { background: "transparent", color: "#9CA3AF", border: "1px solid #E5E7EB" }
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
 
             {releaseLoading && (
               <div className="flex justify-center py-6">
