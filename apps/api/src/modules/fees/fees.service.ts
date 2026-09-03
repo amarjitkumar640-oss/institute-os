@@ -710,23 +710,50 @@ export async function getFeeSummary(db: PrismaClient, tenantId: string, centerId
 
 export type CollectionPeriod = "today" | "week" | "month" | "year";
 
+// The API container runs in UTC (no TZ env set), but "today/week/month/year"
+// must mean the institute's own calendar day (IST), not the server's. Using
+// now.getFullYear()/getMonth()/getDate() directly computed the boundary in
+// UTC, which only silently diverges from IST during the ~00:00–05:30 IST
+// window each day — a payment made at, say, 11pm IST on the 2nd was still
+// being shown as "today" at 2am IST on the 3rd, because the server's UTC
+// clock hadn't rolled over to the 3rd yet. Shifting the instant by IST's
+// fixed +5:30 offset before reading the calendar date makes every boundary
+// below independent of the server's own timezone.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+function toIstWallClock(now: Date): Date {
+  return new Date(now.getTime() + IST_OFFSET_MS);
+}
+
+// `wallClock` is already shifted by toIstWallClock(); its UTC getters read
+// back the IST calendar date/time, so building the boundary with Date.UTC
+// and shifting back by the same offset gives the real UTC instant for
+// midnight IST on that date.
+function istDateToUtcInstant(y: number, m: number, d: number): Date {
+  return new Date(Date.UTC(y, m, d) - IST_OFFSET_MS);
+}
+
 function startOfToday(now: Date): Date {
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const w = toIstWallClock(now);
+  return istDateToUtcInstant(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate());
 }
 
 // Monday-start week — the ISO convention, not calendar-locale-dependent.
 function startOfWeek(now: Date): Date {
-  const day  = now.getDay(); // 0 = Sun .. 6 = Sat
+  const w = toIstWallClock(now);
+  const day  = w.getUTCDay(); // 0 = Sun .. 6 = Sat
   const diff = (day === 0 ? -6 : 1) - day; // days back to the most recent Monday
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+  return istDateToUtcInstant(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate() + diff);
 }
 
 function startOfMonth(now: Date): Date {
-  return new Date(now.getFullYear(), now.getMonth(), 1);
+  const w = toIstWallClock(now);
+  return istDateToUtcInstant(w.getUTCFullYear(), w.getUTCMonth(), 1);
 }
 
 function startOfYear(now: Date): Date {
-  return new Date(now.getFullYear(), 0, 1);
+  const w = toIstWallClock(now);
+  return istDateToUtcInstant(w.getUTCFullYear(), 0, 1);
 }
 
 export function periodStart(period: CollectionPeriod, now: Date): Date {
